@@ -790,7 +790,7 @@ function errorMessage(err: unknown): string {
           <span v-if="notice" class="notice-text">{{ notice }}</span>
         </div>
 
-        <div class="panes" :class="{ single: viewMode !== 'live' }">
+        <div class="panes" :class="{ single: viewMode !== 'side' }">
           <section
             v-show="viewMode !== 'preview'"
             class="editor-pane"
@@ -807,6 +807,7 @@ function errorMessage(err: unknown): string {
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"
+              @save-request="saveCurrentNote"
             />
           </section>
 
@@ -815,7 +816,7 @@ function errorMessage(err: unknown): string {
             :key="editorSession"
             :html="previewHtml"
             :note-path="activeTab.path"
-            :scroll-line="editorScrollLine"
+            :focus-line="cursorLine ?? editorScrollLine"
             :scroll-ratio="editorScrollRatio"
           />
         </div>

@@ -11,7 +11,7 @@ import { EditorView, placeholder } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { tags } from '@lezer/highlight';
-import { vim } from '@replit/codemirror-vim';
+import { Vim, vim } from '@replit/codemirror-vim';
 
 const props = defineProps<{
   initialContent: string;
@@ -23,6 +23,7 @@ const emit = defineEmits<{
   change: [content: string];
   scrollSync: [position: { line: number; ratio: number }];
   cursor: [position: { line: number; column: number }];
+  saveRequest: [];
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
@@ -186,6 +187,9 @@ onMounted(() => {
   if (!host.value) {
     return;
   }
+  Vim.defineEx('write', 'w', () => {
+    emit('saveRequest');
+  });
   view = new EditorView({
     parent: host.value,
     state: EditorState.create({

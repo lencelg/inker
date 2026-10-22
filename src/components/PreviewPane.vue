@@ -8,7 +8,7 @@ import { isLocalImageSource } from '../lib/markdown';
 const props = defineProps<{
   html: string;
   notePath: string;
-  scrollLine: number;
+  focusLine: number;
   scrollRatio?: number;
 }>();
 
@@ -139,7 +139,7 @@ function applyScrollSync(): void {
 
   let top: number;
   if (anchors.length > 0) {
-    const targetLine = Math.max(1, props.scrollLine);
+    const targetLine = Math.max(1, props.focusLine);
     let index = 0;
     while (
       index + 1 < anchors.length &&
@@ -162,7 +162,8 @@ function applyScrollSync(): void {
     top = ratio * maximum;
   }
 
-  element.scrollTop = Math.min(maximum, Math.max(0, top - 10));
+  const focusOffset = element.clientHeight * 0.32;
+  element.scrollTop = Math.min(maximum, Math.max(0, top - focusOffset));
 }
 
 watch(
@@ -180,7 +181,7 @@ watch(
 );
 
 watch(
-  [() => props.scrollLine, () => props.scrollRatio],
+  [() => props.focusLine, () => props.scrollRatio],
   async () => {
     await nextTick();
     applyScrollSync();

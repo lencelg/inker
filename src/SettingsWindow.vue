@@ -181,7 +181,7 @@ function closeWindow(): void {
           <div class="setting-row vim-row">
             <span>
               <strong>Vim 模式</strong>
-              <small>使用 Vim 键位编辑 Markdown。</small>
+              <small>使用 Vim 键位编辑，支持搜索、替换、宏和常用 ex 命令。</small>
             </span>
             <input
               class="switch"
