@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Local-first Markdown notes desktop app",
+  "description": "markleaf - local-first Markdown notes desktop app",
   "author": "lencelg",
   "license": "MIT",
   "scripts": {
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language-data": "^6.5.2",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
     "@replit/codemirror-vim": "^6.4.0",
@@ -20,6 +21,7 @@
     "@tauri-apps/plugin-opener": "^2.7.2",
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.17",
+    "highlight.js": "^11.12.0",
     "katex": "^0.19.0",
     "markdown-it": "^15.0.3",
     "markdown-it-task-lists": "^2.1.1",

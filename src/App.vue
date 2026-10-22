@@ -4,6 +4,7 @@ import { api } from './api';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
+import LeafIcon from './components/LeafIcon.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
 import PromptDialog from './components/PromptDialog.vue';
@@ -32,7 +33,7 @@ const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
 const error = ref('');
 const notice = ref('');
-const previewVisible = ref(true);
+const previewVisible = ref(false);
 const vimEnabled = ref(false);
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
@@ -606,8 +607,8 @@ function errorMessage(err: unknown): string {
 
     <main v-if="notesDir === null" class="workspace welcome">
       <div class="welcome-card">
-        <span class="welcome-icon">M↓</span>
-        <h1>Markdown 笔记</h1>
+        <span class="welcome-icon"><LeafIcon /></span>
+        <h1>markleaf</h1>
         <p>选择一个文件夹，笔记会以 .md 文件保存在其中。</p>
         <button class="btn primary" type="button" @click="chooseFolder">
           选择笔记文件夹
@@ -689,7 +690,7 @@ function errorMessage(err: unknown): string {
       </template>
 
       <div v-else class="workspace-empty">
-        <span class="workspace-empty-icon">M↓</span>
+        <span class="workspace-empty-icon"><LeafIcon /></span>
         <h1>还没有打开笔记</h1>
         <p>在左侧文件树中打开或新建一个 Markdown 文件。</p>
       </div>

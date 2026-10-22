@@ -10,6 +10,8 @@
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
   --accent-soft: #eaf1ff;
+  --leaf: #2f7d57;
+  --leaf-strong: #215c40;
   --warning: #b45309;
   --warning-soft: #fef3c7;
   --error: #b91c1c;
@@ -348,8 +350,8 @@ button:disabled {
   margin: 1em 0;
   padding: 14px 16px;
   border-radius: 10px;
-  background: #1f2933;
-  color: #f8fafc;
+  background: #0d1117;
+  color: #c9d1d9;
   overflow-x: auto;
 }
 
@@ -497,10 +499,12 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--panel);
-  color: var(--faint);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -1px;
+  color: var(--leaf);
+}
+
+.workspace-empty-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .workspace-empty h1 {
@@ -532,11 +536,13 @@ button:disabled {
   width: 48px;
   height: 48px;
   border-radius: 14px;
-  background: var(--ink);
+  background: linear-gradient(135deg, var(--leaf), var(--leaf-strong));
   color: #fff;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -1px;
+}
+
+.welcome-icon svg {
+  width: 26px;
+  height: 26px;
 }
 
 .welcome-card h1 {

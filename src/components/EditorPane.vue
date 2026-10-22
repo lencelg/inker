@@ -4,6 +4,7 @@ import { basicSetup } from 'codemirror';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, placeholder } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
+import { languages } from '@codemirror/language-data';
 import { vim } from '@replit/codemirror-vim';
 
 const props = defineProps<{
@@ -98,7 +99,7 @@ onMounted(() => {
         vimCompartment.of(props.vimEnabled ? vimExtension : []),
         readOnlyCompartment.of(readOnlyExtensions(props.readOnly)),
         basicSetup,
-        markdown(),
+        markdown({ codeLanguages: languages }),
         placeholder('从这里开始写…'),
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({ 'aria-label': 'Markdown 内容' }),

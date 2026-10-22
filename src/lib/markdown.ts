@@ -1,3 +1,5 @@
+import hljs from 'highlight.js/lib/common';
+import 'highlight.js/styles/github-dark.css';
 import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 
@@ -11,6 +13,14 @@ const markdown = new MarkdownIt({
 });
 
 markdown.use(taskLists, { enabled: true, label: false });
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 interface SourceMappedToken {
   map: [number, number] | null;
@@ -30,12 +40,24 @@ markdown.renderer.renderToken = (tokens, idx, options) => {
   return originalRenderToken(tokens, idx, options);
 };
 
-const originalFenceRenderer = markdown.renderer.rules.fence;
-markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
-  annotateSourceLine(tokens[idx]);
-  return originalFenceRenderer
-    ? originalFenceRenderer(tokens, idx, options, env, self)
-    : self.renderToken(tokens, idx, options);
+markdown.renderer.rules.fence = (tokens, idx) => {
+  const token = tokens[idx];
+  const sourceLine = token.map
+    ? ` data-source-line="${token.map[0] + 1}"`
+    : '';
+  const info = token.info.trim().split(/\s+/)[0] ?? '';
+  const language = info ? hljs.getLanguage(info) : undefined;
+  const code = language
+    ? hljs.highlight(token.content, {
+        language: info,
+        ignoreIllegals: true,
+      }).value
+    : escapeHtml(token.content);
+  const languageClass = info
+    ? ` class="language-${escapeHtml(info)}"`
+    : '';
+
+  return `<pre class="hljs"${sourceLine}><code${languageClass}>${code}</code></pre>\n`;
 };
 
 const originalCodeBlockRenderer = markdown.renderer.rules.code_block;

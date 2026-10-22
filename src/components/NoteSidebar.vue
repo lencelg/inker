@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { dirname } from '../lib/paths';
 import type { FileEntry } from '../types';
+import LeafIcon from './LeafIcon.vue';
 
 const props = defineProps<{
   entries: FileEntry[];
@@ -225,11 +226,8 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 <template>
   <aside class="sidebar">
     <div class="brand">
-      <span class="logo">M↓</span>
-      <div>
-        <h1>Markdown 笔记</h1>
-        <p>本地 · 文件树 · 预览</p>
-      </div>
+      <span class="logo"><LeafIcon /></span>
+      <h1>markleaf</h1>
     </div>
 
     <div class="list-heading">
@@ -370,22 +368,20 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: var(--ink);
+  background: linear-gradient(135deg, var(--leaf), var(--leaf-strong));
   color: #fff;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -1px;
+}
+
+.logo svg {
+  width: 23px;
+  height: 23px;
 }
 
 .brand h1 {
   margin: 0;
-  font-size: 15px;
-}
-
-.brand p {
-  margin: 2px 0 0;
-  font-size: 11px;
-  color: var(--muted);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .list-heading {

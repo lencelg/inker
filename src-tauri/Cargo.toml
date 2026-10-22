@@ -1,7 +1,7 @@
 [package]
 name = "markdown-notes-tauri"
 version = "0.1.0"
-description = "Local-first Markdown notes"
+description = "markleaf - local-first Markdown notes"
 authors = ["lencelg"]
 edition = "2021"
 rust-version = "1.77"
