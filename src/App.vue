@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from './api';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
@@ -16,6 +16,12 @@ import {
   isSameOrDescendant,
   replacePrefix,
 } from './lib/paths';
+import {
+  DEFAULT_THEME,
+  THEME_STORAGE_KEY,
+  isThemeId,
+  type ThemeId,
+} from './lib/themes';
 import type { FileEntry, NotesState } from './types';
 
 interface NoteTab {
@@ -35,6 +41,7 @@ const error = ref('');
 const notice = ref('');
 const previewVisible = ref(false);
 const vimEnabled = ref(false);
+const theme = ref<ThemeId>(readStoredTheme());
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
 const editorScrollLine = ref(1);
@@ -94,6 +101,8 @@ const confirmation = ref<PendingConfirmation | null>(null);
 const prompt = ref<PromptState | null>(null);
 const saveTasks = new Map<string, Promise<boolean>>();
 
+watch(theme, applyTheme, { immediate: true });
+
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown, true);
   void bootstrap();
@@ -113,6 +122,25 @@ async function bootstrap(): Promise<void> {
     }
   } catch (err) {
     setError(err);
+  }
+}
+
+function readStoredTheme(): ThemeId {
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (isThemeId(stored)) return stored;
+  } catch {
+    // Storage can be unavailable in restricted webviews.
+  }
+  return DEFAULT_THEME;
+}
+
+function applyTheme(value: ThemeId): void {
+  document.documentElement.dataset.theme = value;
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, value);
+  } catch {
+    // Persisting the preference is optional.
   }
 }
 
@@ -596,6 +624,7 @@ function errorMessage(err: unknown): string {
       :notes-dir="notesDir"
       :expanded-paths="expandedPaths"
       :busy="busy || anySaving"
+      :theme="theme"
       @select="selectNote"
       @toggle-folder="toggleFolder"
       @choose-folder="chooseFolder"
@@ -603,6 +632,7 @@ function errorMessage(err: unknown): string {
       @create-folder="requestCreateFolder"
       @rename="requestRename"
       @remove="requestDelete"
+      @theme-change="theme = $event"
     />
 
     <main v-if="notesDir === null" class="workspace welcome">

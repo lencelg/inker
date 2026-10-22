@@ -39,7 +39,7 @@ onMounted(() => {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(31, 41, 51, 0.42);
+  background: var(--overlay);
   backdrop-filter: blur(3px);
   outline: none;
 }
@@ -50,7 +50,7 @@ onMounted(() => {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(31, 41, 51, 0.2);
+  box-shadow: var(--shadow-strong);
 }
 
 .dialog h2 {

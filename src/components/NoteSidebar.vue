@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { dirname } from '../lib/paths';
+import type { ThemeId } from '../lib/themes';
 import type { FileEntry } from '../types';
 import LeafIcon from './LeafIcon.vue';
+import ThemePicker from './ThemePicker.vue';
 
 const props = defineProps<{
   entries: FileEntry[];
@@ -10,6 +12,7 @@ const props = defineProps<{
   notesDir: string | null;
   expandedPaths: string[];
   busy: boolean;
+  theme: ThemeId;
 }>();
 
 const emit = defineEmits<{
@@ -20,6 +23,7 @@ const emit = defineEmits<{
   createFolder: [parent: string];
   rename: [entry: FileEntry];
   remove: [entry: FileEntry];
+  themeChange: [theme: ThemeId];
 }>();
 
 interface TreeNode {
@@ -291,6 +295,10 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
     </div>
 
     <footer class="sidebar-footer">
+      <ThemePicker
+        :theme="theme"
+        @change="emit('themeChange', $event)"
+      />
       <button
         class="folder-button"
         type="button"
@@ -349,7 +357,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
   gap: 12px;
   height: 100%;
   padding: 22px 14px 14px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
   backdrop-filter: blur(12px);
   overflow: hidden;
@@ -418,7 +426,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 }
 
 .tree-row:hover {
-  background: rgba(31, 41, 51, 0.05);
+  background: var(--hover);
 }
 
 .tree-row.selected {
@@ -469,7 +477,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 }
 
 .tree-row.folder .entry-icon {
-  color: #b08a3e;
+  color: var(--folder-icon);
 }
 
 .tree-row.selected .entry-icon {
@@ -490,6 +498,9 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 }
 
 .sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 4px 0;
   border-top: 1px solid var(--border);
 }
@@ -509,7 +520,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 }
 
 .folder-button:hover {
-  background: rgba(31, 41, 51, 0.05);
+  background: var(--hover);
   color: var(--ink);
 }
 
@@ -533,7 +544,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(31, 41, 51, 0.18);
+  box-shadow: var(--menu-shadow);
   outline: none;
 }
 

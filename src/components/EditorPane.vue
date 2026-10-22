@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { basicSetup } from 'codemirror';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, placeholder } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
+import { tags } from '@lezer/highlight';
 import { vim } from '@replit/codemirror-vim';
 
 const props = defineProps<{
@@ -27,6 +29,60 @@ let view: EditorView | null = null;
 let scrollElement: HTMLElement | null = null;
 let scrollFrame = 0;
 
+const syntaxTheme = HighlightStyle.define([
+  { tag: tags.keyword, color: 'var(--syntax-keyword)' },
+  {
+    tag: [tags.atom, tags.bool, tags.number, tags.integer, tags.float],
+    color: 'var(--syntax-number)',
+  },
+  { tag: [tags.string, tags.character], color: 'var(--syntax-string)' },
+  { tag: [tags.comment, tags.meta], color: 'var(--syntax-comment)' },
+  {
+    tag: [tags.typeName, tags.className, tags.namespace],
+    color: 'var(--syntax-type)',
+  },
+  {
+    tag: [tags.function(tags.variableName), tags.function(tags.propertyName)],
+    color: 'var(--syntax-function)',
+  },
+  {
+    tag: [tags.variableName, tags.propertyName, tags.attributeName],
+    color: 'var(--syntax-variable)',
+  },
+  {
+    tag: [
+      tags.operator,
+      tags.operatorKeyword,
+      tags.punctuation,
+      tags.separator,
+      tags.bracket,
+    ],
+    color: 'var(--syntax-operator)',
+  },
+  { tag: [tags.tagName, tags.angleBracket], color: 'var(--syntax-tag)' },
+  {
+    tag: [
+      tags.heading,
+      tags.heading1,
+      tags.heading2,
+      tags.heading3,
+      tags.heading4,
+      tags.heading5,
+      tags.heading6,
+    ],
+    color: 'var(--syntax-heading)',
+    fontWeight: '700',
+  },
+  { tag: tags.strong, fontWeight: '700' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.link, color: 'var(--syntax-link)', textDecoration: 'underline' },
+  { tag: tags.url, color: 'var(--syntax-link)' },
+  { tag: tags.quote, color: 'var(--syntax-quote)' },
+  { tag: tags.monospace, color: 'var(--syntax-string)' },
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: tags.invalid, color: 'var(--syntax-invalid)' },
+]);
+
 const theme = EditorView.theme({
   '&': {
     height: '100%',
@@ -44,6 +100,7 @@ const theme = EditorView.theme({
   '.cm-content': {
     padding: '20px 22px',
     caretColor: 'var(--ink)',
+    color: 'var(--ink)',
   },
   '.cm-gutters': {
     backgroundColor: 'var(--bg-soft)',
@@ -52,13 +109,37 @@ const theme = EditorView.theme({
     color: 'var(--faint)',
   },
   '.cm-activeLine': {
-    backgroundColor: 'rgba(31, 41, 51, 0.035)',
+    backgroundColor: 'var(--editor-active-line)',
   },
   '.cm-activeLineGutter': {
-    backgroundColor: 'rgba(31, 41, 51, 0.06)',
+    backgroundColor: 'var(--editor-active-line-gutter)',
   },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-    backgroundColor: 'rgba(37, 99, 235, 0.16)',
+    backgroundColor: 'var(--editor-selection)',
+  },
+  '.cm-panels': {
+    backgroundColor: 'var(--bg-soft)',
+    color: 'var(--ink)',
+  },
+  '.cm-panels.cm-panels-top': {
+    borderBottom: '1px solid var(--border)',
+  },
+  '.cm-searchMatch': {
+    backgroundColor: 'var(--hover-strong)',
+    outline: '1px solid var(--accent)',
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'var(--accent-soft)',
+  },
+  '.cm-textfield, .cm-button': {
+    border: '1px solid var(--border)',
+    backgroundColor: 'var(--panel)',
+    color: 'var(--ink)',
+  },
+  '.cm-tooltip': {
+    border: '1px solid var(--border)',
+    backgroundColor: 'var(--panel)',
+    color: 'var(--ink)',
   },
 });
 
@@ -100,6 +181,7 @@ onMounted(() => {
         readOnlyCompartment.of(readOnlyExtensions(props.readOnly)),
         basicSetup,
         markdown({ codeLanguages: languages }),
+        syntaxHighlighting(syntaxTheme),
         placeholder('从这里开始写…'),
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({ 'aria-label': 'Markdown 内容' }),

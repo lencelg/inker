@@ -68,7 +68,7 @@ function cancel(): void {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(31, 41, 51, 0.42);
+  background: var(--overlay);
   backdrop-filter: blur(3px);
 }
 
@@ -78,7 +78,7 @@ function cancel(): void {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(31, 41, 51, 0.2);
+  box-shadow: var(--shadow-strong);
 }
 
 .dialog h2 {
@@ -108,7 +108,7 @@ function cancel(): void {
 
 .field input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .error {

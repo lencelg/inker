@@ -3,6 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      try {
+        const theme = localStorage.getItem('markleaf-theme');
+        if (
+          ['paper', 'white', 'dark', 'vscode-light', 'vscode-dark', 'vscode-hc'].includes(
+            theme,
+          )
+        ) {
+          document.documentElement.dataset.theme = theme;
+        }
+      } catch {
+        // Ignore storage errors and use the default theme.
+      }
+    </script>
     <title>markleaf</title>
   </head>
   <body>

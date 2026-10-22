@@ -137,7 +137,7 @@ watch(
 }
 
 .tab:hover {
-  background: rgba(31, 41, 51, 0.045);
+  background: var(--hover);
   color: var(--ink);
 }
 
@@ -215,7 +215,7 @@ watch(
 }
 
 .tab-close:hover {
-  background: rgba(31, 41, 51, 0.1);
+  background: var(--hover-strong);
   color: var(--ink);
 }
 
