@@ -13,6 +13,14 @@
         ) {
           document.documentElement.dataset.theme = theme;
         }
+        const font = localStorage.getItem('markleaf-font-family');
+        if (
+          ['jetbrains-mono', 'fira-code', 'source-code-pro', 'system-mono'].includes(
+            font,
+          )
+        ) {
+          document.documentElement.dataset.font = font;
+        }
         const fontSize = Number(localStorage.getItem('markleaf-font-size'));
         if (Number.isFinite(fontSize) && fontSize >= 11 && fontSize <= 28) {
           document.documentElement.style.setProperty(

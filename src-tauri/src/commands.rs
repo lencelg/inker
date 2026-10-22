@@ -6,7 +6,7 @@ use crate::notes::{
 };
 use crate::settings::{load_settings, save_settings, Settings};
 use std::path::{Path, PathBuf};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
 pub fn get_state(app: AppHandle) -> Result<NotesState, String> {
@@ -73,6 +73,34 @@ pub fn rename_entry(app: AppHandle, path: String, name: String) -> Result<String
 pub fn delete_entry(app: AppHandle, path: String) -> Result<(), String> {
     let target = entry_path(&require_notes_dir(&app)?, &path)?;
     trash::delete(&target).map_err(|error| format!("移到回收站失败：{error}"))
+}
+
+#[tauri::command]
+pub fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("settings") {
+        window
+            .show()
+            .map_err(|error| format!("显示设置窗口失败：{error}"))?;
+        let _ = window.unminimize();
+        window
+            .set_focus()
+            .map_err(|error| format!("聚焦设置窗口失败：{error}"))?;
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(
+        &app,
+        "settings",
+        WebviewUrl::App("settings.html".into()),
+    )
+    .title("设置 - markleaf")
+    .inner_size(640.0, 700.0)
+    .min_inner_size(500.0, 520.0)
+    .resizable(true)
+    .center()
+    .build()
+    .map_err(|error| format!("打开设置窗口失败：{error}"))?;
+    Ok(())
 }
 
 fn current_state(app: &AppHandle) -> Result<NotesState, String> {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { api } from './api';
 import ActivityBar from './components/ActivityBar.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -10,7 +11,7 @@ import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import SearchPanel from './components/SearchPanel.vue';
-import SettingsPanel from './components/SettingsPanel.vue';
+import StatusBar from './components/StatusBar.vue';
 import { renderMarkdown } from './lib/markdown';
 import {
   ancestorDirs,
@@ -20,16 +21,15 @@ import {
   replacePrefix,
 } from './lib/paths';
 import {
-  DEFAULT_FONT_SIZE,
-  FONT_SIZE_STORAGE_KEY,
-  clampFontSize,
+  PREFERENCES_EVENT,
+  PREFERENCES_REQUEST_EVENT,
+  applyPreferences,
+  normalizePreferences,
+  readPreferences,
+  savePreferences,
+  type Preferences,
 } from './lib/preferences';
-import {
-  DEFAULT_THEME,
-  THEME_STORAGE_KEY,
-  isThemeId,
-  type ThemeId,
-} from './lib/themes';
+import type { ViewMode } from './lib/viewModes';
 import type { FileEntry, NotesState, SearchMatch } from './types';
 
 interface NoteTab {
@@ -47,18 +47,21 @@ const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
 const error = ref('');
 const notice = ref('');
-const previewVisible = ref(false);
-const vimEnabled = ref(false);
-const theme = ref<ThemeId>(readStoredTheme());
-const activeView = ref<'explorer' | 'search' | 'settings'>('explorer');
-const fontSize = ref(readStoredFontSize());
+const preferences = ref<Preferences>(readPreferences());
+const activeView = ref<'explorer' | 'search'>('explorer');
+const viewMode = ref<ViewMode>('source');
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
 const editorScrollLine = ref(1);
 const editorScrollRatio = ref(0);
+const cursorLine = ref<number | null>(null);
+const cursorColumn = ref<number | null>(null);
 const editorPane = ref<{
   revealLine: (line: number, column?: number) => void;
+  refresh: () => void;
 } | null>(null);
+
+applyPreferences(preferences.value);
 
 const activeTab = computed(
   () => tabs.value.find((tab) => tab.path === activePath.value) ?? null,
@@ -76,6 +79,10 @@ const saving = computed(
 );
 const anySaving = computed(() => savingPaths.value.length > 0);
 const busy = computed(() => switching.value || mutating.value);
+const vimEnabled = computed(() => preferences.value.vimEnabled);
+const lineEnding = computed(() =>
+  activeTab.value?.content.includes('\r\n') ? 'CRLF' : 'LF',
+);
 const tabItems = computed(() =>
   tabs.value.map((tab) => ({
     path: tab.path,
@@ -114,9 +121,8 @@ const confirmation = ref<PendingConfirmation | null>(null);
 const prompt = ref<PromptState | null>(null);
 const saveTasks = new Map<string, Promise<boolean>>();
 let wheelAccumulator = 0;
-
-watch(theme, applyTheme, { immediate: true });
-watch(fontSize, applyFontSize, { immediate: true });
+let unlistenPreferences: UnlistenFn | null = null;
+let unlistenPreferencesRequest: UnlistenFn | null = null;
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown, true);
@@ -124,13 +130,40 @@ onMounted(() => {
     capture: true,
     passive: false,
   });
+  void setupPreferenceSync();
   void bootstrap();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown, true);
   window.removeEventListener('wheel', handleGlobalWheel, true);
+  unlistenPreferences?.();
+  unlistenPreferencesRequest?.();
 });
+
+async function setupPreferenceSync(): Promise<void> {
+  try {
+    unlistenPreferences = await listen<Preferences>(
+      PREFERENCES_EVENT,
+      (event) => {
+        const next = normalizePreferences(event.payload);
+        preferences.value = next;
+        savePreferences(next);
+        applyPreferences(next);
+      },
+    );
+    unlistenPreferencesRequest = await listen(
+      PREFERENCES_REQUEST_EVENT,
+      () => {
+        void emit(PREFERENCES_EVENT, preferences.value).catch(() => {
+          // Live sync is best-effort; local storage still applies.
+        });
+      },
+    );
+  } catch {
+    // Preferences remain usable without cross-window events.
+  }
+}
 
 async function bootstrap(): Promise<void> {
   try {
@@ -145,49 +178,18 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-function readStoredTheme(): ThemeId {
-  try {
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (isThemeId(stored)) return stored;
-  } catch {
-    // Storage can be unavailable in restricted webviews.
-  }
-  return DEFAULT_THEME;
-}
-
-function applyTheme(value: ThemeId): void {
-  document.documentElement.dataset.theme = value;
-  try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, value);
-  } catch {
-    // Persisting the preference is optional.
-  }
-}
-
-function readStoredFontSize(): number {
-  try {
-    const stored = window.localStorage.getItem(FONT_SIZE_STORAGE_KEY);
-    if (stored !== null) return clampFontSize(Number(stored));
-  } catch {
-    // Storage can be unavailable in restricted webviews.
-  }
-  return DEFAULT_FONT_SIZE;
-}
-
-function applyFontSize(value: number): void {
-  document.documentElement.style.setProperty(
-    '--content-font-size',
-    `${value}px`,
-  );
-  try {
-    window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(value));
-  } catch {
-    // Persisting the preference is optional.
-  }
+function updatePreferences(patch: Partial<Preferences>): void {
+  const next = normalizePreferences({ ...preferences.value, ...patch });
+  preferences.value = next;
+  savePreferences(next);
+  applyPreferences(next);
+  void emit(PREFERENCES_EVENT, next).catch(() => {
+    // Persistence has already happened locally.
+  });
 }
 
 function setFontSize(value: number): void {
-  fontSize.value = clampFontSize(value);
+  updatePreferences({ fontSize: value });
 }
 
 function handleGlobalWheel(event: WheelEvent): void {
@@ -205,7 +207,29 @@ function handleGlobalWheel(event: WheelEvent): void {
 
   const direction = Math.sign(wheelAccumulator);
   wheelAccumulator = 0;
-  setFontSize(fontSize.value - direction);
+  setFontSize(preferences.value.fontSize - direction);
+}
+
+function handleCursor(position: { line: number; column: number }): void {
+  cursorLine.value = position.line;
+  cursorColumn.value = position.column;
+}
+
+async function setViewMode(mode: ViewMode): Promise<void> {
+  if (viewMode.value === mode) return;
+  viewMode.value = mode;
+  await nextTick();
+  if (mode !== 'preview') {
+    editorPane.value?.refresh();
+  }
+}
+
+async function openSettings(): Promise<void> {
+  try {
+    await api.openSettingsWindow();
+  } catch (err) {
+    setError(err);
+  }
 }
 
 async function openSearchResult(match: SearchMatch): Promise<void> {
@@ -257,6 +281,8 @@ function pruneTabs(): void {
   editorSession.value += 1;
   editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  cursorLine.value = null;
+  cursorColumn.value = null;
 }
 
 async function openNote(path: string): Promise<boolean> {
@@ -296,6 +322,8 @@ function activateTab(path: string): void {
   editorSession.value += 1;
   editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  cursorLine.value = null;
+  cursorColumn.value = null;
   clearFeedback();
   revealPath(path);
 }
@@ -462,6 +490,8 @@ function resetTabs(): void {
   editorSession.value += 1;
   editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  cursorLine.value = null;
+  cursorColumn.value = null;
 }
 
 function toggleFolder(path: string): void {
@@ -631,6 +661,8 @@ async function requestCloseTab(path: string): Promise<void> {
   editorSession.value += 1;
   editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  cursorLine.value = null;
+  cursorColumn.value = null;
   clearFeedback();
 }
 
@@ -697,6 +729,7 @@ function errorMessage(err: unknown): string {
     <ActivityBar
       :active-view="activeView"
       @change-view="activeView = $event"
+      @open-settings="openSettings"
     />
 
     <NoteSidebar
@@ -716,17 +749,9 @@ function errorMessage(err: unknown): string {
     />
 
     <SearchPanel
-      v-else-if="activeView === 'search'"
+      v-else
       :notes-dir="notesDir"
       @open="openSearchResult"
-    />
-
-    <SettingsPanel
-      v-else
-      :theme="theme"
-      :font-size="fontSize"
-      @theme-change="theme = $event"
-      @font-size-change="setFontSize"
     />
 
     <main v-if="notesDir === null" class="workspace welcome">
@@ -755,27 +780,6 @@ function errorMessage(err: unknown): string {
             @select="activateTab"
             @close="requestCloseTab"
           />
-          <div class="toolbar">
-            <button
-              class="btn ghost toggle"
-              :class="{ active: vimEnabled }"
-              type="button"
-              :aria-pressed="vimEnabled"
-              title="切换 Vim 模式"
-              @click="vimEnabled = !vimEnabled"
-            >
-              Vim
-            </button>
-            <button
-              class="btn ghost toggle"
-              :class="{ active: previewVisible }"
-              type="button"
-              :aria-pressed="previewVisible"
-              @click="previewVisible = !previewVisible"
-            >
-              预览
-            </button>
-          </div>
         </header>
 
         <div class="document-meta">
@@ -786,11 +790,13 @@ function errorMessage(err: unknown): string {
           <span v-if="notice" class="notice-text">{{ notice }}</span>
         </div>
 
-        <div class="panes" :class="{ single: !previewVisible }">
-          <section class="editor-pane">
+        <div class="panes" :class="{ single: viewMode !== 'live' }">
+          <section
+            v-show="viewMode !== 'preview'"
+            class="editor-pane"
+          >
             <header class="pane-header">
               <span class="pane-title">Markdown</span>
-              <span v-if="vimEnabled" class="pane-hint">Vim</span>
             </header>
             <EditorPane
               ref="editorPane"
@@ -800,11 +806,12 @@ function errorMessage(err: unknown): string {
               :read-only="switching || mutating"
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
+              @cursor="handleCursor"
             />
           </section>
 
           <PreviewPane
-            v-if="previewVisible"
+            v-if="viewMode !== 'source'"
             :key="editorSession"
             :html="previewHtml"
             :note-path="activeTab.path"
@@ -820,6 +827,15 @@ function errorMessage(err: unknown): string {
         <p>在左侧文件树中打开或新建一个 Markdown 文件。</p>
       </div>
     </main>
+
+    <StatusBar
+      :line="activeTab ? cursorLine : null"
+      :column="activeTab ? cursorColumn : null"
+      :mode="viewMode"
+      :vim-enabled="vimEnabled"
+      :line-ending="lineEnding"
+      @mode-change="setViewMode"
+    />
 
     <ConfirmDialog
       v-if="confirmation"

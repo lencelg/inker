@@ -1,7 +1,6 @@
 import { createApp } from 'vue';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import '@fontsource/jetbrains-mono/400.css';
-import '@fontsource/jetbrains-mono/700.css';
+import './lib/font-assets';
 import 'katex/dist/katex.min.css';
 import App from './App.vue';
 import './style.css';

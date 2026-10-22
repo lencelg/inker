@@ -47,4 +47,5 @@ export interface NotesApi {
   createFolder(parent: string, name: string): Promise<string>;
   renameEntry(path: string, name: string): Promise<string>;
   deleteEntry(path: string): Promise<void>;
+  openSettingsWindow(): Promise<void>;
 }

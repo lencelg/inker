@@ -40,4 +40,6 @@ export const api: NotesApi = {
   renameEntry: (path, name) => invoke<string>('rename_entry', { path, name }),
 
   deleteEntry: (path) => invoke<void>('delete_entry', { path }),
+
+  openSettingsWindow: () => invoke<void>('open_settings_window'),
 };

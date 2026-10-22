@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { basicSetup } from 'codemirror';
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import {
+  HighlightStyle,
+  indentUnit,
+  syntaxHighlighting,
+} from '@codemirror/language';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, placeholder } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
@@ -18,6 +22,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   change: [content: string];
   scrollSync: [position: { line: number; ratio: number }];
+  cursor: [position: { line: number; column: number }];
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
@@ -167,6 +172,16 @@ function handleScroll(): void {
   scheduleScrollSync();
 }
 
+function emitCursor(): void {
+  if (!view) return;
+  const head = view.state.selection.main.head;
+  const line = view.state.doc.lineAt(head);
+  emit('cursor', {
+    line: line.number,
+    column: head - line.from + 1,
+  });
+}
+
 onMounted(() => {
   if (!host.value) {
     return;
@@ -181,6 +196,8 @@ onMounted(() => {
         basicSetup,
         markdown({ codeLanguages: languages }),
         syntaxHighlighting(syntaxTheme),
+        indentUnit.of('    '),
+        EditorState.tabSize.of(4),
         placeholder('从这里开始写…'),
         EditorView.lineWrapping,
         EditorView.contentAttributes.of({ 'aria-label': 'Markdown 内容' }),
@@ -190,6 +207,9 @@ onMounted(() => {
             emit('change', update.state.doc.toString());
             scheduleScrollSync();
           }
+          if (update.docChanged || update.selectionSet) {
+            emitCursor();
+          }
         }),
       ],
     }),
@@ -198,6 +218,7 @@ onMounted(() => {
   scrollElement.addEventListener('scroll', handleScroll, { passive: true });
   view.focus();
   scheduleScrollSync();
+  emitCursor();
 });
 
 watch(
@@ -248,7 +269,13 @@ function revealLine(lineNumber: number, column = 1): void {
   view.focus();
 }
 
-defineExpose({ revealLine });
+function refresh(): void {
+  if (!view) return;
+  view.requestMeasure();
+  view.focus();
+}
+
+defineExpose({ revealLine, refresh });
 </script>
 
 <template>

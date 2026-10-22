@@ -65,6 +65,12 @@
   --activity-icon-active: #1f2933;
   --activity-active-bg: rgba(37, 99, 235, 0.1);
   --activity-hover: rgba(31, 41, 51, 0.06);
+  --statusbar-bg: #26303a;
+  --statusbar-ink: #f5f7fa;
+  --statusbar-muted: #c3ccd6;
+  --statusbar-hover: rgba(255, 255, 255, 0.12);
+  --statusbar-border: transparent;
+  --statusbar-border-soft: rgba(255, 255, 255, 0.2);
   font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system,
     sans-serif;
   font-synthesis: none;
@@ -92,6 +98,12 @@
   --activity-icon-active: #1f2328;
   --activity-active-bg: #e3e8ed;
   --activity-hover: rgba(0, 0, 0, 0.05);
+  --statusbar-bg: #26303a;
+  --statusbar-ink: #f5f7fa;
+  --statusbar-muted: #c3ccd6;
+  --statusbar-hover: rgba(255, 255, 255, 0.12);
+  --statusbar-border: transparent;
+  --statusbar-border-soft: rgba(255, 255, 255, 0.2);
 }
 
 :root[data-theme='dark'] {
@@ -157,6 +169,12 @@
   --activity-icon-active: #e6edf3;
   --activity-active-bg: #1a2530;
   --activity-hover: rgba(255, 255, 255, 0.06);
+  --statusbar-bg: #0b1015;
+  --statusbar-ink: #dbe4ee;
+  --statusbar-muted: #8b98a6;
+  --statusbar-hover: rgba(255, 255, 255, 0.08);
+  --statusbar-border: #2a333d;
+  --statusbar-border-soft: rgba(255, 255, 255, 0.16);
 }
 
 :root[data-theme='vscode-light'] {
@@ -220,6 +238,12 @@
   --activity-icon-active: #ffffff;
   --activity-active-bg: #37373d;
   --activity-hover: rgba(255, 255, 255, 0.08);
+  --statusbar-bg: #007acc;
+  --statusbar-ink: #ffffff;
+  --statusbar-muted: rgba(255, 255, 255, 0.78);
+  --statusbar-hover: rgba(255, 255, 255, 0.18);
+  --statusbar-border: transparent;
+  --statusbar-border-soft: rgba(255, 255, 255, 0.28);
 }
 
 :root[data-theme='vscode-dark'] {
@@ -285,6 +309,12 @@
   --activity-icon-active: #ffffff;
   --activity-active-bg: #37373d;
   --activity-hover: rgba(255, 255, 255, 0.1);
+  --statusbar-bg: #007acc;
+  --statusbar-ink: #ffffff;
+  --statusbar-muted: rgba(255, 255, 255, 0.78);
+  --statusbar-hover: rgba(255, 255, 255, 0.18);
+  --statusbar-border: transparent;
+  --statusbar-border-soft: rgba(255, 255, 255, 0.28);
 }
 
 :root[data-theme='vscode-hc'] {
@@ -351,6 +381,27 @@
   --activity-icon-active: #6fc3df;
   --activity-active-bg: #0a2a33;
   --activity-hover: #1a1a1a;
+  --statusbar-bg: #000000;
+  --statusbar-ink: #ffffff;
+  --statusbar-muted: #d6d6d6;
+  --statusbar-hover: #1a1a1a;
+  --statusbar-border: #6fc3df;
+  --statusbar-border-soft: #6fc3df;
+}
+
+:root[data-font='fira-code'] {
+  --mono-font: 'Fira Code', 'JetBrains Mono', ui-monospace, SFMono-Regular,
+    Menlo, Consolas, monospace;
+}
+
+:root[data-font='source-code-pro'] {
+  --mono-font: 'Source Code Pro', 'JetBrains Mono', ui-monospace,
+    SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root[data-font='system-mono'] {
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'DejaVu Sans Mono', monospace;
 }
 
 * {
@@ -439,7 +490,7 @@ button:disabled {
 .app-shell {
   display: grid;
   grid-template-columns: 48px 252px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 26px;
   height: 100vh;
   overflow: hidden;
 }
@@ -511,19 +562,6 @@ button:disabled {
   color: var(--muted);
 }
 
-.toolbar {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.toggle.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
 .banner {
   display: flex;
   align-items: center;
@@ -583,16 +621,6 @@ button:disabled {
 .pane-title {
   font-size: 13.5px;
   font-weight: 600;
-}
-
-.pane-hint {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
 }
 
 .markdown-body {

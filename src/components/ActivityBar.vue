@@ -1,11 +1,14 @@
 <script setup lang="ts">
-type ActivityView = 'explorer' | 'search' | 'settings';
+type ActivityView = 'explorer' | 'search';
 
 defineProps<{
   activeView: ActivityView;
 }>();
 
-const emit = defineEmits<{ changeView: [view: ActivityView] }>();
+const emit = defineEmits<{
+  changeView: [view: ActivityView];
+  openSettings: [];
+}>();
 </script>
 
 <template>
@@ -69,12 +72,10 @@ const emit = defineEmits<{ changeView: [view: ActivityView] }>();
 
     <button
       class="activity-item"
-      :class="{ active: activeView === 'settings' }"
       type="button"
       title="设置"
       aria-label="设置"
-      :aria-pressed="activeView === 'settings'"
-      @click="emit('changeView', 'settings')"
+      @click="emit('openSettings')"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path
