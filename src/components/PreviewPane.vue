@@ -8,15 +8,24 @@ import { isLocalImageSource } from '../lib/markdown';
 const props = defineProps<{
   html: string;
   notePath: string;
+  scrollLine: number;
   scrollRatio?: number;
 }>();
 
+interface SourceAnchor {
+  line: number;
+  top: number;
+}
+
 // Notes may contain raw HTML, so all rendered HTML is sanitized before v-html.
 const safeHtml = computed(() =>
-  DOMPurify.sanitize(props.html, { ADD_ATTR: ['data-md-src'] }),
+  DOMPurify.sanitize(props.html, {
+    ADD_ATTR: ['data-md-src', 'data-source-line'],
+  }),
 );
 const bodyRef = ref<HTMLElement | null>(null);
 const imageCache = new Map<string, string>();
+let anchors: SourceAnchor[] = [];
 let resolveRun = 0;
 
 function renderMath(): void {
@@ -91,24 +100,79 @@ async function resolveImages(): Promise<void> {
   );
 
   if (run === resolveRun) {
-    applyScrollRatio();
+    collectAnchors();
+    applyScrollSync();
   }
 }
 
-function applyScrollRatio(): void {
+function collectAnchors(): void {
+  const root = bodyRef.value;
+  if (!root) {
+    anchors = [];
+    return;
+  }
+
+  const rootTop = root.getBoundingClientRect().top;
+  const byLine = new Map<number, number>();
+  const elements = root.querySelectorAll<HTMLElement>('[data-source-line]');
+  for (const element of elements) {
+    const line = Number(element.dataset.sourceLine);
+    if (!Number.isFinite(line) || line < 1 || byLine.has(line)) continue;
+    const top = element.getBoundingClientRect().top - rootTop + root.scrollTop;
+    byLine.set(line, top);
+  }
+
+  const collected = [...byLine.entries()]
+    .map(([line, top]) => ({ line, top }))
+    .sort((a, b) => a.line - b.line);
+  if (collected.length > 0 && collected[0].line > 1) {
+    collected.unshift({ line: 1, top: 0 });
+  }
+  anchors = collected;
+}
+
+function applyScrollSync(): void {
   const element = bodyRef.value;
   if (!element) return;
   const maximum = element.scrollHeight - element.clientHeight;
   if (maximum <= 0) return;
-  const ratio = Math.min(1, Math.max(0, props.scrollRatio ?? 0));
-  element.scrollTop = ratio * maximum;
+
+  let top: number;
+  if (anchors.length > 0) {
+    const targetLine = Math.max(1, props.scrollLine);
+    let index = 0;
+    while (
+      index + 1 < anchors.length &&
+      anchors[index + 1].line <= targetLine
+    ) {
+      index += 1;
+    }
+    const start = anchors[index];
+    const next = anchors[index + 1];
+    top = start.top;
+    if (next && next.line > start.line && targetLine > start.line) {
+      const progress = Math.min(
+        1,
+        (targetLine - start.line) / (next.line - start.line),
+      );
+      top = start.top + (next.top - start.top) * progress;
+    }
+  } else {
+    const ratio = Math.min(1, Math.max(0, props.scrollRatio ?? 0));
+    top = ratio * maximum;
+  }
+
+  element.scrollTop = Math.min(maximum, Math.max(0, top - 10));
 }
 
 watch(
   [() => props.html, () => props.notePath],
   async ([html]) => {
     await nextTick();
-    if (!html) return;
+    if (!html) {
+      anchors = [];
+      return;
+    }
     renderMath();
     await resolveImages();
   },
@@ -116,10 +180,10 @@ watch(
 );
 
 watch(
-  () => props.scrollRatio,
+  [() => props.scrollLine, () => props.scrollRatio],
   async () => {
     await nextTick();
-    applyScrollRatio();
+    applyScrollSync();
   },
 );
 </script>

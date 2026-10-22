@@ -12,6 +12,40 @@ const markdown = new MarkdownIt({
 
 markdown.use(taskLists, { enabled: true, label: false });
 
+interface SourceMappedToken {
+  map: [number, number] | null;
+  nesting: number;
+  attrSet(name: string, value: string): void;
+}
+
+function annotateSourceLine(token: SourceMappedToken): void {
+  if (token.map && token.nesting !== -1) {
+    token.attrSet('data-source-line', String(token.map[0] + 1));
+  }
+}
+
+const originalRenderToken = markdown.renderer.renderToken.bind(markdown.renderer);
+markdown.renderer.renderToken = (tokens, idx, options) => {
+  annotateSourceLine(tokens[idx]);
+  return originalRenderToken(tokens, idx, options);
+};
+
+const originalFenceRenderer = markdown.renderer.rules.fence;
+markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  annotateSourceLine(tokens[idx]);
+  return originalFenceRenderer
+    ? originalFenceRenderer(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options);
+};
+
+const originalCodeBlockRenderer = markdown.renderer.rules.code_block;
+markdown.renderer.rules.code_block = (tokens, idx, options, env, self) => {
+  annotateSourceLine(tokens[idx]);
+  return originalCodeBlockRenderer
+    ? originalCodeBlockRenderer(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options);
+};
+
 const defaultImageRenderer = markdown.renderer.rules.image;
 
 markdown.renderer.rules.image = (tokens, idx, options, env, self) => {

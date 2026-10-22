@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   change: [content: string];
-  scrollRatio: [ratio: number];
+  scrollSync: [position: { line: number; ratio: number }];
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
@@ -24,6 +24,7 @@ const vimExtension = vim({ status: true });
 
 let view: EditorView | null = null;
 let scrollElement: HTMLElement | null = null;
+let scrollFrame = 0;
 
 const theme = EditorView.theme({
   '&': {
@@ -64,10 +65,25 @@ function readOnlyExtensions(readOnly: boolean) {
   return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 }
 
-function handleScroll(): void {
-  if (!scrollElement) return;
+function emitScrollSync(): void {
+  if (!view || !scrollElement) return;
   const maximum = scrollElement.scrollHeight - scrollElement.clientHeight;
-  emit('scrollRatio', maximum > 0 ? scrollElement.scrollTop / maximum : 0);
+  const ratio = maximum > 0 ? scrollElement.scrollTop / maximum : 0;
+  const block = view.lineBlockAtHeight(scrollElement.scrollTop + 8);
+  const line = view.state.doc.lineAt(block.from).number;
+  emit('scrollSync', { line, ratio });
+}
+
+function scheduleScrollSync(): void {
+  if (scrollFrame) return;
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0;
+    emitScrollSync();
+  });
+}
+
+function handleScroll(): void {
+  scheduleScrollSync();
 }
 
 onMounted(() => {
@@ -90,6 +106,7 @@ onMounted(() => {
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             emit('change', update.state.doc.toString());
+            scheduleScrollSync();
           }
         }),
       ],
@@ -98,6 +115,7 @@ onMounted(() => {
   scrollElement = view.scrollDOM;
   scrollElement.addEventListener('scroll', handleScroll, { passive: true });
   view.focus();
+  scheduleScrollSync();
 });
 
 watch(
@@ -120,6 +138,10 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  if (scrollFrame) {
+    cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+  }
   scrollElement?.removeEventListener('scroll', handleScroll);
   scrollElement = null;
   view?.destroy();

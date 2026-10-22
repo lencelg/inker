@@ -36,6 +36,7 @@ const previewVisible = ref(true);
 const vimEnabled = ref(false);
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
+const editorScrollLine = ref(1);
 const editorScrollRatio = ref(0);
 
 const activeTab = computed(
@@ -149,6 +150,7 @@ function pruneTabs(): void {
     activePath.value = null;
   }
   editorSession.value += 1;
+  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
 }
 
@@ -187,6 +189,7 @@ function activateTab(path: string): void {
   }
   activePath.value = path;
   editorSession.value += 1;
+  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
   clearFeedback();
   revealPath(path);
@@ -207,8 +210,9 @@ function handleContentChange(value: string): void {
   notice.value = '';
 }
 
-function handleEditorScroll(ratio: number): void {
-  editorScrollRatio.value = ratio;
+function handleEditorScroll(position: { line: number; ratio: number }): void {
+  editorScrollLine.value = position.line;
+  editorScrollRatio.value = position.ratio;
 }
 
 function handleGlobalKeydown(event: KeyboardEvent): void {
@@ -351,6 +355,7 @@ function resetTabs(): void {
   tabs.value = [];
   activePath.value = null;
   editorSession.value += 1;
+  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
 }
 
@@ -519,6 +524,7 @@ async function requestCloseTab(path: string): Promise<void> {
     activePath.value = null;
   }
   editorSession.value += 1;
+  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
   clearFeedback();
 }
@@ -667,7 +673,7 @@ function errorMessage(err: unknown): string {
               :vim-enabled="vimEnabled"
               :read-only="switching || mutating"
               @change="handleContentChange"
-              @scroll-ratio="handleEditorScroll"
+              @scroll-sync="handleEditorScroll"
             />
           </section>
 
@@ -676,6 +682,7 @@ function errorMessage(err: unknown): string {
             :key="editorSession"
             :html="previewHtml"
             :note-path="activeTab.path"
+            :scroll-line="editorScrollLine"
             :scroll-ratio="editorScrollRatio"
           />
         </div>
