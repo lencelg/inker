@@ -1,28 +1,66 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api } from './api';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import EditorPane from './components/EditorPane.vue';
+import EditorTabs from './components/EditorTabs.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
-import SyntaxIssues from './components/SyntaxIssues.vue';
-import { lintMarkdown } from './lib/lint';
+import PromptDialog from './components/PromptDialog.vue';
 import { renderMarkdown } from './lib/markdown';
-import type { NoteMeta, NotesState, SyntaxIssue } from './types';
+import {
+  ancestorDirs,
+  basename,
+  flattenFiles,
+  isSameOrDescendant,
+  replacePrefix,
+} from './lib/paths';
+import type { FileEntry, NotesState } from './types';
 
-const notes = ref<NoteMeta[]>([]);
+interface NoteTab {
+  path: string;
+  content: string;
+  savedContent: string;
+}
+
+const entries = ref<FileEntry[]>([]);
 const notesDir = ref<string | null>(null);
-const selectedFilename = ref<string | null>(null);
-const title = ref('');
-const content = ref('');
-const issues = ref<SyntaxIssue[]>([]);
-const checked = ref(false);
-const dirty = ref(false);
+const tabs = ref<NoteTab[]>([]);
+const activePath = ref<string | null>(null);
+const switching = ref(false);
+const mutating = ref(false);
+const savingPaths = ref<string[]>([]);
 const error = ref('');
 const notice = ref('');
-const saving = ref(false);
-const editorRef = ref<HTMLTextAreaElement | null>(null);
+const previewVisible = ref(true);
+const vimEnabled = ref(false);
+const expandedPaths = ref<string[]>([]);
+const editorSession = ref(0);
+const editorScrollRatio = ref(0);
 
-const previewHtml = computed(() => renderMarkdown(content.value));
+const activeTab = computed(
+  () => tabs.value.find((tab) => tab.path === activePath.value) ?? null,
+);
+const selectedPath = computed(() => activeTab.value?.path ?? null);
+const previewHtml = computed(() => renderMarkdown(activeTab.value?.content ?? ''));
+const activeDirty = computed(
+  () =>
+    activeTab.value !== null &&
+    activeTab.value.content !== activeTab.value.savedContent,
+);
+const saving = computed(
+  () =>
+    activePath.value !== null && savingPaths.value.includes(activePath.value),
+);
+const anySaving = computed(() => savingPaths.value.length > 0);
+const busy = computed(() => switching.value || mutating.value);
+const tabItems = computed(() =>
+  tabs.value.map((tab) => ({
+    path: tab.path,
+    name: basename(tab.path),
+    dirty: tab.content !== tab.savedContent,
+  })),
+);
 
 interface ConfirmOptions {
   title: string;
@@ -39,19 +77,37 @@ interface PendingConfirmation {
   resolve: (confirmed: boolean) => void;
 }
 
+interface PromptState {
+  title: string;
+  label: string;
+  initialValue: string;
+  confirmLabel: string;
+  placeholder: string;
+  busy: boolean;
+  error: string;
+  submit: (value: string) => Promise<void>;
+}
+
 const confirmation = ref<PendingConfirmation | null>(null);
+const prompt = ref<PromptState | null>(null);
+const saveTasks = new Map<string, Promise<boolean>>();
 
 onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown, true);
   void bootstrap();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown, true);
 });
 
 async function bootstrap(): Promise<void> {
   try {
     const state = await api.getState();
     applyState(state);
-    const first = state.notes[0];
+    const first = flattenFiles(state.entries)[0];
     if (first) {
-      await loadNote(first.filename);
+      await openNote(first.path);
     }
   } catch (err) {
     setError(err);
@@ -60,179 +116,443 @@ async function bootstrap(): Promise<void> {
 
 function applyState(state: NotesState): void {
   notesDir.value = state.notesDir;
-  notes.value = state.notes;
+  entries.value = state.entries;
+  pruneExpandedPaths();
+  pruneTabs();
 }
 
-async function loadNote(filename: string): Promise<void> {
-  const detail = await api.readNote(filename);
-  selectedFilename.value = filename;
-  title.value = detail.note.title;
-  content.value = detail.content;
-  issues.value = [];
-  checked.value = false;
-  dirty.value = false;
+function pruneExpandedPaths(): void {
+  const directories = new Set(
+    entries.value.filter((entry) => entry.isDir).map((entry) => entry.path),
+  );
+  expandedPaths.value = expandedPaths.value.filter((path) => directories.has(path));
+}
+
+function pruneTabs(): void {
+  const files = new Set(
+    entries.value.filter((entry) => !entry.isDir).map((entry) => entry.path),
+  );
+  const stale = tabs.value.filter((tab) => !files.has(tab.path));
+  if (stale.length === 0) return;
+
+  const activeIndex = tabs.value.findIndex((tab) => tab.path === activePath.value);
+  const activeRemoved =
+    activeIndex >= 0 && stale.some((tab) => tab.path === activePath.value);
+  tabs.value = tabs.value.filter((tab) => files.has(tab.path));
+  if (!activeRemoved) return;
+
+  const fallback = tabs.value[Math.max(0, Math.min(activeIndex, tabs.value.length - 1))];
+  if (fallback) {
+    activePath.value = fallback.path;
+    revealPath(fallback.path);
+  } else {
+    activePath.value = null;
+  }
+  editorSession.value += 1;
+  editorScrollRatio.value = 0;
+}
+
+async function openNote(path: string): Promise<boolean> {
+  const existing = tabs.value.find((tab) => tab.path === path);
+  if (existing) {
+    activateTab(path);
+    return true;
+  }
+
+  try {
+    const detail = await api.readNote(path);
+    const opened = tabs.value.find((tab) => tab.path === detail.path);
+    if (opened) {
+      activateTab(detail.path);
+      return true;
+    }
+    tabs.value.push({
+      path: detail.path,
+      content: detail.content,
+      savedContent: detail.content,
+    });
+    activateTab(detail.path);
+    return true;
+  } catch (err) {
+    setError(err);
+    return false;
+  }
+}
+
+function activateTab(path: string): void {
+  if (!tabs.value.some((tab) => tab.path === path)) return;
+  if (activePath.value === path) {
+    revealPath(path);
+    return;
+  }
+  activePath.value = path;
+  editorSession.value += 1;
+  editorScrollRatio.value = 0;
+  clearFeedback();
+  revealPath(path);
+}
+
+function revealPath(path: string): void {
+  const directories = ancestorDirs(path);
+  if (directories.length === 0) return;
+  expandedPaths.value = [
+    ...new Set([...expandedPaths.value, ...directories]),
+  ];
+}
+
+function handleContentChange(value: string): void {
+  const tab = activeTab.value;
+  if (!tab) return;
+  tab.content = value;
   notice.value = '';
-  await scrollEditorToTop();
+}
+
+function handleEditorScroll(ratio: number): void {
+  editorScrollRatio.value = ratio;
+}
+
+function handleGlobalKeydown(event: KeyboardEvent): void {
+  if (event.isComposing) return;
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (
+    prompt.value ||
+    confirmation.value ||
+    switching.value ||
+    mutating.value ||
+    !activeTab.value
+  ) {
+    return;
+  }
+  void saveCurrentNote();
+}
+
+function markSaving(path: string, value: boolean): void {
+  const next = new Set(savingPaths.value);
+  if (value) {
+    next.add(path);
+  } else {
+    next.delete(path);
+  }
+  savingPaths.value = [...next];
+}
+
+async function saveTab(tab: NoteTab): Promise<boolean> {
+  const pending = saveTasks.get(tab.path);
+  if (pending) return pending;
+  if (tab.content === tab.savedContent) return true;
+
+  const snapshot = tab.content;
+  markSaving(tab.path, true);
+
+  const task = (async (): Promise<boolean> => {
+    try {
+      await api.saveNote(tab.path, snapshot);
+      if (tab.content === snapshot) {
+        tab.savedContent = snapshot;
+      }
+      if (activePath.value === tab.path) {
+        notice.value = '已保存。';
+      }
+      return true;
+    } catch (err) {
+      setError(err);
+      return false;
+    } finally {
+      saveTasks.delete(tab.path);
+      markSaving(tab.path, false);
+    }
+  })();
+
+  saveTasks.set(tab.path, task);
+  return task;
+}
+
+async function saveCurrentNote(): Promise<boolean> {
+  const tab = activeTab.value;
+  if (!tab) return true;
+
+  clearFeedback();
+  const pending = saveTasks.get(tab.path);
+  if (pending && !(await pending)) return false;
+  if (tab.content === tab.savedContent) {
+    if (activePath.value === tab.path) {
+      notice.value = '已保存。';
+    }
+    return true;
+  }
+  return saveTab(tab);
+}
+
+async function saveAllDirtyTabs(): Promise<boolean> {
+  for (const tab of [...tabs.value]) {
+    const pending = saveTasks.get(tab.path);
+    if (pending && !(await pending)) return false;
+    if (tab.content === tab.savedContent) continue;
+    if (!(await saveTab(tab))) return false;
+    if (tab.content !== tab.savedContent) return false;
+  }
+  return true;
+}
+
+async function selectNote(path: string): Promise<void> {
+  if (busy.value || path === activePath.value) return;
+
+  const existing = tabs.value.find((tab) => tab.path === path);
+  if (existing) {
+    activateTab(path);
+    return;
+  }
+
+  switching.value = true;
+  clearFeedback();
+  try {
+    await openNote(path);
+  } finally {
+    switching.value = false;
+  }
 }
 
 async function chooseFolder(): Promise<void> {
-  if (!(await confirmDiscard())) return;
-  clearFeedback();
+  if (busy.value) return;
+
   try {
-    const state = await api.chooseNotesDir();
-    if (!state) return;
+    const path = await api.pickNotesDir();
+    if (!path) return;
+
+    switching.value = true;
+    try {
+      clearFeedback();
+      if (!(await saveAllDirtyTabs())) return;
+    } finally {
+      switching.value = false;
+    }
+
+    const state = await api.chooseNotesDir(path);
+    resetTabs();
+    expandedPaths.value = [];
     applyState(state);
-    const first = state.notes[0];
+
+    const first = flattenFiles(state.entries)[0];
     if (first) {
-      await loadNote(first.filename);
-    } else {
-      resetEditor();
+      await openNote(first.path);
     }
   } catch (err) {
     setError(err);
   }
 }
 
-async function selectNote(filename: string): Promise<void> {
-  if (filename === selectedFilename.value) return;
-  if (!(await confirmDiscard())) return;
+function resetTabs(): void {
+  tabs.value = [];
+  activePath.value = null;
+  editorSession.value += 1;
+  editorScrollRatio.value = 0;
+}
+
+function toggleFolder(path: string): void {
+  const next = new Set(expandedPaths.value);
+  if (next.has(path)) {
+    next.delete(path);
+  } else {
+    next.add(path);
+  }
+  expandedPaths.value = [...next];
+}
+
+function requestCreateFile(parent: string): void {
+  openPrompt({
+    title: '新建文件',
+    label: '文件名',
+    initialValue: '未命名.md',
+    confirmLabel: '创建',
+    placeholder: '例如：笔记.md',
+    submit: async (name) => {
+      if (mutating.value || switching.value) {
+        throw new Error('请稍后再试。');
+      }
+      mutating.value = true;
+      try {
+        const path = await api.createFile(parent, name);
+        await refreshEntries();
+        revealPath(path);
+        const opened = await openNote(path);
+        notice.value = opened ? '文件已创建。' : '文件已创建，但打开失败。';
+      } finally {
+        mutating.value = false;
+      }
+    },
+  });
+}
+
+function requestCreateFolder(parent: string): void {
+  openPrompt({
+    title: '新建文件夹',
+    label: '文件夹名称',
+    initialValue: '',
+    confirmLabel: '创建',
+    placeholder: '例如：日记',
+    submit: async (name) => {
+      if (mutating.value || switching.value) {
+        throw new Error('请稍后再试。');
+      }
+      mutating.value = true;
+      try {
+        const path = await api.createFolder(parent, name);
+        await refreshEntries();
+        revealPath(path);
+        notice.value = '文件夹已创建。';
+      } finally {
+        mutating.value = false;
+      }
+    },
+  });
+}
+
+function requestRename(entry: FileEntry): void {
+  openPrompt({
+    title: entry.isDir ? '重命名文件夹' : '重命名文件',
+    label: '新名称',
+    initialValue: entry.name,
+    confirmLabel: '重命名',
+    placeholder: entry.isDir ? '文件夹名称' : '例如：笔记.md',
+    submit: async (name) => {
+      if (mutating.value || switching.value || anySaving.value) {
+        throw new Error('请稍后再试。');
+      }
+      mutating.value = true;
+      try {
+        const newPath = await api.renameEntry(entry.path, name);
+        for (const tab of tabs.value) {
+          tab.path = replacePrefix(tab.path, entry.path, newPath);
+        }
+        if (activePath.value) {
+          activePath.value = replacePrefix(activePath.value, entry.path, newPath);
+        }
+        expandedPaths.value = expandedPaths.value.map((path) =>
+          replacePrefix(path, entry.path, newPath),
+        );
+        await refreshEntries();
+        revealPath(newPath);
+        notice.value = '已重命名。';
+      } finally {
+        mutating.value = false;
+      }
+    },
+  });
+}
+
+async function requestDelete(entry: FileEntry): Promise<void> {
+  if (busy.value || anySaving.value) return;
+
+  const affectedTabs = tabs.value.filter((tab) =>
+    isSameOrDescendant(tab.path, entry.path),
+  );
+  const hasDirtyTab = affectedTabs.some(
+    (tab) => tab.content !== tab.savedContent,
+  );
+  const warning = hasDirtyTab
+    ? '其中有未保存的修改，删除后将无法恢复。'
+    : '';
+  const confirmed = await askConfirmation({
+    title: entry.isDir ? '删除这个文件夹？' : '删除这个文件？',
+    message: entry.isDir
+      ? `文件夹“${entry.name}”及其内容会移到系统回收站。${warning}`
+      : `文件“${entry.name}”会移到系统回收站。${warning}`,
+    confirmLabel: '移到回收站',
+  });
+  if (!confirmed || busy.value || anySaving.value) return;
+
+  mutating.value = true;
   clearFeedback();
   try {
-    await loadNote(filename);
-  } catch (err) {
-    setError(err);
-  }
-}
+    const activeWasAffected =
+      activePath.value !== null &&
+      isSameOrDescendant(activePath.value, entry.path);
+    await api.deleteEntry(entry.path);
+    await refreshEntries();
 
-async function startNewNote(): Promise<void> {
-  if (!notesDir.value) {
-    await chooseFolder();
-    return;
-  }
-  if (!(await confirmDiscard())) return;
-  resetEditor();
-  clearFeedback();
-}
-
-function markDirty(): void {
-  dirty.value = true;
-  notice.value = '';
-  checked.value = false;
-  issues.value = [];
-}
-
-async function importNote(): Promise<void> {
-  if (!notesDir.value) {
-    await chooseFolder();
-    return;
-  }
-  if (!(await confirmDiscard())) return;
-  clearFeedback();
-  try {
-    const note = await api.importNote();
-    if (!note) return;
-    await refreshNotes();
-    await loadNote(note.filename);
-    notice.value = '已导入。';
-  } catch (err) {
-    setError(err);
-  }
-}
-
-function runSyntaxCheck(): void {
-  clearFeedback();
-  issues.value = lintMarkdown(content.value);
-  checked.value = true;
-}
-
-async function saveNote(): Promise<void> {
-  if (saving.value) return;
-  if (!notesDir.value) {
-    error.value = '请先选择笔记文件夹';
-    return;
-  }
-  if (!content.value.trim()) {
-    error.value = '笔记内容不能为空';
-    return;
-  }
-
-  saving.value = true;
-  clearFeedback();
-  try {
-    const note = selectedFilename.value
-      ? await api.updateNote({
-          filename: selectedFilename.value,
-          title: title.value,
-          content: content.value,
-        })
-      : await api.createNote({ title: title.value, content: content.value });
-
-    selectedFilename.value = note.filename;
-    title.value = note.title;
-    dirty.value = false;
-    notice.value = '已保存。';
-    await refreshNotes();
+    if (activeWasAffected && tabs.value.length === 0) {
+      const next = flattenFiles(entries.value)[0];
+      if (next) {
+        await openNote(next.path);
+      }
+    }
+    notice.value = '已移到回收站。';
   } catch (err) {
     setError(err);
   } finally {
-    saving.value = false;
+    mutating.value = false;
   }
 }
 
-async function refreshNotes(): Promise<void> {
+async function requestCloseTab(path: string): Promise<void> {
+  if (busy.value || anySaving.value) return;
+
+  const tab = tabs.value.find((item) => item.path === path);
+  if (!tab) return;
+
+  if (tab.content !== tab.savedContent) {
+    const confirmed = await askConfirmation({
+      title: '关闭未保存的标签页？',
+      message: `“${basename(tab.path)}”有未保存的修改，关闭后将丢失。`,
+      confirmLabel: '不保存并关闭',
+    });
+    if (!confirmed) return;
+  }
+
+  const index = tabs.value.findIndex((item) => item.path === path);
+  if (index === -1) return;
+  const wasActive = activePath.value === path;
+  tabs.value.splice(index, 1);
+
+  if (!wasActive) return;
+  const next = tabs.value[Math.min(index, tabs.value.length - 1)];
+  if (next) {
+    activePath.value = next.path;
+    revealPath(next.path);
+  } else {
+    activePath.value = null;
+  }
+  editorSession.value += 1;
+  editorScrollRatio.value = 0;
+  clearFeedback();
+}
+
+async function refreshEntries(): Promise<void> {
   const state = await api.refresh();
   applyState(state);
 }
 
-async function removeNote(filename: string): Promise<void> {
-  const confirmed = await askConfirmation({
-    title: '删除这条笔记？',
-    message: '笔记文件会移到系统回收站。',
-    confirmLabel: '移到回收站',
-  });
-  if (!confirmed) return;
-  clearFeedback();
+function openPrompt(config: Omit<PromptState, 'busy' | 'error'>): void {
+  prompt.value = { ...config, busy: false, error: '' };
+}
+
+async function submitPrompt(value: string): Promise<void> {
+  const current = prompt.value;
+  if (!current || current.busy) return;
+
+  current.busy = true;
+  current.error = '';
   try {
-    const wasSelected = selectedFilename.value === filename;
-    await api.deleteNote(filename);
-    await refreshNotes();
-    if (wasSelected) {
-      const next = notes.value[0];
-      if (next) {
-        await loadNote(next.filename);
-      } else {
-        resetEditor();
-      }
-    }
-    notice.value = '笔记已移到回收站。';
+    await current.submit(value);
+    prompt.value = null;
   } catch (err) {
-    setError(err);
+    current.error = errorMessage(err);
+  } finally {
+    if (prompt.value === current) {
+      current.busy = false;
+    }
   }
 }
 
-function resetEditor(): void {
-  selectedFilename.value = null;
-  title.value = '';
-  content.value = '';
-  issues.value = [];
-  checked.value = false;
-  dirty.value = false;
-}
-
-async function scrollEditorToTop(): Promise<void> {
-  await nextTick();
-  if (editorRef.value) {
-    editorRef.value.scrollTop = 0;
-  }
-}
-
-function confirmDiscard(): Promise<boolean> {
-  if (!dirty.value) return Promise.resolve(true);
-  return askConfirmation({
-    title: '放弃未保存的修改？',
-    message: '当前笔记有尚未保存的修改，继续操作会丢失这些修改。',
-    confirmLabel: '放弃修改',
-  });
+function cancelPrompt(): void {
+  if (prompt.value?.busy) return;
+  prompt.value = null;
 }
 
 function askConfirmation(options: ConfirmOptions): Promise<boolean> {
@@ -242,14 +562,9 @@ function askConfirmation(options: ConfirmOptions): Promise<boolean> {
 }
 
 function resolveConfirmation(confirmed: boolean): void {
-  confirmation.value?.resolve(confirmed);
+  const current = confirmation.value;
   confirmation.value = null;
-}
-
-function handleSaveShortcut(): void {
-  if (!confirmation.value) {
-    void saveNote();
-  }
+  current?.resolve(confirmed);
 }
 
 function clearFeedback(): void {
@@ -258,25 +573,29 @@ function clearFeedback(): void {
 }
 
 function setError(err: unknown): void {
-  error.value = err instanceof Error ? err.message : String(err);
+  error.value = errorMessage(err);
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 </script>
 
 <template>
-  <div
-    class="app-shell"
-    @keydown.ctrl.s.prevent="handleSaveShortcut"
-    @keydown.meta.s.prevent="handleSaveShortcut"
-  >
+  <div class="app-shell">
     <NoteSidebar
-      :notes="notes"
-      :selected-filename="selectedFilename"
+      :entries="entries"
+      :selected-path="selectedPath"
       :notes-dir="notesDir"
-      @create="startNewNote"
+      :expanded-paths="expandedPaths"
+      :busy="busy || anySaving"
       @select="selectNote"
-      @remove="removeNote"
-      @import="importNote"
+      @toggle-folder="toggleFolder"
       @choose-folder="chooseFolder"
+      @create-file="requestCreateFile"
+      @create-folder="requestCreateFolder"
+      @rename="requestRename"
+      @remove="requestDelete"
     />
 
     <main v-if="notesDir === null" class="workspace welcome">
@@ -292,55 +611,80 @@ function setError(err: unknown): void {
     </main>
 
     <main v-else class="workspace">
-      <header class="workspace-header">
-        <div class="title-group">
-          <input
-            v-model="title"
-            class="title-input"
-            type="text"
-            maxlength="120"
-            placeholder="笔记标题（留空则自动生成）"
-            aria-label="笔记标题"
-            @input="markDirty"
-          />
-          <div class="status-line">
-            <span v-if="dirty" class="pill dirty">未保存</span>
-            <span v-else-if="selectedFilename" class="pill saved">已保存</span>
-            <span v-else class="pill draft">新笔记</span>
-            <span v-if="notice" class="notice-text">{{ notice }}</span>
-          </div>
-        </div>
-        <div class="toolbar">
-          <button class="btn ghost" type="button" @click="runSyntaxCheck">检查语法</button>
-          <button class="btn primary" type="button" :disabled="saving" @click="saveNote">
-            {{ saving ? '保存中…' : '保存笔记' }}
-          </button>
-        </div>
-      </header>
-
       <div v-if="error" class="banner" role="alert">
         <span>{{ error }}</span>
         <button type="button" aria-label="关闭错误提示" @click="error = ''">×</button>
       </div>
 
-      <div class="panes">
-        <section class="editor-pane">
-          <header class="pane-header">
-            <span class="pane-title">Markdown</span>
-          </header>
-          <textarea
-            ref="editorRef"
-            v-model="content"
-            class="editor"
-            spellcheck="false"
-            aria-label="Markdown 内容"
-            placeholder="# 从这里开始写…"
-            @input="markDirty"
-          ></textarea>
-          <SyntaxIssues v-if="checked" :issues="issues" />
-        </section>
+      <template v-if="activeTab">
+        <header class="workspace-header">
+          <EditorTabs
+            :tabs="tabItems"
+            :active-path="activePath"
+            @select="activateTab"
+            @close="requestCloseTab"
+          />
+          <div class="toolbar">
+            <button
+              class="btn ghost toggle"
+              :class="{ active: vimEnabled }"
+              type="button"
+              :aria-pressed="vimEnabled"
+              title="切换 Vim 模式"
+              @click="vimEnabled = !vimEnabled"
+            >
+              Vim
+            </button>
+            <button
+              class="btn ghost toggle"
+              :class="{ active: previewVisible }"
+              type="button"
+              :aria-pressed="previewVisible"
+              @click="previewVisible = !previewVisible"
+            >
+              预览
+            </button>
+          </div>
+        </header>
 
-        <PreviewPane :html="previewHtml" />
+        <div class="document-meta">
+          <span class="document-path">{{ activeTab.path }}</span>
+          <span v-if="saving" class="pill draft">保存中…</span>
+          <span v-else-if="activeDirty" class="pill dirty">未保存</span>
+          <span v-else class="pill saved">已保存</span>
+          <span v-if="notice" class="notice-text">{{ notice }}</span>
+        </div>
+
+        <div class="panes" :class="{ single: !previewVisible }">
+          <section class="editor-pane">
+            <header class="pane-header">
+              <span class="pane-title">Markdown</span>
+              <span v-if="vimEnabled" class="pane-hint">Vim</span>
+            </header>
+            <EditorPane
+              :key="editorSession"
+              :initial-content="activeTab.content"
+              :vim-enabled="vimEnabled"
+              :read-only="switching || mutating"
+              @change="handleContentChange"
+              @scroll-ratio="handleEditorScroll"
+            />
+          </section>
+
+          <PreviewPane
+            v-if="previewVisible"
+            :key="editorSession"
+            :html="previewHtml"
+            :note-path="activeTab.path"
+            :scroll-ratio="editorScrollRatio"
+          />
+        </div>
+      </template>
+
+      <div v-else class="workspace-empty">
+        <span class="workspace-empty-icon">M↓</span>
+        <h1>还没有打开笔记</h1>
+        <p>在左侧文件树中打开或新建一个 Markdown 文件。</p>
       </div>
     </main>
 
@@ -352,6 +696,19 @@ function setError(err: unknown): void {
       :danger="confirmation.danger"
       @confirm="resolveConfirmation(true)"
       @cancel="resolveConfirmation(false)"
+    />
+
+    <PromptDialog
+      v-if="prompt"
+      :title="prompt.title"
+      :label="prompt.label"
+      :initial-value="prompt.initialValue"
+      :confirm-label="prompt.confirmLabel"
+      :placeholder="prompt.placeholder"
+      :busy="prompt.busy"
+      :error="prompt.error"
+      @confirm="submitPrompt"
+      @cancel="cancelPrompt"
     />
   </div>
 </template>

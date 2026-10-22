@@ -2,14 +2,22 @@
 import DOMPurify from 'dompurify';
 import renderMathInElement from 'katex/contrib/auto-render';
 import { computed, nextTick, ref, watch } from 'vue';
+import { api } from '../api';
+import { isLocalImageSource } from '../lib/markdown';
 
 const props = defineProps<{
   html: string;
+  notePath: string;
+  scrollRatio?: number;
 }>();
 
 // Notes may contain raw HTML, so all rendered HTML is sanitized before v-html.
-const safeHtml = computed(() => DOMPurify.sanitize(props.html));
+const safeHtml = computed(() =>
+  DOMPurify.sanitize(props.html, { ADD_ATTR: ['data-md-src'] }),
+);
 const bodyRef = ref<HTMLElement | null>(null);
+const imageCache = new Map<string, string>();
+let resolveRun = 0;
 
 function renderMath(): void {
   if (!bodyRef.value) return;
@@ -27,17 +35,92 @@ function renderMath(): void {
   });
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function markMissing(image: HTMLImageElement, message: string): void {
+  const placeholder = document.createElement('span');
+  placeholder.className = 'md-image-missing';
+  placeholder.textContent = `${image.alt || '图片'}（无法加载）`;
+  placeholder.title = `图片加载失败：${message}`;
+  image.replaceWith(placeholder);
+}
+
+async function resolveImages(): Promise<void> {
+  const root = bodyRef.value;
+  if (!root) return;
+
+  const run = ++resolveRun;
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+
+  await Promise.all(
+    images.map(async (image) => {
+      let source = image.dataset.mdSrc ?? '';
+      if (!source) {
+        const current = image.getAttribute('src')?.trim() ?? '';
+        if (!isLocalImageSource(current)) return;
+        source = current;
+        image.dataset.mdSrc = source;
+        image.removeAttribute('src');
+      }
+
+      const key = `${props.notePath}\u0000${source}`;
+      const cached = imageCache.get(key);
+      if (cached) {
+        image.src = cached;
+        image.classList.remove('md-image-loading', 'md-image-missing');
+        image.removeAttribute('title');
+        return;
+      }
+
+      image.classList.add('md-image-loading');
+      try {
+        const asset = await api.readAsset(props.notePath, source);
+        const dataUrl = `data:${asset.mime};base64,${asset.data}`;
+        imageCache.set(key, dataUrl);
+        if (run !== resolveRun || !image.isConnected) return;
+        image.src = dataUrl;
+        image.classList.remove('md-image-loading', 'md-image-missing');
+        image.removeAttribute('title');
+      } catch (error) {
+        if (run !== resolveRun || !image.isConnected) return;
+        markMissing(image, errorMessage(error));
+      }
+    }),
+  );
+
+  if (run === resolveRun) {
+    applyScrollRatio();
+  }
+}
+
+function applyScrollRatio(): void {
+  const element = bodyRef.value;
+  if (!element) return;
+  const maximum = element.scrollHeight - element.clientHeight;
+  if (maximum <= 0) return;
+  const ratio = Math.min(1, Math.max(0, props.scrollRatio ?? 0));
+  element.scrollTop = ratio * maximum;
+}
+
 watch(
-  () => props.html,
-  async (html, previousHtml) => {
+  [() => props.html, () => props.notePath],
+  async ([html]) => {
     await nextTick();
     if (!html) return;
     renderMath();
-    if (!previousHtml && bodyRef.value) {
-      bodyRef.value.scrollTop = 0;
-    }
+    await resolveImages();
   },
   { immediate: true },
+);
+
+watch(
+  () => props.scrollRatio,
+  async () => {
+    await nextTick();
+    applyScrollRatio();
+  },
 );
 </script>
 

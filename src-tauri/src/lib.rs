@@ -12,10 +12,12 @@ pub fn run() {
             commands::choose_notes_dir,
             commands::refresh_notes,
             commands::read_note,
-            commands::create_note,
-            commands::update_note,
-            commands::delete_note,
-            commands::import_note
+            commands::save_note,
+            commands::read_note_asset,
+            commands::create_file,
+            commands::create_folder,
+            commands::rename_entry,
+            commands::delete_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

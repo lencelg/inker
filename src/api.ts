@@ -1,48 +1,35 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import type {
-  CreateNoteInput,
-  NoteDetail,
-  NoteMeta,
-  NotesApi,
-  NotesState,
-  UpdateNoteInput,
-} from './types';
+import type { NoteAsset, NoteDetail, NotesApi, NotesState } from './types';
 
 export const api: NotesApi = {
   getState: () => invoke<NotesState>('get_state'),
 
-  chooseNotesDir: async () => {
+  pickNotesDir: async () => {
     const selected = await open({
       directory: true,
       multiple: false,
       title: '选择笔记文件夹',
     });
-    if (typeof selected !== 'string') {
-      return null;
-    }
-    return invoke<NotesState>('choose_notes_dir', { path: selected });
+    return typeof selected === 'string' ? selected : null;
   },
+
+  chooseNotesDir: (path) => invoke<NotesState>('choose_notes_dir', { path }),
 
   refresh: () => invoke<NotesState>('refresh_notes'),
 
-  readNote: (filename) => invoke<NoteDetail>('read_note', { filename }),
+  readNote: (path) => invoke<NoteDetail>('read_note', { path }),
 
-  createNote: (input: CreateNoteInput) => invoke<NoteMeta>('create_note', { input }),
+  saveNote: (path, content) => invoke<void>('save_note', { path, content }),
 
-  updateNote: (input: UpdateNoteInput) => invoke<NoteMeta>('update_note', { input }),
+  readAsset: (notePath, source) =>
+    invoke<NoteAsset>('read_note_asset', { notePath, source }),
 
-  deleteNote: (filename) => invoke<void>('delete_note', { filename }),
+  createFile: (parent, name) => invoke<string>('create_file', { parent, name }),
 
-  importNote: async () => {
-    const selected = await open({
-      multiple: false,
-      title: '导入 Markdown',
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
-    });
-    if (typeof selected !== 'string') {
-      return null;
-    }
-    return invoke<NoteMeta>('import_note', { source: selected });
-  },
+  createFolder: (parent, name) => invoke<string>('create_folder', { parent, name }),
+
+  renameEntry: (path, name) => invoke<string>('rename_entry', { path, name }),
+
+  deleteEntry: (path) => invoke<void>('delete_entry', { path }),
 };

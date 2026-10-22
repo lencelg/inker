@@ -1,0 +1,235 @@
+<script setup lang="ts">
+import { nextTick, ref, watch } from 'vue';
+import type { ComponentPublicInstance } from 'vue';
+
+interface TabItem {
+  path: string;
+  name: string;
+  dirty: boolean;
+}
+
+const props = defineProps<{
+  tabs: TabItem[];
+  activePath: string | null;
+}>();
+
+const emit = defineEmits<{
+  select: [path: string];
+  close: [path: string];
+}>();
+
+const tabElements = ref(new Map<string, HTMLElement>());
+
+function setTabRef(
+  path: string,
+  element: Element | ComponentPublicInstance | null,
+): void {
+  if (element instanceof HTMLElement) {
+    tabElements.value.set(path, element);
+  } else {
+    tabElements.value.delete(path);
+  }
+}
+
+function closeTab(event: MouseEvent, path: string): void {
+  event.stopPropagation();
+  emit('close', path);
+}
+
+function onAuxClick(event: MouseEvent, path: string): void {
+  if (event.button === 1) {
+    event.preventDefault();
+    emit('close', path);
+  }
+}
+
+watch(
+  () => [props.activePath, props.tabs.length],
+  async () => {
+    await nextTick();
+    if (!props.activePath) return;
+    tabElements.value
+      .get(props.activePath)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  },
+);
+</script>
+
+<template>
+  <div class="tabline" role="tablist" aria-label="打开的文件">
+    <div
+      v-for="tab in tabs"
+      :key="tab.path"
+      :ref="(element) => setTabRef(tab.path, element)"
+      class="tab"
+      :class="{ active: tab.path === activePath, dirty: tab.dirty }"
+      role="tab"
+      :aria-selected="tab.path === activePath"
+      :tabindex="tab.path === activePath ? 0 : -1"
+      :title="tab.path"
+      @click="emit('select', tab.path)"
+      @keydown.enter.prevent="emit('select', tab.path)"
+      @keydown.space.prevent="emit('select', tab.path)"
+      @auxclick="onAuxClick($event, tab.path)"
+    >
+      <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20V3.5Z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M14 3.5V8h4"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <span class="tab-name">{{ tab.name }}</span>
+      <span class="tab-action">
+        <span class="tab-dirty" aria-label="未保存"></span>
+        <button
+          class="tab-close"
+          type="button"
+          :aria-label="`关闭 ${tab.name}`"
+          title="关闭"
+          @click="closeTab($event, tab.path)"
+        >
+          ×
+        </button>
+      </span>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.tabline {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px 12px 0 0;
+  scrollbar-width: thin;
+}
+
+.tab {
+  display: flex;
+  flex: 0 1 190px;
+  min-width: 112px;
+  max-width: 220px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px 0 12px;
+  border-right: 1px solid var(--border);
+  border-top: 2px solid transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tab:hover {
+  background: rgba(31, 41, 51, 0.045);
+  color: var(--ink);
+}
+
+.tab.active {
+  border-top-color: var(--accent);
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.tab-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+}
+
+.tab.active .tab-icon {
+  color: var(--accent);
+}
+
+.tab-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab.active .tab-name {
+  font-weight: 600;
+}
+
+.tab-action {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.tab-dirty {
+  display: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.tab.dirty .tab-dirty {
+  display: block;
+}
+
+.tab-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0;
+}
+
+.tab.active .tab-close,
+.tab:hover .tab-close,
+.tab:focus-within .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: rgba(31, 41, 51, 0.1);
+  color: var(--ink);
+}
+
+.tab.dirty .tab-close {
+  display: none;
+}
+
+.tab.dirty:hover .tab-close,
+.tab.dirty:focus-within .tab-close {
+  display: grid;
+}
+
+.tab.dirty:hover .tab-dirty,
+.tab.dirty:focus-within .tab-dirty {
+  display: none;
+}
+</style>

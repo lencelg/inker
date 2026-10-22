@@ -1,46 +1,34 @@
-export interface NoteMeta {
-  filename: string;
-  title: string;
-  sizeBytes: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface NoteDetail {
-  note: NoteMeta;
-  content: string;
+export interface FileEntry {
+  path: string;
+  name: string;
+  isDir: boolean;
 }
 
 export interface NotesState {
   notesDir: string | null;
-  notes: NoteMeta[];
+  entries: FileEntry[];
 }
 
-export interface CreateNoteInput {
-  title: string;
+export interface NoteDetail {
+  path: string;
   content: string;
 }
 
-export interface UpdateNoteInput extends CreateNoteInput {
-  filename: string;
-}
-
-export type IssueSeverity = 'error' | 'warning';
-
-export interface SyntaxIssue {
-  line: number;
-  severity: IssueSeverity;
-  rule: string;
-  message: string;
+export interface NoteAsset {
+  mime: string;
+  data: string;
 }
 
 export interface NotesApi {
   getState(): Promise<NotesState>;
-  chooseNotesDir(): Promise<NotesState | null>;
+  pickNotesDir(): Promise<string | null>;
+  chooseNotesDir(path: string): Promise<NotesState>;
   refresh(): Promise<NotesState>;
-  readNote(filename: string): Promise<NoteDetail>;
-  createNote(input: CreateNoteInput): Promise<NoteMeta>;
-  updateNote(input: UpdateNoteInput): Promise<NoteMeta>;
-  deleteNote(filename: string): Promise<void>;
-  importNote(): Promise<NoteMeta | null>;
+  readNote(path: string): Promise<NoteDetail>;
+  saveNote(path: string, content: string): Promise<void>;
+  readAsset(notePath: string, source: string): Promise<NoteAsset>;
+  createFile(parent: string, name: string): Promise<string>;
+  createFolder(parent: string, name: string): Promise<string>;
+  renameEntry(path: string, name: string): Promise<string>;
+  deleteEntry(path: string): Promise<void>;
 }

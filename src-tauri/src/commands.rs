@@ -1,7 +1,8 @@
 use crate::notes::{
-    create_note as create_note_file, ensure_notes_dir, import_note as import_note_file, list_notes,
-    note_path, read_note as read_note_file, update_note as update_note_file, CreateNoteInput,
-    NoteDetail, NoteMeta, NotesState, UpdateNoteInput,
+    create_file as create_file_entry, create_folder as create_folder_entry, ensure_notes_dir,
+    entry_path, list_entries, read_note as read_note_file, read_note_asset as read_asset_file,
+    rename_entry as rename_entry_file, save_note as save_note_file, NoteAsset, NoteDetail,
+    NotesState,
 };
 use crate::settings::{load_settings, save_settings, Settings};
 use std::path::{Path, PathBuf};
@@ -30,29 +31,43 @@ pub fn refresh_notes(app: AppHandle) -> Result<NotesState, String> {
 }
 
 #[tauri::command]
-pub fn read_note(app: AppHandle, filename: String) -> Result<NoteDetail, String> {
-    read_note_file(&require_notes_dir(&app)?, &filename)
+pub fn read_note(app: AppHandle, path: String) -> Result<NoteDetail, String> {
+    read_note_file(&require_notes_dir(&app)?, &path)
 }
 
 #[tauri::command]
-pub fn create_note(app: AppHandle, input: CreateNoteInput) -> Result<NoteMeta, String> {
-    create_note_file(&require_notes_dir(&app)?, input)
+pub fn save_note(app: AppHandle, path: String, content: String) -> Result<(), String> {
+    save_note_file(&require_notes_dir(&app)?, &path, &content)
 }
 
 #[tauri::command]
-pub fn update_note(app: AppHandle, input: UpdateNoteInput) -> Result<NoteMeta, String> {
-    update_note_file(&require_notes_dir(&app)?, input)
+pub fn read_note_asset(
+    app: AppHandle,
+    note_path: String,
+    source: String,
+) -> Result<NoteAsset, String> {
+    read_asset_file(&require_notes_dir(&app)?, &note_path, &source)
 }
 
 #[tauri::command]
-pub fn delete_note(app: AppHandle, filename: String) -> Result<(), String> {
-    let path = note_path(&require_notes_dir(&app)?, &filename)?;
-    trash::delete(&path).map_err(|error| format!("移到回收站失败：{error}"))
+pub fn create_file(app: AppHandle, parent: String, name: String) -> Result<String, String> {
+    create_file_entry(&require_notes_dir(&app)?, &parent, &name)
 }
 
 #[tauri::command]
-pub fn import_note(app: AppHandle, source: String) -> Result<NoteMeta, String> {
-    import_note_file(&require_notes_dir(&app)?, &source)
+pub fn create_folder(app: AppHandle, parent: String, name: String) -> Result<String, String> {
+    create_folder_entry(&require_notes_dir(&app)?, &parent, &name)
+}
+
+#[tauri::command]
+pub fn rename_entry(app: AppHandle, path: String, name: String) -> Result<String, String> {
+    rename_entry_file(&require_notes_dir(&app)?, &path, &name)
+}
+
+#[tauri::command]
+pub fn delete_entry(app: AppHandle, path: String) -> Result<(), String> {
+    let target = entry_path(&require_notes_dir(&app)?, &path)?;
+    trash::delete(&target).map_err(|error| format!("移到回收站失败：{error}"))
 }
 
 fn current_state(app: &AppHandle) -> Result<NotesState, String> {
@@ -64,7 +79,7 @@ fn current_state(app: &AppHandle) -> Result<NotesState, String> {
         }
         None => Ok(NotesState {
             notes_dir: None,
-            notes: Vec::new(),
+            entries: Vec::new(),
         }),
     }
 }
@@ -72,7 +87,7 @@ fn current_state(app: &AppHandle) -> Result<NotesState, String> {
 fn state_for_dir(notes_dir: &Path) -> Result<NotesState, String> {
     Ok(NotesState {
         notes_dir: Some(notes_dir.display().to_string()),
-        notes: list_notes(notes_dir)?,
+        entries: list_entries(notes_dir)?,
     })
 }
 
