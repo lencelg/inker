@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from './api';
+import ActivityBar from './components/ActivityBar.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
@@ -8,6 +9,8 @@ import LeafIcon from './components/LeafIcon.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
 import PromptDialog from './components/PromptDialog.vue';
+import SearchPanel from './components/SearchPanel.vue';
+import SettingsPanel from './components/SettingsPanel.vue';
 import { renderMarkdown } from './lib/markdown';
 import {
   ancestorDirs,
@@ -17,12 +20,17 @@ import {
   replacePrefix,
 } from './lib/paths';
 import {
+  DEFAULT_FONT_SIZE,
+  FONT_SIZE_STORAGE_KEY,
+  clampFontSize,
+} from './lib/preferences';
+import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
   isThemeId,
   type ThemeId,
 } from './lib/themes';
-import type { FileEntry, NotesState } from './types';
+import type { FileEntry, NotesState, SearchMatch } from './types';
 
 interface NoteTab {
   path: string;
@@ -42,10 +50,15 @@ const notice = ref('');
 const previewVisible = ref(false);
 const vimEnabled = ref(false);
 const theme = ref<ThemeId>(readStoredTheme());
+const activeView = ref<'explorer' | 'search' | 'settings'>('explorer');
+const fontSize = ref(readStoredFontSize());
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
 const editorScrollLine = ref(1);
 const editorScrollRatio = ref(0);
+const editorPane = ref<{
+  revealLine: (line: number, column?: number) => void;
+} | null>(null);
 
 const activeTab = computed(
   () => tabs.value.find((tab) => tab.path === activePath.value) ?? null,
@@ -100,16 +113,23 @@ interface PromptState {
 const confirmation = ref<PendingConfirmation | null>(null);
 const prompt = ref<PromptState | null>(null);
 const saveTasks = new Map<string, Promise<boolean>>();
+let wheelAccumulator = 0;
 
 watch(theme, applyTheme, { immediate: true });
+watch(fontSize, applyFontSize, { immediate: true });
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown, true);
+  window.addEventListener('wheel', handleGlobalWheel, {
+    capture: true,
+    passive: false,
+  });
   void bootstrap();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown, true);
+  window.removeEventListener('wheel', handleGlobalWheel, true);
 });
 
 async function bootstrap(): Promise<void> {
@@ -142,6 +162,62 @@ function applyTheme(value: ThemeId): void {
   } catch {
     // Persisting the preference is optional.
   }
+}
+
+function readStoredFontSize(): number {
+  try {
+    const stored = window.localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+    if (stored !== null) return clampFontSize(Number(stored));
+  } catch {
+    // Storage can be unavailable in restricted webviews.
+  }
+  return DEFAULT_FONT_SIZE;
+}
+
+function applyFontSize(value: number): void {
+  document.documentElement.style.setProperty(
+    '--content-font-size',
+    `${value}px`,
+  );
+  try {
+    window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(value));
+  } catch {
+    // Persisting the preference is optional.
+  }
+}
+
+function setFontSize(value: number): void {
+  fontSize.value = clampFontSize(value);
+}
+
+function handleGlobalWheel(event: WheelEvent): void {
+  if (!(event.ctrlKey || event.metaKey)) {
+    wheelAccumulator = 0;
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+  wheelAccumulator += delta;
+  if (Math.abs(wheelAccumulator) < 30) return;
+
+  const direction = Math.sign(wheelAccumulator);
+  wheelAccumulator = 0;
+  setFontSize(fontSize.value - direction);
+}
+
+async function openSearchResult(match: SearchMatch): Promise<void> {
+  const openTab = tabs.value.find((tab) => tab.path === match.path);
+  if (!openTab) {
+    if (!(await openNote(match.path))) return;
+  } else if (activePath.value !== match.path) {
+    activateTab(match.path);
+  }
+
+  await nextTick();
+  editorPane.value?.revealLine(match.line, match.column);
 }
 
 function applyState(state: NotesState): void {
@@ -618,13 +694,18 @@ function errorMessage(err: unknown): string {
 
 <template>
   <div class="app-shell">
+    <ActivityBar
+      :active-view="activeView"
+      @change-view="activeView = $event"
+    />
+
     <NoteSidebar
+      v-if="activeView === 'explorer'"
       :entries="entries"
       :selected-path="selectedPath"
       :notes-dir="notesDir"
       :expanded-paths="expandedPaths"
       :busy="busy || anySaving"
-      :theme="theme"
       @select="selectNote"
       @toggle-folder="toggleFolder"
       @choose-folder="chooseFolder"
@@ -632,7 +713,20 @@ function errorMessage(err: unknown): string {
       @create-folder="requestCreateFolder"
       @rename="requestRename"
       @remove="requestDelete"
+    />
+
+    <SearchPanel
+      v-else-if="activeView === 'search'"
+      :notes-dir="notesDir"
+      @open="openSearchResult"
+    />
+
+    <SettingsPanel
+      v-else
+      :theme="theme"
+      :font-size="fontSize"
       @theme-change="theme = $event"
+      @font-size-change="setFontSize"
     />
 
     <main v-if="notesDir === null" class="workspace welcome">
@@ -699,6 +793,7 @@ function errorMessage(err: unknown): string {
               <span v-if="vimEnabled" class="pane-hint">Vim</span>
             </header>
             <EditorPane
+              ref="editorPane"
               :key="editorSession"
               :initial-content="activeTab.content"
               :vim-enabled="vimEnabled"

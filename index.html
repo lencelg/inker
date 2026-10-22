@@ -13,8 +13,15 @@
         ) {
           document.documentElement.dataset.theme = theme;
         }
+        const fontSize = Number(localStorage.getItem('markleaf-font-size'));
+        if (Number.isFinite(fontSize) && fontSize >= 11 && fontSize <= 28) {
+          document.documentElement.style.setProperty(
+            '--content-font-size',
+            `${fontSize}px`,
+          );
+        }
       } catch {
-        // Ignore storage errors and use the default theme.
+        // Ignore storage errors and use the defaults.
       }
     </script>
     <title>markleaf</title>

@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { dirname } from '../lib/paths';
-import type { ThemeId } from '../lib/themes';
 import type { FileEntry } from '../types';
 import LeafIcon from './LeafIcon.vue';
-import ThemePicker from './ThemePicker.vue';
 
 const props = defineProps<{
   entries: FileEntry[];
@@ -12,7 +10,6 @@ const props = defineProps<{
   notesDir: string | null;
   expandedPaths: string[];
   busy: boolean;
-  theme: ThemeId;
 }>();
 
 const emit = defineEmits<{
@@ -23,7 +20,6 @@ const emit = defineEmits<{
   createFolder: [parent: string];
   rename: [entry: FileEntry];
   remove: [entry: FileEntry];
-  themeChange: [theme: ThemeId];
 }>();
 
 interface TreeNode {
@@ -295,10 +291,6 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
     </div>
 
     <footer class="sidebar-footer">
-      <ThemePicker
-        :theme="theme"
-        @change="emit('themeChange', $event)"
-      />
       <button
         class="folder-button"
         type="button"
@@ -387,7 +379,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 
 .brand h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -419,7 +411,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
   padding-right: 8px;
   border-radius: 7px;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 13.5px;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
@@ -486,6 +478,8 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 
 .entry-name {
   overflow: hidden;
+  font-family: var(--mono-font);
+  font-size: 12.5px;
   text-overflow: ellipsis;
 }
 
@@ -504,7 +498,6 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
   padding: 8px 4px 0;
   border-top: 1px solid var(--border);
 }
-
 .folder-button {
   display: flex;
   align-items: center;
@@ -530,6 +523,8 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 
 .folder-name {
   overflow: hidden;
+  font-family: var(--mono-font);
+  font-size: 11.5px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -579,19 +574,5 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
   height: 1px;
   margin: 5px 4px;
   background: var(--border);
-}
-
-@media (max-width: 900px) {
-  .sidebar {
-    height: auto;
-    max-height: 42vh;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .tree {
-    flex: none;
-    max-height: 220px;
-  }
 }
 </style>

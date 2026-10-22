@@ -27,7 +27,7 @@
     "targets": ["deb"],
     "category": "Productivity",
     "shortDescription": "markleaf - local-first Markdown notes",
-    "longDescription": "markleaf is a local-first Markdown notes app with a file tree, tabs, optional Vim editing, math, code highlighting, images, and HTML preview.",
+    "longDescription": "markleaf is a local-first Markdown notes app with a file tree, full-text search, tabs, themes, optional Vim editing, math, code highlighting, images, and HTML preview.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

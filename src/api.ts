@@ -1,6 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { NoteAsset, NoteDetail, NotesApi, NotesState } from './types';
+import type {
+  NoteAsset,
+  NoteDetail,
+  NotesApi,
+  NotesState,
+  SearchResults,
+} from './types';
 
 export const api: NotesApi = {
   getState: () => invoke<NotesState>('get_state'),
@@ -24,6 +30,8 @@ export const api: NotesApi = {
 
   readAsset: (notePath, source) =>
     invoke<NoteAsset>('read_note_asset', { notePath, source }),
+
+  searchNotes: (query) => invoke<SearchResults>('search_notes', { query }),
 
   createFile: (parent, name) => invoke<string>('create_file', { parent, name }),
 

@@ -87,14 +87,13 @@ const theme = EditorView.theme({
   '&': {
     height: '100%',
     backgroundColor: 'transparent',
-    fontSize: '13.5px',
+    fontSize: 'var(--content-font-size, 15px)',
   },
   '&.cm-focused': {
     outline: 'none',
   },
   '.cm-scroller': {
-    fontFamily:
-      "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    fontFamily: 'var(--mono-font)',
     lineHeight: '1.75',
   },
   '.cm-content': {
@@ -230,6 +229,26 @@ onBeforeUnmount(() => {
   view?.destroy();
   view = null;
 });
+
+function revealLine(lineNumber: number, column = 1): void {
+  if (!view) return;
+  const safeLine = Math.min(
+    Math.max(1, lineNumber),
+    view.state.doc.lines,
+  );
+  const target = view.state.doc.line(safeLine);
+  const prefix = Array.from(target.text)
+    .slice(0, Math.max(0, column - 1))
+    .join('');
+  const anchor = Math.min(target.to, target.from + prefix.length);
+  view.dispatch({
+    selection: { anchor },
+    effects: EditorView.scrollIntoView(anchor, { y: 'center' }),
+  });
+  view.focus();
+}
+
+defineExpose({ revealLine });
 </script>
 
 <template>
@@ -252,7 +271,7 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--border);
   background: var(--bg-soft);
   color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono-font);
   font-size: 12px;
 }
 

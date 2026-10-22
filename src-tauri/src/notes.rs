@@ -9,6 +9,11 @@ const MAX_DEPTH: usize = 32;
 const MAX_NAME_CHARS: usize = 120;
 const MAX_RELATIVE_CHARS: usize = 1024;
 const MAX_ASSET_BYTES: u64 = 20 * 1024 * 1024;
+const MAX_SEARCH_RESULTS: usize = 500;
+const MAX_SEARCH_QUERY_CHARS: usize = 200;
+const MAX_SEARCH_FILE_BYTES: u64 = 5 * 1024 * 1024;
+const SEARCH_PREVIEW_BEFORE: usize = 60;
+const SEARCH_PREVIEW_AFTER: usize = 140;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +41,25 @@ pub struct NoteDetail {
 pub struct NoteAsset {
     pub mime: String,
     pub data: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMatch {
+    pub path: String,
+    pub name: String,
+    pub line: usize,
+    pub column: usize,
+    pub text: String,
+    pub match_start: usize,
+    pub match_length: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResults {
+    pub matches: Vec<SearchMatch>,
+    pub truncated: bool,
 }
 
 pub fn ensure_notes_dir(value: &str) -> Result<PathBuf, String> {
@@ -133,8 +157,7 @@ pub fn read_note_asset(
     notes_dir: &Path,
     note_relative: &str,
     source: &str,
-) -> Result<NoteAsset, String> {
-    let root = canonical_dir(notes_dir)?;
+) -> Result<NoteAsset, String> {    let root = canonical_dir(notes_dir)?;
     let note_path = resolve_existing_file(notes_dir, note_relative)?;
     let relative = decode_asset_source(source)?;
     let base = note_path
@@ -164,6 +187,81 @@ pub fn read_note_asset(
         mime: mime.to_string(),
         data: BASE64.encode(bytes),
     })
+}
+
+pub fn search_notes(notes_dir: &Path, query: &str) -> Result<SearchResults, String> {
+    let needle = query.trim();
+    if needle.is_empty() {
+        return Ok(SearchResults {
+            matches: Vec::new(),
+            truncated: false,
+        });
+    }
+    if needle.chars().count() > MAX_SEARCH_QUERY_CHARS {
+        return Err("搜索关键词过长".to_string());
+    }
+
+    let root = canonical_dir(notes_dir)?;
+    let needle_lower = needle.to_lowercase();
+    let needle_len = needle.chars().count();
+    let entries = list_entries(notes_dir)?;
+    let mut matches = Vec::new();
+    let mut truncated = false;
+
+    'files: for entry in entries.iter().filter(|entry| !entry.is_dir) {
+        let path = root.join(&entry.path);
+        let metadata = match fs::metadata(&path) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        if metadata.len() > MAX_SEARCH_FILE_BYTES {
+            continue;
+        }
+        let content = match fs::read_to_string(&path) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+
+        for (line_index, line) in content.lines().enumerate() {
+            let lower = line.to_lowercase();
+            let byte_index = match lower.find(&needle_lower) {
+                Some(value) => value,
+                None => continue,
+            };
+            let char_index = lower[..byte_index].chars().count();
+            let line_chars: Vec<char> = line.chars().collect();
+            if char_index >= line_chars.len() {
+                continue;
+            }
+
+            let start = char_index.saturating_sub(SEARCH_PREVIEW_BEFORE);
+            let end = (char_index + needle_len + SEARCH_PREVIEW_AFTER).min(line_chars.len());
+            let mut text: String = line_chars[start..end].iter().collect();
+            let leading_ellipsis = start > 0;
+            if leading_ellipsis {
+                text.insert(0, '…');
+            }
+            if end < line_chars.len() {
+                text.push('…');
+            }
+
+            matches.push(SearchMatch {
+                path: entry.path.clone(),
+                name: entry.name.clone(),
+                line: line_index + 1,
+                column: char_index + 1,
+                text,
+                match_start: char_index - start + usize::from(leading_ellipsis),
+                match_length: needle_len,
+            });
+            if matches.len() >= MAX_SEARCH_RESULTS {
+                truncated = true;
+                break 'files;
+            }
+        }
+    }
+
+    Ok(SearchResults { matches, truncated })
 }
 
 pub fn create_file(notes_dir: &Path, parent: &str, name: &str) -> Result<String, String> {
@@ -635,6 +733,61 @@ mod tests {
         symlink(&outside, root.join("linked.png")).unwrap();
 
         assert!(read_note_asset(&root, "Note.md", "linked.png").is_err());
+    }
+
+    #[test]
+    fn searches_notes_case_insensitively() {
+        let (_temp, root) = setup();
+        fs::create_dir(root.join("Journal")).unwrap();
+        fs::write(
+            root.join("Journal/Note.md"),
+            "Alpha\nNeedle here\nanother NEEDLE",
+        )
+        .unwrap();
+        fs::write(root.join("Other.md"), "no match").unwrap();
+        fs::write(root.join("ignore.txt"), "needle").unwrap();
+
+        let results = search_notes(&root, "needle").unwrap();
+        assert!(!results.truncated);
+        assert_eq!(results.matches.len(), 2);
+
+        let first = &results.matches[0];
+        assert_eq!(first.path, "Journal/Note.md");
+        assert_eq!(first.name, "Note.md");
+        assert_eq!(first.line, 2);
+        assert_eq!(first.column, 1);
+        assert_eq!(first.text, "Needle here");
+        assert_eq!(first.match_start, 0);
+        assert_eq!(first.match_length, 6);
+
+        let second = &results.matches[1];
+        assert_eq!(second.line, 3);
+        assert_eq!(second.column, 9);
+        assert_eq!(second.match_start, 8);
+
+        assert!(search_notes(&root, "  ").unwrap().matches.is_empty());
+        assert!(search_notes(&root, &"x".repeat(201)).is_err());
+    }
+
+    #[test]
+    fn search_preview_keeps_long_line_matches_visible() {
+        let (_temp, root) = setup();
+        let mut line = "a".repeat(100);
+        line.push_str("Needle");
+        line.push_str(&"b".repeat(200));
+        fs::write(root.join("Long.md"), line).unwrap();
+
+        let results = search_notes(&root, "needle").unwrap();
+        let hit = &results.matches[0];
+        let preview: Vec<char> = hit.text.chars().collect();
+        let matched: String = preview
+            .iter()
+            .skip(hit.match_start)
+            .take(hit.match_length)
+            .collect();
+        assert_eq!(matched, "Needle");
+        assert!(hit.text.starts_with('…'));
+        assert!(hit.text.ends_with('…'));
     }
 
     #[test]

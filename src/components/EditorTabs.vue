@@ -130,7 +130,7 @@ watch(
   border-right: 1px solid var(--border);
   border-top: 2px solid transparent;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
@@ -166,6 +166,8 @@ watch(
 .tab-name {
   flex: 1;
   overflow: hidden;
+  font-family: var(--mono-font);
+  font-size: 12.5px;
   text-overflow: ellipsis;
 }
 

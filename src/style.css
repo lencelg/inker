@@ -56,6 +56,15 @@
   --syntax-link: #0066cc;
   --syntax-quote: #6b7280;
   --syntax-invalid: #b91c1c;
+  --mono-font: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace,
+    SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  --content-font-size: 15px;
+  --activity-bg: #ece7df;
+  --activity-icon: #6b7280;
+  --activity-icon-hover: #1f2933;
+  --activity-icon-active: #1f2933;
+  --activity-active-bg: rgba(37, 99, 235, 0.1);
+  --activity-hover: rgba(31, 41, 51, 0.06);
   font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system,
     sans-serif;
   font-synthesis: none;
@@ -77,6 +86,12 @@
   --btn-hover-border: #c9d1d9;
   --blockquote-border: #d8dee4;
   --code-inline-bg: #f0f2f5;
+  --activity-bg: #eef0f3;
+  --activity-icon: #59636e;
+  --activity-icon-hover: #1f2328;
+  --activity-icon-active: #1f2328;
+  --activity-active-bg: #e3e8ed;
+  --activity-hover: rgba(0, 0, 0, 0.05);
 }
 
 :root[data-theme='dark'] {
@@ -136,6 +151,12 @@
   --syntax-link: #4fc1ff;
   --syntax-quote: #9cdcfe;
   --syntax-invalid: #f44747;
+  --activity-bg: #0b1015;
+  --activity-icon: #7f8b99;
+  --activity-icon-hover: #c9d4df;
+  --activity-icon-active: #e6edf3;
+  --activity-active-bg: #1a2530;
+  --activity-hover: rgba(255, 255, 255, 0.06);
 }
 
 :root[data-theme='vscode-light'] {
@@ -193,6 +214,12 @@
   --syntax-link: #0066cc;
   --syntax-quote: #6f6f6f;
   --syntax-invalid: #cd3131;
+  --activity-bg: #2c2c2c;
+  --activity-icon: #9d9d9d;
+  --activity-icon-hover: #ffffff;
+  --activity-icon-active: #ffffff;
+  --activity-active-bg: #37373d;
+  --activity-hover: rgba(255, 255, 255, 0.08);
 }
 
 :root[data-theme='vscode-dark'] {
@@ -252,6 +279,12 @@
   --syntax-link: #4fc1ff;
   --syntax-quote: #9cdcfe;
   --syntax-invalid: #f44747;
+  --activity-bg: #333333;
+  --activity-icon: #9d9d9d;
+  --activity-icon-hover: #ffffff;
+  --activity-icon-active: #ffffff;
+  --activity-active-bg: #37373d;
+  --activity-hover: rgba(255, 255, 255, 0.1);
 }
 
 :root[data-theme='vscode-hc'] {
@@ -312,6 +345,12 @@
   --syntax-link: #4fc1ff;
   --syntax-quote: #d6d6d6;
   --syntax-invalid: #ff6b6b;
+  --activity-bg: #000000;
+  --activity-icon: #e6e6e6;
+  --activity-icon-hover: #ffffff;
+  --activity-icon-active: #6fc3df;
+  --activity-active-bg: #0a2a33;
+  --activity-hover: #1a1a1a;
 }
 
 * {
@@ -354,7 +393,7 @@ button:disabled {
   border-radius: 10px;
   background: var(--panel);
   padding: 8px 14px;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   transition:
     background 0.15s ease,
@@ -399,7 +438,7 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 284px minmax(0, 1fr);
+  grid-template-columns: 48px 252px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
@@ -439,8 +478,8 @@ button:disabled {
   overflow: hidden;
   min-width: 0;
   color: var(--faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-family: var(--mono-font);
+  font-size: 11.5px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -542,6 +581,7 @@ button:disabled {
 }
 
 .pane-title {
+  font-size: 13.5px;
   font-weight: 600;
 }
 
@@ -560,7 +600,7 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   padding: 22px 26px 40px;
-  font-size: 15px;
+  font-size: calc(var(--content-font-size) + 0.5px);
   line-height: 1.75;
   overflow-wrap: break-word;
 }
@@ -633,7 +673,7 @@ button:disabled {
   padding: 0.15em 0.4em;
   border-radius: 5px;
   background: var(--code-inline-bg);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono-font);
   font-size: 0.88em;
 }
 
@@ -644,6 +684,7 @@ button:disabled {
   background: #0d1117;
   color: #c9d1d9;
   overflow-x: auto;
+  font-family: var(--mono-font);
 }
 
 .markdown-body pre code {
@@ -727,7 +768,7 @@ button:disabled {
 
 @media (max-width: 1080px) {
   .app-shell {
-    grid-template-columns: 248px minmax(0, 1fr);
+    grid-template-columns: 44px 228px minmax(0, 1fr);
   }
 
   .workspace {
@@ -736,33 +777,16 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
-  body {
-    overflow: auto;
-  }
-
   .app-shell {
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
+    grid-template-columns: 44px 204px minmax(0, 1fr);
   }
 
   .workspace {
-    overflow: visible;
-    padding: 16px;
+    padding: 14px;
   }
 
   .panes {
-    grid-template-columns: 1fr;
-  }
-
-  .editor-pane {
-    min-height: 52vh;
-  }
-
-  .preview-pane {
-    min-height: 46vh;
+    gap: 10px;
   }
 }
 

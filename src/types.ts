@@ -19,6 +19,21 @@ export interface NoteAsset {
   data: string;
 }
 
+export interface SearchMatch {
+  path: string;
+  name: string;
+  line: number;
+  column: number;
+  text: string;
+  matchStart: number;
+  matchLength: number;
+}
+
+export interface SearchResults {
+  matches: SearchMatch[];
+  truncated: boolean;
+}
+
 export interface NotesApi {
   getState(): Promise<NotesState>;
   pickNotesDir(): Promise<string | null>;
@@ -27,6 +42,7 @@ export interface NotesApi {
   readNote(path: string): Promise<NoteDetail>;
   saveNote(path: string, content: string): Promise<void>;
   readAsset(notePath: string, source: string): Promise<NoteAsset>;
+  searchNotes(query: string): Promise<SearchResults>;
   createFile(parent: string, name: string): Promise<string>;
   createFolder(parent: string, name: string): Promise<string>;
   renameEntry(path: string, name: string): Promise<string>;
