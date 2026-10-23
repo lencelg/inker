@@ -607,6 +607,40 @@ button:disabled {
   overflow-wrap: break-word;
 }
 
+.markdown-body .mermaid-block {
+  margin: 1.2em 0;
+  padding: 14px;
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.markdown-body .mermaid-block svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.markdown-body .mermaid-source {
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  color: var(--ink);
+  border-radius: 0;
+  text-align: left;
+}
+
+.markdown-body .mermaid-block.mermaid-error {
+  background: var(--error-soft);
+  border-color: var(--error-border);
+  color: var(--error);
+  text-align: left;
+}
+
 .markdown-body > :first-child {
   margin-top: 0;
 }

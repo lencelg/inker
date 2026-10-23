@@ -153,6 +153,93 @@ pub fn save_note(notes_dir: &Path, relative: &str, content: &str) -> Result<(), 
     fs::write(&path, content).map_err(|error| format!("保存笔记失败：{error}"))
 }
 
+pub fn save_note_image(
+    notes_dir: &Path,
+    note_relative: &str,
+    file_name: &str,
+    data: &str,
+) -> Result<String, String> {
+    let root = canonical_dir(notes_dir)?;
+    let note_path = resolve_existing_file(notes_dir, note_relative)?;
+    let bytes = BASE64
+        .decode(data)
+        .map_err(|_| "图片数据无效".to_string())?;
+    if bytes.is_empty() {
+        return Err("图片内容为空".to_string());
+    }
+    if bytes.len() as u64 > MAX_ASSET_BYTES {
+        return Err("图片文件过大（最大 20 MB）".to_string());
+    }
+
+    let original = Path::new(file_name);
+    let extension = original
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !matches!(
+        extension.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg"
+    ) {
+        return Err("不支持的图片格式".to_string());
+    }
+
+    let stem = sanitize_image_stem(
+        original
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("image"),
+    );
+    let base = note_path
+        .parent()
+        .ok_or_else(|| "无法确定笔记所在文件夹".to_string())?;
+    let assets = base.join("assets");
+    fs::create_dir_all(&assets).map_err(|error| format!("创建图片目录失败：{error}"))?;
+    let assets = fs::canonicalize(&assets)
+        .map_err(|error| format!("读取图片目录失败：{error}"))?;
+    if !assets.starts_with(&root) {
+        return Err("图片目录超出笔记文件夹".to_string());
+    }
+
+    let mut candidate = assets.join(format!("{stem}.{extension}"));
+    let mut counter = 1;
+    while candidate.exists() {
+        if counter > 9999 {
+            return Err("无法生成唯一的图片文件名".to_string());
+        }
+        candidate = assets.join(format!("{stem}-{counter}.{extension}"));
+        counter += 1;
+    }
+
+    fs::write(&candidate, bytes).map_err(|error| format!("保存图片失败：{error}"))?;
+    let relative = candidate
+        .strip_prefix(base)
+        .map_err(|_| "无法生成图片路径".to_string())?;
+    Ok(relative
+        .to_string_lossy()
+        .replace(std::path::MAIN_SEPARATOR, "/"))
+}
+
+fn sanitize_image_stem(value: &str) -> String {
+    let mut result = String::new();
+    for character in value.chars() {
+        if character.is_alphanumeric() || character == '-' || character == '_' {
+            result.push(character);
+        } else if character == ' ' || character == '.' {
+            result.push('-');
+        }
+        if result.chars().count() >= 48 {
+            break;
+        }
+    }
+    let trimmed = result.trim_matches('-');
+    if trimmed.is_empty() {
+        "image".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 pub fn read_note_asset(
     notes_dir: &Path,
     note_relative: &str,
@@ -846,5 +933,35 @@ mod tests {
         assert!(read_note(&root, "linked/secret.md").is_err());
         let entries = list_entries(&root).unwrap();
         assert!(entries.iter().all(|entry| entry.path != "linked"));
+    }
+
+    #[test]
+    fn saves_pasted_images_into_assets() {
+        let (_temp, root) = setup();
+        fs::write(root.join("Note.md"), "# Note").unwrap();
+        let data = BASE64.encode([137u8, 80, 78, 71]);
+
+        let first = save_note_image(&root, "Note.md", "screen shot.png", &data)
+            .unwrap();
+        assert_eq!(first, "assets/screen-shot.png");
+        assert_eq!(
+            fs::read(root.join("assets/screen-shot.png")).unwrap(),
+            vec![137, 80, 78, 71]
+        );
+
+        let second = save_note_image(&root, "Note.md", "screen shot.png", &data)
+            .unwrap();
+        assert_eq!(second, "assets/screen-shot-1.png");
+    }
+
+    #[test]
+    fn rejects_unsupported_image_types() {
+        let (_temp, root) = setup();
+        fs::write(root.join("Note.md"), "# Note").unwrap();
+        let data = BASE64.encode(b"not an image");
+        assert!(
+            save_note_image(&root, "Note.md", "note.md", &data).is_err()
+        );
+        assert!(save_note_image(&root, "Note.md", "note.png", "%%%").is_err());
     }
 }

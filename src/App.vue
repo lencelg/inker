@@ -103,6 +103,7 @@ const previewLayoutKey = computed(
   () =>
     `${preferences.value.theme}:${preferences.value.fontFamily}:${preferences.value.fontSize}`,
 );
+const immersiveEnabled = computed(() => preferences.value.immersive);
 const tabItems = computed(() =>
   tabs.value.map((tab) => ({
     path: tab.path,
@@ -290,6 +291,10 @@ function updatePreferences(patch: Partial<Preferences>): void {
 
 function setFontSize(value: number): void {
   updatePreferences({ fontSize: value });
+}
+
+function toggleImmersive(): void {
+  updatePreferences({ immersive: !preferences.value.immersive });
 }
 
 function handleGlobalWheel(event: WheelEvent): void {
@@ -494,7 +499,16 @@ function handlePreviewScroll(line: number): void {
 
 function handleGlobalKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return;
-  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') {
+  const modifier = event.ctrlKey || event.metaKey;
+
+  if (modifier && event.shiftKey && event.key.toLowerCase() === 'm') {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleImmersive();
+    return;
+  }
+
+  if (!modifier || event.key.toLowerCase() !== 's') {
     return;
   }
 
@@ -925,6 +939,7 @@ function errorMessage(err: unknown): string {
           :initial-content="activeTab.content"
           :note-path="activeTab.path"
           :read-only="switching || mutating"
+          :immersive="immersiveEnabled"
           @change="handleContentChange"
         />
 
@@ -951,6 +966,7 @@ function errorMessage(err: unknown): string {
               :vim-enabled="vimEnabled"
               :read-only="switching || mutating"
               :layout-key="previewLayoutKey"
+              :immersive="immersiveEnabled"
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"
@@ -999,7 +1015,9 @@ function errorMessage(err: unknown): string {
       :mode="viewMode"
       :vim-enabled="vimEnabled && viewMode !== 'wysiwyg'"
       :line-ending="lineEnding"
+      :immersive="immersiveEnabled"
       @mode-change="setViewMode"
+      @immersive-toggle="toggleImmersive"
     />
 
     <ConfirmDialog

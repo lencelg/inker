@@ -41,6 +41,11 @@ export interface NotesApi {
   refresh(): Promise<NotesState>;
   readNote(path: string): Promise<NoteDetail>;
   saveNote(path: string, content: string): Promise<void>;
+  saveImage(
+    notePath: string,
+    fileName: string,
+    data: string,
+  ): Promise<string>;
   readAsset(notePath: string, source: string): Promise<NoteAsset>;
   searchNotes(query: string): Promise<SearchResults>;
   createFile(parent: string, name: string): Promise<string>;

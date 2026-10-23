@@ -13,6 +13,7 @@ pub fn run() {
             commands::refresh_notes,
             commands::read_note,
             commands::save_note,
+            commands::save_note_image,
             commands::read_note_asset,
             commands::search_notes,
             commands::create_file,

@@ -8,9 +8,13 @@ const props = defineProps<{
   mode: ViewMode;
   vimEnabled: boolean;
   lineEnding: string;
+  immersive: boolean;
 }>();
 
-const emit = defineEmits<{ modeChange: [mode: ViewMode] }>();
+const emit = defineEmits<{
+  modeChange: [mode: ViewMode];
+  immersiveToggle: [];
+}>();
 
 const modeLabel = computed(
   () => VIEW_MODES.find((item) => item.id === props.mode)?.label ?? '源码模式',
@@ -195,6 +199,16 @@ function onMenuKeyDown(event: KeyboardEvent): void {
       </button>
 
       <span v-if="vimEnabled" class="status-vim">Vim</span>
+      <button
+        type="button"
+        class="status-focus"
+        :class="{ active: immersive }"
+        :aria-pressed="immersive"
+        title="沉浸式写作（Ctrl+Shift+M）"
+        @click="emit('immersiveToggle')"
+      >
+        专注
+      </button>
     </div>
 
     <div class="status-right">
@@ -402,6 +416,33 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   font-family: var(--mono-font);
   font-size: 10.5px;
   letter-spacing: 0.03em;
+}
+
+.status-focus {
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--statusbar-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.status-focus:hover {
+  background: var(--statusbar-hover);
+  color: var(--statusbar-ink);
+}
+
+.status-focus.active {
+  background: var(--statusbar-hover);
+  color: var(--statusbar-ink);
+  font-weight: 600;
+}
+
+.status-focus:focus-visible {
+  outline: 1px solid var(--statusbar-ink);
+  outline-offset: -1px;
 }
 
 .status-item {

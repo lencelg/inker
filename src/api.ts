@@ -28,6 +28,9 @@ export const api: NotesApi = {
 
   saveNote: (path, content) => invoke<void>('save_note', { path, content }),
 
+  saveImage: (notePath, fileName, data) =>
+    invoke<string>('save_note_image', { notePath, fileName, data }),
+
   readAsset: (notePath, source) =>
     invoke<NoteAsset>('read_note_asset', { notePath, source }),
 

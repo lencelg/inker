@@ -16,6 +16,7 @@ export const MAX_FONT_SIZE = 28;
 export const FONT_SIZE_STORAGE_KEY = 'markleaf-font-size';
 export const FONT_FAMILY_STORAGE_KEY = 'markleaf-font-family';
 export const VIM_STORAGE_KEY = 'markleaf-vim';
+export const IMMERSIVE_STORAGE_KEY = 'markleaf-immersive';
 export const PREFERENCES_EVENT = 'markleaf-preferences';
 export const PREFERENCES_REQUEST_EVENT = 'markleaf-preferences-request';
 
@@ -24,6 +25,7 @@ export interface Preferences {
   fontSize: number;
   fontFamily: FontId;
   vimEnabled: boolean;
+  immersive: boolean;
 }
 
 export function clampFontSize(value: number): number {
@@ -43,6 +45,7 @@ export function normalizePreferences(value: unknown): Preferences {
       ? source.fontFamily
       : DEFAULT_FONT,
     vimEnabled: source.vimEnabled === true,
+    immersive: source.immersive === true,
   };
 }
 
@@ -56,6 +59,8 @@ export function readPreferences(): Preferences {
       fontFamily: window.localStorage.getItem(FONT_FAMILY_STORAGE_KEY),
       vimEnabled:
         window.localStorage.getItem(VIM_STORAGE_KEY) === 'true',
+      immersive:
+        window.localStorage.getItem(IMMERSIVE_STORAGE_KEY) === 'true',
     });
   } catch {
     return normalizePreferences({});
@@ -79,6 +84,10 @@ export function savePreferences(preferences: Preferences): void {
     window.localStorage.setItem(
       VIM_STORAGE_KEY,
       String(preferences.vimEnabled),
+    );
+    window.localStorage.setItem(
+      IMMERSIVE_STORAGE_KEY,
+      String(preferences.immersive),
     );
   } catch {
     // Persisting the preference is optional.

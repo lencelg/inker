@@ -6,8 +6,22 @@ import {
   indentUnit,
   syntaxHighlighting,
 } from '@codemirror/language';
-import { Compartment, EditorState } from '@codemirror/state';
-import { EditorView, placeholder } from '@codemirror/view';
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  Prec,
+  type Range,
+} from '@codemirror/state';
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  keymap,
+  placeholder,
+  type DecorationSet,
+  type ViewUpdate,
+} from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { tags } from '@lezer/highlight';
@@ -18,6 +32,7 @@ const props = defineProps<{
   vimEnabled: boolean;
   readOnly: boolean;
   layoutKey?: string;
+  immersive: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -30,12 +45,14 @@ const emit = defineEmits<{
 const host = ref<HTMLDivElement | null>(null);
 const vimCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
+const immersiveCompartment = new Compartment();
 const vimExtension = vim({ status: true });
 
 let view: EditorView | null = null;
 let scrollElement: HTMLElement | null = null;
 let scrollFrame = 0;
 let resizeFrame = 0;
+let centerFrame = 0;
 let resizeObserver: ResizeObserver | null = null;
 
 const syntaxTheme = HighlightStyle.define([
@@ -193,6 +210,165 @@ function emitCursor(): void {
   });
 }
 
+function activeBlock(
+  source: EditorView,
+): { start: number; end: number } {
+  const doc = source.state.doc;
+  const cursorLine = doc.lineAt(source.state.selection.main.head).number;
+  let start = cursorLine;
+  let end = cursorLine;
+
+  while (start > 1 && doc.line(start - 1).text.trim() !== '') {
+    start -= 1;
+  }
+  while (end < doc.lines && doc.line(end + 1).text.trim() !== '') {
+    end += 1;
+  }
+  return { start, end };
+}
+
+function buildImmersiveDecorations(source: EditorView): DecorationSet {
+  const { start, end } = activeBlock(source);
+  const decorations: Range<Decoration>[] = [];
+  const doc = source.state.doc;
+  const lineDecoration = Decoration.line({ class: 'cm-immersive-dim' });
+
+  for (const range of source.visibleRanges) {
+    let line = doc.lineAt(range.from);
+    while (true) {
+      if (line.number < start || line.number > end) {
+        decorations.push(lineDecoration.range(line.from));
+      }
+      if (line.to >= range.to || line.number >= doc.lines) break;
+      line = doc.line(line.number + 1);
+    }
+  }
+
+  return Decoration.set(decorations);
+}
+
+const immersiveDimPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(source: EditorView) {
+      this.decorations = buildImmersiveDecorations(source);
+    }
+
+    update(update: ViewUpdate): void {
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.viewportChanged
+      ) {
+        this.decorations = buildImmersiveDecorations(update.view);
+      }
+    }
+  },
+  {
+    decorations: (plugin) => plugin.decorations,
+  },
+);
+
+function centerSelection(): void {
+  if (!props.immersive || !view || centerFrame) return;
+  centerFrame = requestAnimationFrame(() => {
+    centerFrame = 0;
+    if (!view || !props.immersive) return;
+    const head = view.state.selection.main.head;
+    view.dispatch({
+      effects: EditorView.scrollIntoView(head, { y: 'center' }),
+    });
+  });
+}
+
+function selectNextOccurrence(source: EditorView): boolean {
+  const state = source.state;
+  const ranges = state.selection.ranges;
+  const primary = ranges[ranges.length - 1];
+
+  if (primary.empty) {
+    const word = state.wordAt(primary.head);
+    if (!word) return false;
+    source.dispatch({
+      selection: EditorSelection.create([
+        EditorSelection.range(word.from, word.to),
+      ]),
+    });
+    return true;
+  }
+
+  const text = state.sliceDoc(primary.from, primary.to);
+  if (!text) return false;
+  const doc = state.doc.toString();
+
+  let index = doc.indexOf(text, primary.to);
+  while (
+    index >= 0 &&
+    ranges.some(
+      (range) => range.from === index && range.to === index + text.length,
+    )
+  ) {
+    index = doc.indexOf(text, index + text.length);
+  }
+  if (index < 0) {
+    index = doc.indexOf(text, 0);
+    while (
+      index >= 0 &&
+      ranges.some(
+        (range) => range.from === index && range.to === index + text.length,
+      )
+    ) {
+      index = doc.indexOf(text, index + text.length);
+    }
+  }
+  if (index < 0) return false;
+
+  const next = ranges.concat(
+    EditorSelection.range(index, index + text.length),
+  );
+  source.dispatch({
+    selection: EditorSelection.create(next, next.length - 1),
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+function collapseSelections(source: EditorView): boolean {
+  if (source.state.selection.ranges.length <= 1) return false;
+  source.dispatch({
+    selection: EditorSelection.cursor(source.state.selection.main.head),
+  });
+  return true;
+}
+
+const multiCursorKeymap = Prec.high(
+  keymap.of([
+    { key: 'Mod-d', run: selectNextOccurrence, preventDefault: true },
+    { key: 'Escape', run: collapseSelections, preventDefault: true },
+  ]),
+);
+
+const multiCursorMouse = EditorView.domEventHandlers({
+  mousedown(event, source) {
+    if (!event.altKey) return false;
+    const position = source.posAtCoords({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (position === null) return false;
+    const selection = source.state.selection;
+    const next = selection.addRange(
+      EditorSelection.cursor(position),
+      true,
+    );
+    source.dispatch({ selection: next });
+    source.focus();
+    event.preventDefault();
+    return true;
+  },
+});
+
 onMounted(() => {
   if (!host.value) {
     return;
@@ -207,6 +383,12 @@ onMounted(() => {
       extensions: [
         vimCompartment.of(props.vimEnabled ? vimExtension : []),
         readOnlyCompartment.of(readOnlyExtensions(props.readOnly)),
+        immersiveCompartment.of(
+          props.immersive ? immersiveDimPlugin : [],
+        ),
+        EditorState.allowMultipleSelections.of(true),
+        multiCursorKeymap,
+        multiCursorMouse,
         basicSetup,
         markdown({ codeLanguages: languages }),
         syntaxHighlighting(syntaxTheme),
@@ -223,6 +405,7 @@ onMounted(() => {
           }
           if (update.docChanged || update.selectionSet) {
             emitCursor();
+            centerSelection();
           }
         }),
       ],
@@ -274,6 +457,18 @@ watch(
   },
 );
 
+watch(
+  () => props.immersive,
+  (enabled) => {
+    view?.dispatch({
+      effects: immersiveCompartment.reconfigure(
+        enabled ? immersiveDimPlugin : [],
+      ),
+    });
+    if (enabled) centerSelection();
+  },
+);
+
 onBeforeUnmount(() => {
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame);
@@ -282,6 +477,10 @@ onBeforeUnmount(() => {
   if (resizeFrame) {
     cancelAnimationFrame(resizeFrame);
     resizeFrame = 0;
+  }
+  if (centerFrame) {
+    cancelAnimationFrame(centerFrame);
+    centerFrame = 0;
   }
   resizeObserver?.disconnect();
   resizeObserver = null;
@@ -384,6 +583,11 @@ defineExpose({ revealLine, refresh, scrollToLine, captureState, restoreState });
 
 .editor-host :deep(.cm-editor) {
   height: 100%;
+}
+
+.editor-host :deep(.cm-immersive-dim) {
+  opacity: 0.26;
+  transition: opacity 120ms ease;
 }
 
 .editor-host :deep(.cm-vim-panel) {

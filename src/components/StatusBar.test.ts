@@ -12,6 +12,7 @@ function mountStatusBar() {
       mode: 'source',
       vimEnabled: false,
       lineEnding: 'LF',
+      immersive: false,
     },
   });
 }
@@ -52,6 +53,13 @@ describe('StatusBar mode menu', () => {
     expect(wrapper.find('.status-mode').attributes('aria-expanded')).toBe(
       'false',
     );
+    wrapper.unmount();
+  });
+
+  it('emits the immersive toggle', async () => {
+    const wrapper = mountStatusBar();
+    await wrapper.find('.status-focus').trigger('click');
+    expect(wrapper.emitted('immersiveToggle')).toHaveLength(1);
     wrapper.unmount();
   });
 });

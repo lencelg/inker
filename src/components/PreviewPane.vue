@@ -4,6 +4,7 @@ import renderMathInElement from 'katex/contrib/auto-render';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
 import { isLocalImageSource } from '../lib/markdown';
+import { renderMermaid } from '../lib/mermaid';
 import {
   previewScrollTop,
   sourceLineAtOffset,
@@ -23,7 +24,12 @@ const emit = defineEmits<{ syncSource: [line: number] }>();
 // Notes may contain raw HTML, so all rendered HTML is sanitized before v-html.
 const safeHtml = computed(() =>
   DOMPurify.sanitize(props.html, {
-    ADD_ATTR: ['data-md-src', 'data-source-line', 'data-source-line-end'],
+    ADD_ATTR: [
+      'data-md-src',
+      'data-source-line',
+      'data-source-line-end',
+      'data-mermaid',
+    ],
   }),
 );
 const bodyRef = ref<HTMLElement | null>(null);
@@ -65,11 +71,9 @@ function markMissing(image: HTMLImageElement, message: string): void {
   image.replaceWith(placeholder);
 }
 
-async function resolveImages(): Promise<void> {
+async function resolveImages(run: number): Promise<void> {
   const root = bodyRef.value;
   if (!root) return;
-
-  const run = ++resolveRun;
   const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
 
   await Promise.all(
@@ -107,11 +111,31 @@ async function resolveImages(): Promise<void> {
       }
     }),
   );
+}
 
-  if (run === resolveRun) {
-    collectAnchors();
-    applyScrollSync();
-  }
+async function renderDiagrams(run: number): Promise<void> {
+  const root = bodyRef.value;
+  if (!root) return;
+
+  const blocks = Array.from(
+    root.querySelectorAll<HTMLElement>('[data-mermaid]'),
+  );
+  await Promise.all(
+    blocks.map(async (block) => {
+      const source = block.dataset.mermaid ?? '';
+      if (!source.trim()) return;
+      try {
+        const svg = await renderMermaid(source);
+        if (run !== resolveRun || !block.isConnected) return;
+        block.classList.add('mermaid-rendered');
+        block.innerHTML = svg;
+      } catch (error) {
+        if (run !== resolveRun || !block.isConnected) return;
+        block.classList.add('mermaid-error');
+        block.title = `Mermaid 渲染失败：${errorMessage(error)}`;
+      }
+    }),
+  );
 }
 
 function collectAnchors(): void {
@@ -241,8 +265,12 @@ watch(
       anchors = [];
       return;
     }
+    const run = ++resolveRun;
     renderMath();
-    await resolveImages();
+    await Promise.all([resolveImages(run), renderDiagrams(run)]);
+    if (run !== resolveRun) return;
+    collectAnchors();
+    applyScrollSync();
   },
   { immediate: true },
 );

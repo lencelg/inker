@@ -77,6 +77,10 @@ function onVimChange(event: Event): void {
   update({ vimEnabled: (event.target as HTMLInputElement).checked });
 }
 
+function onImmersiveChange(event: Event): void {
+  update({ immersive: (event.target as HTMLInputElement).checked });
+}
+
 function closeWindow(): void {
   void getCurrentWindow().close();
 }
@@ -189,6 +193,20 @@ function closeWindow(): void {
               :checked="preferences.vimEnabled"
               aria-label="Vim 模式"
               @change="onVimChange"
+            />
+          </div>
+
+          <div class="setting-row immersive-row">
+            <span>
+              <strong>沉浸式写作</strong>
+              <small>打字机模式让当前行保持居中，并淡化其他内容。</small>
+            </span>
+            <input
+              class="switch"
+              type="checkbox"
+              :checked="preferences.immersive"
+              aria-label="沉浸式写作"
+              @change="onImmersiveChange"
             />
           </div>
         </div>
@@ -411,6 +429,10 @@ function closeWindow(): void {
 }
 
 .vim-row {
+  border-top: 1px solid var(--border);
+}
+
+.immersive-row {
   border-top: 1px solid var(--border);
 }
 

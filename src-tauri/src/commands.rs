@@ -1,8 +1,10 @@
 use crate::notes::{
-    create_file as create_file_entry, create_folder as create_folder_entry, ensure_notes_dir,
-    entry_path, list_entries, read_note as read_note_file, read_note_asset as read_asset_file,
-    rename_entry as rename_entry_file, save_note as save_note_file, search_notes as search_notes_file,
-    NoteAsset, NoteDetail, NotesState, SearchResults,
+    create_file as create_file_entry, create_folder as create_folder_entry,
+    ensure_notes_dir, entry_path, list_entries, read_note as read_note_file,
+    read_note_asset as read_asset_file, rename_entry as rename_entry_file,
+    save_note as save_note_file, save_note_image as save_image_file,
+    search_notes as search_notes_file, NoteAsset, NoteDetail, NotesState,
+    SearchResults,
 };
 use crate::settings::{load_settings, save_settings, Settings};
 use std::path::{Path, PathBuf};
@@ -38,6 +40,21 @@ pub fn read_note(app: AppHandle, path: String) -> Result<NoteDetail, String> {
 #[tauri::command]
 pub fn save_note(app: AppHandle, path: String, content: String) -> Result<(), String> {
     save_note_file(&require_notes_dir(&app)?, &path, &content)
+}
+
+#[tauri::command]
+pub fn save_note_image(
+    app: AppHandle,
+    note_path: String,
+    file_name: String,
+    data: String,
+) -> Result<String, String> {
+    save_image_file(
+        &require_notes_dir(&app)?,
+        &note_path,
+        &file_name,
+        &data,
+    )
 }
 
 #[tauri::command]
