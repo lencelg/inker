@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { dirname } from '../lib/paths';
 import type { FileEntry } from '../types';
-import LeafIcon from './LeafIcon.vue';
 
 const props = defineProps<{
   entries: FileEntry[];
@@ -46,9 +45,7 @@ const folderName = computed(() => {
   return parts[parts.length - 1] ?? props.notesDir;
 });
 
-const fileCount = computed(() => props.entries.filter((entry) => !entry.isDir).length);
 const expanded = computed(() => new Set(props.expandedPaths));
-
 const tree = computed<TreeNode[]>(() => {
   const nodes = new Map<string, TreeNode>();
   for (const entry of props.entries) {
@@ -225,16 +222,6 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 
 <template>
   <aside class="sidebar">
-    <div class="brand">
-      <span class="logo"><LeafIcon /></span>
-      <h1>markleaf</h1>
-    </div>
-
-    <div class="list-heading">
-      <span>笔记库</span>
-      <span>{{ fileCount }}</span>
-    </div>
-
     <div class="tree" role="tree" @contextmenu.prevent="onRootContextMenu">
       <div
         v-for="row in rows"
@@ -346,53 +333,13 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   height: 100%;
-  padding: 22px 14px 14px;
+  padding: 10px 14px 14px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
   backdrop-filter: blur(12px);
   overflow: hidden;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 0 4px;
-}
-
-.logo {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--leaf), var(--leaf-strong));
-  color: #fff;
-}
-
-.logo svg {
-  width: 23px;
-  height: 23px;
-}
-
-.brand h1 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.list-heading {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 6px 0;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 .tree {

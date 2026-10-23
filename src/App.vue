@@ -38,6 +38,8 @@ interface NoteTab {
   savedContent: string;
 }
 
+const SPLIT_STORAGE_KEY = 'markleaf-split-ratio';
+
 const entries = ref<FileEntry[]>([]);
 const notesDir = ref<string | null>(null);
 const tabs = ref<NoteTab[]>([]);
@@ -48,7 +50,10 @@ const savingPaths = ref<string[]>([]);
 const error = ref('');
 const preferences = ref<Preferences>(readPreferences());
 const activeView = ref<'explorer' | 'search'>('explorer');
+const sidebarVisible = ref(true);
 const viewMode = ref<ViewMode>('source');
+const splitRatio = ref(readSplitRatio());
+const resizing = ref(false);
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
 const editorScrollLine = ref(1);
@@ -113,6 +118,86 @@ const saveTasks = new Map<string, Promise<boolean>>();
 let wheelAccumulator = 0;
 let unlistenPreferences: UnlistenFn | null = null;
 let unlistenPreferencesRequest: UnlistenFn | null = null;
+
+function readSplitRatio(): number {
+  try {
+    const raw = window.localStorage.getItem(SPLIT_STORAGE_KEY);
+    if (raw !== null) {
+      const value = Number(raw);
+      if (Number.isFinite(value)) {
+        return Math.min(0.8, Math.max(0.2, value));
+      }
+    }
+  } catch {
+    // Use the default split when storage is unavailable.
+  }
+  return 0.5;
+}
+
+function persistSplitRatio(): void {
+  try {
+    window.localStorage.setItem(
+      SPLIT_STORAGE_KEY,
+      String(splitRatio.value),
+    );
+  } catch {
+    // Persisting the layout is optional.
+  }
+}
+
+function selectActivity(view: 'explorer' | 'search'): void {
+  if (activeView.value === view) {
+    sidebarVisible.value = !sidebarVisible.value;
+  } else {
+    activeView.value = view;
+    sidebarVisible.value = true;
+  }
+}
+
+function startResize(event: PointerEvent): void {
+  if (viewMode.value !== 'side') return;
+  event.preventDefault();
+
+  const resizer = event.currentTarget as HTMLElement;
+  const container = resizer.parentElement;
+  if (!container) return;
+
+  const rect = container.getBoundingClientRect();
+  resizing.value = true;
+  resizer.setPointerCapture(event.pointerId);
+
+  const move = (moveEvent: PointerEvent): void => {
+    const ratio = (moveEvent.clientX - rect.left) / rect.width;
+    splitRatio.value = Math.min(0.8, Math.max(0.2, ratio));
+  };
+  const stop = (): void => {
+    resizing.value = false;
+    resizer.removeEventListener('pointermove', move);
+    resizer.removeEventListener('pointerup', stop);
+    resizer.removeEventListener('pointercancel', stop);
+    if (resizer.hasPointerCapture(event.pointerId)) {
+      resizer.releasePointerCapture(event.pointerId);
+    }
+    persistSplitRatio();
+  };
+
+  resizer.addEventListener('pointermove', move);
+  resizer.addEventListener('pointerup', stop);
+  resizer.addEventListener('pointercancel', stop);
+}
+
+function onResizerKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  event.preventDefault();
+  const delta = event.key === 'ArrowLeft' ? -0.02 : 0.02;
+  splitRatio.value = Math.min(0.8, Math.max(0.2, splitRatio.value + delta));
+  persistSplitRatio();
+}
+
+function resetSplit(): void {
+  splitRatio.value = 0.5;
+  persistSplitRatio();
+}
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown, true);
@@ -706,15 +791,19 @@ function errorMessage(err: unknown): string {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div
+    class="app-shell"
+    :class="{ 'sidebar-hidden': !sidebarVisible }"
+  >
     <ActivityBar
       :active-view="activeView"
-      @change-view="activeView = $event"
+      :sidebar-visible="sidebarVisible"
+      @change-view="selectActivity"
       @open-settings="openSettings"
     />
 
     <NoteSidebar
-      v-if="activeView === 'explorer'"
+      v-if="sidebarVisible && activeView === 'explorer'"
       :entries="entries"
       :selected-path="selectedPath"
       :notes-dir="notesDir"
@@ -730,7 +819,7 @@ function errorMessage(err: unknown): string {
     />
 
     <SearchPanel
-      v-else
+      v-else-if="sidebarVisible && activeView === 'search'"
       :notes-dir="notesDir"
       @open="openSearchResult"
     />
@@ -763,7 +852,17 @@ function errorMessage(err: unknown): string {
           />
         </header>
 
-        <div class="panes" :class="{ single: viewMode !== 'side' }">
+        <div
+          class="panes"
+          :class="{ single: viewMode !== 'side', resizing }"
+          :style="
+            viewMode === 'side'
+              ? {
+                  gridTemplateColumns: `${splitRatio}fr 6px ${1 - splitRatio}fr`,
+                }
+              : undefined
+          "
+        >
           <section
             v-show="viewMode !== 'preview'"
             class="editor-pane"
@@ -780,6 +879,21 @@ function errorMessage(err: unknown): string {
               @save-request="saveCurrentNote"
             />
           </section>
+
+          <div
+            v-if="viewMode === 'side'"
+            class="pane-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            :aria-valuenow="Math.round(splitRatio * 100)"
+            aria-valuemin="20"
+            aria-valuemax="80"
+            tabindex="0"
+            title="拖动调整编辑区和预览区宽度，双击恢复默认"
+            @pointerdown="startResize"
+            @keydown="onResizerKeydown"
+            @dblclick="resetSplit"
+          ></div>
 
           <PreviewPane
             v-if="viewMode !== 'source'"

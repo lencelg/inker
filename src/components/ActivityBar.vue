@@ -3,6 +3,7 @@ type ActivityView = 'explorer' | 'search';
 
 defineProps<{
   activeView: ActivityView;
+  sidebarVisible: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -15,11 +16,11 @@ const emit = defineEmits<{
   <nav class="activity-bar" aria-label="主导航">
     <button
       class="activity-item"
-      :class="{ active: activeView === 'explorer' }"
+      :class="{ active: sidebarVisible && activeView === 'explorer' }"
       type="button"
       title="文件"
       aria-label="文件"
-      :aria-pressed="activeView === 'explorer'"
+      :aria-pressed="sidebarVisible && activeView === 'explorer'"
       @click="emit('changeView', 'explorer')"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -42,11 +43,11 @@ const emit = defineEmits<{
 
     <button
       class="activity-item"
-      :class="{ active: activeView === 'search' }"
+      :class="{ active: sidebarVisible && activeView === 'search' }"
       type="button"
       title="搜索"
       aria-label="搜索"
-      :aria-pressed="activeView === 'search'"
+      :aria-pressed="sidebarVisible && activeView === 'search'"
       @click="emit('changeView', 'search')"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
