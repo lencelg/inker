@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { api } from './api';
 import ActivityBar from './components/ActivityBar.vue';
@@ -31,6 +31,10 @@ import {
 } from './lib/preferences';
 import type { ViewMode } from './lib/viewModes';
 import type { FileEntry, NotesState, SearchMatch } from './types';
+
+const WysiwygPane = defineAsyncComponent(
+  () => import('./components/WysiwygPane.vue'),
+);
 
 interface NoteTab {
   path: string;
@@ -300,9 +304,19 @@ function handleCursor(position: {
 
 async function setViewMode(mode: ViewMode): Promise<void> {
   if (viewMode.value === mode) return;
+  const leavingWysiwyg = viewMode.value === 'wysiwyg';
+  const enteringWysiwyg = mode === 'wysiwyg';
   viewMode.value = mode;
+  if (leavingWysiwyg || enteringWysiwyg) {
+    editorSession.value += 1;
+    previewFocusLine.value = 1;
+    if (enteringWysiwyg) {
+      cursorLine.value = null;
+      cursorColumn.value = null;
+    }
+  }
   await nextTick();
-  if (mode !== 'preview') {
+  if (mode !== 'preview' && mode !== 'wysiwyg') {
     editorPane.value?.refresh();
   }
 }
@@ -321,6 +335,10 @@ async function openSearchResult(match: SearchMatch): Promise<void> {
     if (!(await openNote(match.path))) return;
   } else if (activePath.value !== match.path) {
     activateTab(match.path);
+  }
+
+  if (viewMode.value === 'wysiwyg') {
+    await setViewMode('source');
   }
 
   await nextTick();
@@ -866,7 +884,17 @@ function errorMessage(err: unknown): string {
           />
         </header>
 
+        <WysiwygPane
+          v-if="viewMode === 'wysiwyg'"
+          :key="editorSession"
+          :initial-content="activeTab.content"
+          :note-path="activeTab.path"
+          :read-only="switching || mutating"
+          @change="handleContentChange"
+        />
+
         <div
+          v-else
           class="panes"
           :class="{ single: viewMode !== 'side', resizing }"
           :style="
@@ -929,10 +957,10 @@ function errorMessage(err: unknown): string {
     </main>
 
     <StatusBar
-      :line="activeTab ? cursorLine : null"
-      :column="activeTab ? cursorColumn : null"
+      :line="activeTab && viewMode !== 'wysiwyg' ? cursorLine : null"
+      :column="activeTab && viewMode !== 'wysiwyg' ? cursorColumn : null"
       :mode="viewMode"
-      :vim-enabled="vimEnabled"
+      :vim-enabled="vimEnabled && viewMode !== 'wysiwyg'"
       :line-ending="lineEnding"
       @mode-change="setViewMode"
     />
