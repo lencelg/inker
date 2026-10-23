@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { VIEW_MODES, type ViewMode } from '../lib/viewModes';
 
 const props = defineProps<{
@@ -18,6 +18,14 @@ const modeLabel = computed(
 
 const osName = detectOs();
 
+const menuOpen = ref(false);
+const menuStyle = ref<Record<string, string>>({});
+const triggerElement = ref<HTMLButtonElement | null>(null);
+const menuElement = ref<HTMLElement | null>(null);
+let detachMenu: (() => void) | null = null;
+
+onBeforeUnmount(() => closeMenu());
+
 function detectOs(): string {
   const userAgent = navigator.userAgent;
   if (/Windows/i.test(userAgent)) return 'Windows';
@@ -26,15 +34,153 @@ function detectOs(): string {
   return navigator.platform || 'Unknown';
 }
 
-function onModeChange(event: Event): void {
-  emit('modeChange', (event.target as HTMLSelectElement).value as ViewMode);
+function toggleMenu(): void {
+  if (menuOpen.value) {
+    closeMenu(true);
+  } else {
+    void openMenu();
+  }
+}
+
+async function openMenu(edge: 'current' | 'first' | 'last' = 'current'): Promise<void> {
+  if (menuOpen.value) {
+    focusMenuItem(edge);
+    return;
+  }
+
+  const trigger = triggerElement.value;
+  if (!trigger) return;
+
+  const rect = trigger.getBoundingClientRect();
+  const margin = 8;
+  menuStyle.value = {
+    left: `${Math.round(Math.max(margin, rect.left))}px`,
+    bottom: `${Math.round(window.innerHeight - rect.top + 4)}px`,
+    visibility: 'hidden',
+  };
+  menuOpen.value = true;
+  await nextTick();
+
+  const width = menuElement.value?.offsetWidth ?? 0;
+  const left = Math.min(
+    Math.max(margin, rect.left),
+    Math.max(margin, window.innerWidth - width - margin),
+  );
+  menuStyle.value = {
+    left: `${Math.round(left)}px`,
+    bottom: `${Math.round(window.innerHeight - rect.top + 4)}px`,
+    visibility: 'visible',
+  };
+
+  attachDismissListeners();
+  focusMenuItem(edge);
+}
+
+function focusMenuItem(edge: 'current' | 'first' | 'last'): void {
+  const items = menuItems();
+  if (!items.length) return;
+
+  if (edge === 'first') {
+    items[0].focus();
+  } else if (edge === 'last') {
+    items[items.length - 1].focus();
+  } else {
+    const active = items.find((item) => item.getAttribute('aria-checked') === 'true');
+    (active ?? items[0]).focus();
+  }
+}
+
+function menuItems(): HTMLButtonElement[] {
+  if (!menuElement.value) return [];
+  return Array.from(
+    menuElement.value.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
+  );
+}
+
+function attachDismissListeners(): void {
+  detachMenu?.();
+
+  const onPointerDown = (event: PointerEvent): void => {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (menuElement.value?.contains(target) || triggerElement.value?.contains(target)) return;
+    closeMenu();
+  };
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeMenu(true);
+  };
+  const onDismiss = (): void => closeMenu();
+
+  window.addEventListener('pointerdown', onPointerDown, true);
+  window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('scroll', onDismiss, true);
+  window.addEventListener('resize', onDismiss);
+  window.addEventListener('blur', onDismiss);
+
+  detachMenu = () => {
+    window.removeEventListener('pointerdown', onPointerDown, true);
+    window.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('scroll', onDismiss, true);
+    window.removeEventListener('resize', onDismiss);
+    window.removeEventListener('blur', onDismiss);
+  };
+}
+
+function closeMenu(restoreFocus = false): void {
+  if (!menuOpen.value) return;
+  menuOpen.value = false;
+  menuStyle.value = {};
+  detachMenu?.();
+  detachMenu = null;
+  if (restoreFocus) triggerElement.value?.focus({ preventScroll: true });
+}
+
+function selectMode(mode: ViewMode): void {
+  emit('modeChange', mode);
+  closeMenu(true);
+}
+
+function onMenuKeyDown(event: KeyboardEvent): void {
+  const items = menuItems();
+  if (!items.length) return;
+
+  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    items[(index + 1) % items.length]?.focus();
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    items[(index - 1 + items.length) % items.length]?.focus();
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    items[0].focus();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    items[items.length - 1].focus();
+  } else if (event.key === 'Tab') {
+    closeMenu();
+  }
 }
 </script>
 
 <template>
   <footer class="status-bar">
     <div class="status-left">
-      <label class="status-mode" title="切换编辑模式">
+      <button
+        ref="triggerElement"
+        type="button"
+        class="status-mode"
+        :class="{ open: menuOpen }"
+        title="切换编辑模式"
+        aria-haspopup="menu"
+        :aria-expanded="menuOpen"
+        aria-controls="status-mode-menu"
+        @click="toggleMenu"
+        @keydown.down.prevent="openMenu('first')"
+        @keydown.up.prevent="openMenu('last')"
+      >
         <span>{{ modeLabel }}</span>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path
@@ -46,12 +192,7 @@ function onModeChange(event: Event): void {
             stroke-linejoin="round"
           />
         </svg>
-        <select :value="mode" aria-label="编辑模式" @change="onModeChange">
-          <option v-for="item in VIEW_MODES" :key="item.id" :value="item.id">
-            {{ item.label }}
-          </option>
-        </select>
-      </label>
+      </button>
 
       <span v-if="vimEnabled" class="status-vim">Vim</span>
     </div>
@@ -66,6 +207,45 @@ function onModeChange(event: Event): void {
       <span class="status-item">{{ osName }}</span>
     </div>
   </footer>
+
+  <Teleport to="body">
+    <Transition name="mode-menu">
+      <div
+        v-if="menuOpen"
+        id="status-mode-menu"
+        ref="menuElement"
+        class="mode-menu"
+        role="menu"
+        aria-label="编辑模式"
+        :style="menuStyle"
+        @keydown="onMenuKeyDown"
+      >
+        <button
+          v-for="item in VIEW_MODES"
+          :key="item.id"
+          type="button"
+          class="mode-menu-item"
+          role="menuitemradio"
+          :aria-checked="item.id === mode"
+          @click="selectMode(item.id)"
+        >
+          <span class="mode-menu-check" aria-hidden="true">
+            <svg v-if="item.id === mode" viewBox="0 0 24 24">
+              <path
+                d="m5 12.5 4.2 4.2L19 7"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          <span>{{ item.label }}</span>
+        </button>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -100,22 +280,26 @@ function onModeChange(event: Event): void {
 }
 
 .status-mode {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 3px;
   height: 22px;
   padding: 0 7px;
+  border: 0;
   border-radius: 4px;
+  background: transparent;
   color: var(--statusbar-ink);
+  font: inherit;
   cursor: pointer;
+  appearance: none;
 }
 
-.status-mode:hover {
+.status-mode:hover,
+.status-mode.open {
   background: var(--statusbar-hover);
 }
 
-.status-mode:focus-within {
+.status-mode:focus-visible {
   outline: 1px solid var(--statusbar-ink);
   outline-offset: -1px;
 }
@@ -124,15 +308,84 @@ function onModeChange(event: Event): void {
   width: 12px;
   height: 12px;
   opacity: 0.8;
+  transition: transform 120ms ease;
 }
 
-.status-mode select {
-  position: absolute;
-  inset: 0;
+.status-mode.open svg {
+  transform: rotate(180deg);
+}
+
+.mode-menu {
+  position: fixed;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  min-width: 176px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  color: var(--ink);
+  font-size: 12.5px;
+  user-select: none;
+}
+
+.mode-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   width: 100%;
-  height: 100%;
-  opacity: 0;
+  padding: 6px 10px 6px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
+}
+
+.mode-menu-item:hover,
+.mode-menu-item:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.mode-menu-check {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+.mode-menu-check svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mode-menu-enter-active,
+.mode-menu-leave-active {
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
+}
+
+.mode-menu-enter-from,
+.mode-menu-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-menu-enter-active,
+  .mode-menu-leave-active,
+  .status-mode svg {
+    transition: none;
+  }
 }
 
 .status-vim {
