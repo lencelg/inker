@@ -110,20 +110,22 @@ watch(
   display: flex;
   flex: 1;
   min-width: 0;
+  height: 38px;
   align-items: stretch;
+  padding: 0 6px;
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--bg-soft);
-  border: 1px solid var(--border);
-  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid var(--border);
   scrollbar-width: thin;
 }
 
 .tab {
   display: flex;
-  flex: 0 1 190px;
-  min-width: 112px;
-  max-width: 220px;
+  flex: 0 1 210px;
+  min-width: 120px;
+  max-width: 240px;
+  height: 100%;
   align-items: center;
   gap: 7px;
   padding: 0 8px 0 12px;
@@ -167,7 +169,7 @@ watch(
   flex: 1;
   overflow: hidden;
   font-family: var(--mono-font);
-  font-size: 12.5px;
+  font-size: 13px;
   text-overflow: ellipsis;
 }
 

@@ -9,6 +9,7 @@ const props = defineProps<{
   html: string;
   notePath: string;
   focusLine: number;
+  focusRatio: number;
   scrollRatio?: number;
 }>();
 
@@ -162,7 +163,9 @@ function applyScrollSync(): void {
     top = ratio * maximum;
   }
 
-  const focusOffset = element.clientHeight * 0.32;
+  const focusOffset =
+    element.clientHeight *
+    Math.min(0.9, Math.max(0.1, props.focusRatio));
   element.scrollTop = Math.min(maximum, Math.max(0, top - focusOffset));
 }
 
@@ -181,7 +184,7 @@ watch(
 );
 
 watch(
-  [() => props.focusLine, () => props.scrollRatio],
+  [() => props.focusLine, () => props.focusRatio, () => props.scrollRatio],
   async () => {
     await nextTick();
     applyScrollSync();
@@ -191,10 +194,6 @@ watch(
 
 <template>
   <section class="preview-pane">
-    <header class="pane-header">
-      <span class="pane-title">预览</span>
-    </header>
-
     <div v-if="html" ref="bodyRef" class="markdown-body" v-html="safeHtml"></div>
     <div v-else class="preview-empty">
       <span class="preview-icon">&lt;/&gt;</span>
@@ -210,9 +209,6 @@ watch(
   min-height: 0;
   overflow: hidden;
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
 }
 
 .preview-empty {
@@ -242,7 +238,7 @@ watch(
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg-soft);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono-font);
   font-size: 13px;
   color: var(--faint);
 }

@@ -46,7 +46,6 @@ const switching = ref(false);
 const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
 const error = ref('');
-const notice = ref('');
 const preferences = ref<Preferences>(readPreferences());
 const activeView = ref<'explorer' | 'search'>('explorer');
 const viewMode = ref<ViewMode>('source');
@@ -56,6 +55,7 @@ const editorScrollLine = ref(1);
 const editorScrollRatio = ref(0);
 const cursorLine = ref<number | null>(null);
 const cursorColumn = ref<number | null>(null);
+const cursorRatio = ref(0.5);
 const editorPane = ref<{
   revealLine: (line: number, column?: number) => void;
   refresh: () => void;
@@ -68,15 +68,6 @@ const activeTab = computed(
 );
 const selectedPath = computed(() => activeTab.value?.path ?? null);
 const previewHtml = computed(() => renderMarkdown(activeTab.value?.content ?? ''));
-const activeDirty = computed(
-  () =>
-    activeTab.value !== null &&
-    activeTab.value.content !== activeTab.value.savedContent,
-);
-const saving = computed(
-  () =>
-    activePath.value !== null && savingPaths.value.includes(activePath.value),
-);
 const anySaving = computed(() => savingPaths.value.length > 0);
 const busy = computed(() => switching.value || mutating.value);
 const vimEnabled = computed(() => preferences.value.vimEnabled);
@@ -210,9 +201,14 @@ function handleGlobalWheel(event: WheelEvent): void {
   setFontSize(preferences.value.fontSize - direction);
 }
 
-function handleCursor(position: { line: number; column: number }): void {
+function handleCursor(position: {
+  line: number;
+  column: number;
+  ratio: number;
+}): void {
   cursorLine.value = position.line;
   cursorColumn.value = position.column;
+  cursorRatio.value = position.ratio;
 }
 
 async function setViewMode(mode: ViewMode): Promise<void> {
@@ -283,6 +279,7 @@ function pruneTabs(): void {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
+  cursorRatio.value = 0.5;
 }
 
 async function openNote(path: string): Promise<boolean> {
@@ -324,6 +321,7 @@ function activateTab(path: string): void {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
+  cursorRatio.value = 0.5;
   clearFeedback();
   revealPath(path);
 }
@@ -340,7 +338,6 @@ function handleContentChange(value: string): void {
   const tab = activeTab.value;
   if (!tab) return;
   tab.content = value;
-  notice.value = '';
 }
 
 function handleEditorScroll(position: { line: number; ratio: number }): void {
@@ -393,9 +390,6 @@ async function saveTab(tab: NoteTab): Promise<boolean> {
       if (tab.content === snapshot) {
         tab.savedContent = snapshot;
       }
-      if (activePath.value === tab.path) {
-        notice.value = '已保存。';
-      }
       return true;
     } catch (err) {
       setError(err);
@@ -418,9 +412,6 @@ async function saveCurrentNote(): Promise<boolean> {
   const pending = saveTasks.get(tab.path);
   if (pending && !(await pending)) return false;
   if (tab.content === tab.savedContent) {
-    if (activePath.value === tab.path) {
-      notice.value = '已保存。';
-    }
     return true;
   }
   return saveTab(tab);
@@ -492,6 +483,7 @@ function resetTabs(): void {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
+  cursorRatio.value = 0.5;
 }
 
 function toggleFolder(path: string): void {
@@ -520,8 +512,7 @@ function requestCreateFile(parent: string): void {
         const path = await api.createFile(parent, name);
         await refreshEntries();
         revealPath(path);
-        const opened = await openNote(path);
-        notice.value = opened ? '文件已创建。' : '文件已创建，但打开失败。';
+        await openNote(path);
       } finally {
         mutating.value = false;
       }
@@ -545,7 +536,6 @@ function requestCreateFolder(parent: string): void {
         const path = await api.createFolder(parent, name);
         await refreshEntries();
         revealPath(path);
-        notice.value = '文件夹已创建。';
       } finally {
         mutating.value = false;
       }
@@ -578,7 +568,6 @@ function requestRename(entry: FileEntry): void {
         );
         await refreshEntries();
         revealPath(newPath);
-        notice.value = '已重命名。';
       } finally {
         mutating.value = false;
       }
@@ -622,7 +611,6 @@ async function requestDelete(entry: FileEntry): Promise<void> {
         await openNote(next.path);
       }
     }
-    notice.value = '已移到回收站。';
   } catch (err) {
     setError(err);
   } finally {
@@ -663,6 +651,7 @@ async function requestCloseTab(path: string): Promise<void> {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
+  cursorRatio.value = 0.5;
   clearFeedback();
 }
 
@@ -712,7 +701,6 @@ function resolveConfirmation(confirmed: boolean): void {
 
 function clearFeedback(): void {
   error.value = '';
-  notice.value = '';
 }
 
 function setError(err: unknown): void {
@@ -782,22 +770,11 @@ function errorMessage(err: unknown): string {
           />
         </header>
 
-        <div class="document-meta">
-          <span class="document-path">{{ activeTab.path }}</span>
-          <span v-if="saving" class="pill draft">保存中…</span>
-          <span v-else-if="activeDirty" class="pill dirty">未保存</span>
-          <span v-else class="pill saved">已保存</span>
-          <span v-if="notice" class="notice-text">{{ notice }}</span>
-        </div>
-
         <div class="panes" :class="{ single: viewMode !== 'side' }">
           <section
             v-show="viewMode !== 'preview'"
             class="editor-pane"
           >
-            <header class="pane-header">
-              <span class="pane-title">Markdown</span>
-            </header>
             <EditorPane
               ref="editorPane"
               :key="editorSession"
@@ -817,6 +794,7 @@ function errorMessage(err: unknown): string {
             :html="previewHtml"
             :note-path="activeTab.path"
             :focus-line="cursorLine ?? editorScrollLine"
+            :focus-ratio="cursorRatio"
             :scroll-ratio="editorScrollRatio"
           />
         </div>
