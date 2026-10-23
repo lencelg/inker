@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify';
 import renderMathInElement from 'katex/contrib/auto-render';
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 import { api } from '../api';
 import { isLocalImageSource } from '../lib/markdown';
 import { renderMermaid } from '../lib/mermaid';
@@ -39,8 +46,26 @@ let suppressScrollUntil = 0;
 let scrollFrame = 0;
 let resizeFrame = 0;
 let layoutFrame = 0;
+let anchorFrame = 0;
+let layoutUpdating = false;
+let lastUserScrollAt = 0;
+let pointerScrolling = false;
 let resizeObserver: ResizeObserver | null = null;
 let observedWidth = 0;
+
+function markUserScroll(): void {
+  lastUserScrollAt = performance.now();
+}
+
+function onPointerDown(): void {
+  pointerScrolling = true;
+  markUserScroll();
+}
+
+function onPointerUp(): void {
+  pointerScrolling = false;
+  markUserScroll();
+}
 
 function renderMath(): void {
   if (!bodyRef.value) return;
@@ -70,10 +95,61 @@ function markMissing(image: HTMLImageElement, message: string): void {
   image.replaceWith(placeholder);
 }
 
+function scheduleAnchorRefresh(): void {
+  if (anchorFrame) return;
+  anchorFrame = requestAnimationFrame(() => {
+    anchorFrame = 0;
+    collectAnchors();
+    applyScrollSync();
+  });
+}
+
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
+async function waitForImages(
+  root: HTMLElement,
+  run: number,
+): Promise<void> {
+  const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+  await Promise.all(
+    images.map(async (image) => {
+      if (!image.complete) {
+        await new Promise<void>((resolve) => {
+          let settled = false;
+          const done = (): void => {
+            if (settled) return;
+            settled = true;
+            resolve();
+          };
+          image.addEventListener('load', done, { once: true });
+          image.addEventListener('error', done, { once: true });
+          window.setTimeout(done, 3000);
+        });
+      }
+      if (run !== resolveRun) return;
+      try {
+        await image.decode();
+      } catch {
+        // Broken or unsupported images keep their fallback size.
+      }
+    }),
+  );
+}
+
 async function resolveImages(run: number): Promise<void> {
   const root = bodyRef.value;
   if (!root) return;
   const images = Array.from(root.querySelectorAll<HTMLImageElement>('img'));
+  for (const image of images) {
+    if (!image.complete) {
+      image.addEventListener('load', scheduleAnchorRefresh, { once: true });
+      image.addEventListener('error', scheduleAnchorRefresh, { once: true });
+    }
+  }
 
   await Promise.all(
     images.map(async (image) => {
@@ -196,10 +272,22 @@ function sourceLineAtCenter(): number | null {
 }
 
 function onPreviewScroll(): void {
-  if (performance.now() < suppressScrollUntil || scrollFrame) return;
+  if (
+    layoutUpdating ||
+    performance.now() < suppressScrollUntil ||
+    scrollFrame
+  ) {
+    return;
+  }
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = 0;
-    if (performance.now() < suppressScrollUntil) return;
+    if (layoutUpdating || performance.now() < suppressScrollUntil) return;
+    if (
+      !pointerScrolling &&
+      performance.now() - lastUserScrollAt > 600
+    ) {
+      return;
+    }
     const line = sourceLineAtCenter();
     if (line !== null) emit('syncSource', line);
   });
@@ -228,10 +316,16 @@ function observeBody(): void {
   resizeObserver.observe(bodyRef.value);
 }
 
+onMounted(() => {
+  window.addEventListener('pointerup', onPointerUp);
+});
+
 onBeforeUnmount(() => {
+  window.removeEventListener('pointerup', onPointerUp);
   if (scrollFrame) cancelAnimationFrame(scrollFrame);
   if (resizeFrame) cancelAnimationFrame(resizeFrame);
   if (layoutFrame) cancelAnimationFrame(layoutFrame);
+  if (anchorFrame) cancelAnimationFrame(anchorFrame);
   resizeObserver?.disconnect();
   resizeObserver = null;
 });
@@ -258,19 +352,30 @@ function applyScrollSync(): void {
 watch(
   [() => props.html, () => props.notePath],
   async ([html]) => {
-    suppressScrollUntil = performance.now() + 250;
-    await nextTick();
-    observeBody();
-    if (!html) {
-      anchors = [];
-      return;
-    }
     const run = ++resolveRun;
-    renderMath();
-    await Promise.all([resolveImages(run), renderDiagrams(run)]);
-    if (run !== resolveRun) return;
-    collectAnchors();
-    applyScrollSync();
+    layoutUpdating = true;
+    suppressScrollUntil = performance.now() + 250;
+    try {
+      await nextTick();
+      observeBody();
+      if (!html) {
+        anchors = [];
+        return;
+      }
+      const root = bodyRef.value;
+      if (!root) return;
+      renderMath();
+      await Promise.all([resolveImages(run), renderDiagrams(run)]);
+      if (run !== resolveRun) return;
+      await waitForImages(root, run);
+      if (run !== resolveRun) return;
+      await nextFrame();
+      if (run !== resolveRun) return;
+      collectAnchors();
+      applyScrollSync();
+    } finally {
+      if (run === resolveRun) layoutUpdating = false;
+    }
   },
   { immediate: true },
 );
@@ -305,6 +410,9 @@ watch(
       class="markdown-body"
       v-html="safeHtml"
       @scroll.passive="onPreviewScroll"
+      @wheel.passive="markUserScroll"
+      @pointerdown="onPointerDown"
+      @pointerup="onPointerUp"
     ></div>
     <div v-else class="preview-empty">
       <span class="preview-icon">&lt;/&gt;</span>

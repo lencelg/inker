@@ -91,7 +91,7 @@ markdown.renderer.rules.image = (tokens, idx, options, env, self) => {
     token.attrSet('data-md-src', source);
     token.attrSet('src', TRANSPARENT_IMAGE);
   }
-  token.attrSet('loading', 'lazy');
+  token.attrSet('loading', 'eager');
   token.attrSet('decoding', 'async');
 
   if (defaultImageRenderer) {
