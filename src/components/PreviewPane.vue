@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify';
 import renderMathInElement from 'katex/contrib/auto-render';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
 import { isLocalImageSource } from '../lib/markdown';
 
@@ -11,6 +11,8 @@ const props = defineProps<{
   focusLine: number;
   scrollRatio?: number;
 }>();
+
+const emit = defineEmits<{ syncSource: [line: number] }>();
 
 interface SourceAnchor {
   start: number;
@@ -30,6 +32,11 @@ const bodyRef = ref<HTMLElement | null>(null);
 const imageCache = new Map<string, string>();
 let anchors: SourceAnchor[] = [];
 let resolveRun = 0;
+let suppressScrollUntil = 0;
+let scrollFrame = 0;
+let resizeFrame = 0;
+let resizeObserver: ResizeObserver | null = null;
+let observedWidth = 0;
 
 function renderMath(): void {
   if (!bodyRef.value) return;
@@ -156,6 +163,92 @@ function collectAnchors(): void {
   anchors = [...byStart.values()].sort((a, b) => a.start - b.start);
 }
 
+function sourceLineAtCenter(): number | null {
+  const element = bodyRef.value;
+  if (!element || anchors.length === 0) return null;
+
+  const offset = element.scrollTop + element.clientHeight / 2;
+  let containing: SourceAnchor | null = null;
+  for (const anchor of anchors) {
+    if (offset < anchor.top || offset > anchor.bottom) continue;
+    if (!containing || anchor.height < containing.height) {
+      containing = anchor;
+    }
+  }
+
+  if (containing) {
+    const progress =
+      containing.height > 0
+        ? (offset - containing.top) / containing.height
+        : 0;
+    return Math.round(
+      containing.start + (containing.end - containing.start) * progress,
+    );
+  }
+
+  let previous: SourceAnchor | null = null;
+  let next: SourceAnchor | null = null;
+  for (const anchor of anchors) {
+    if (anchor.bottom <= offset) {
+      previous = anchor;
+    } else if (anchor.top >= offset) {
+      next = anchor;
+      break;
+    }
+  }
+
+  if (!previous) return next?.start ?? null;
+  if (!next) return previous.end;
+
+  const progress = Math.min(
+    1,
+    Math.max(0, (offset - previous.bottom) / Math.max(1, next.top - previous.bottom)),
+  );
+  return Math.round(
+    previous.end + (Math.max(previous.end, next.start) - previous.end) * progress,
+  );
+}
+
+function onPreviewScroll(): void {
+  if (performance.now() < suppressScrollUntil || scrollFrame) return;
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0;
+    if (performance.now() < suppressScrollUntil) return;
+    const line = sourceLineAtCenter();
+    if (line !== null) emit('syncSource', line);
+  });
+}
+
+function observeBody(): void {
+  if (!bodyRef.value) {
+    resizeObserver?.disconnect();
+    resizeObserver = null;
+    observedWidth = 0;
+    return;
+  }
+  if (resizeObserver) return;
+
+  resizeObserver = new ResizeObserver((entries) => {
+    const width = entries[0]?.contentRect.width ?? 0;
+    if (Math.abs(width - observedWidth) < 0.5) return;
+    observedWidth = width;
+    if (resizeFrame) return;
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0;
+      collectAnchors();
+      applyScrollSync();
+    });
+  });
+  resizeObserver.observe(bodyRef.value);
+}
+
+onBeforeUnmount(() => {
+  if (scrollFrame) cancelAnimationFrame(scrollFrame);
+  if (resizeFrame) cancelAnimationFrame(resizeFrame);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+});
+
 function applyScrollSync(): void {
   const element = bodyRef.value;
   if (!element) return;
@@ -217,13 +310,19 @@ function applyScrollSync(): void {
   }
 
   const offset = center ? top - element.clientHeight / 2 : top;
-  element.scrollTop = Math.min(maximum, Math.max(0, offset));
+  const nextTop = Math.min(maximum, Math.max(0, offset));
+  if (Math.abs(element.scrollTop - nextTop) >= 0.5) {
+    suppressScrollUntil = performance.now() + 120;
+    element.scrollTop = nextTop;
+  }
 }
 
 watch(
   [() => props.html, () => props.notePath],
   async ([html]) => {
+    suppressScrollUntil = performance.now() + 250;
     await nextTick();
+    observeBody();
     if (!html) {
       anchors = [];
       return;
@@ -245,7 +344,13 @@ watch(
 
 <template>
   <section class="preview-pane">
-    <div v-if="html" ref="bodyRef" class="markdown-body" v-html="safeHtml"></div>
+    <div
+      v-if="html"
+      ref="bodyRef"
+      class="markdown-body"
+      v-html="safeHtml"
+      @scroll.passive="onPreviewScroll"
+    ></div>
     <div v-else class="preview-empty">
       <span class="preview-icon">&lt;/&gt;</span>
       <p>开始输入 Markdown，预览会实时更新。</p>

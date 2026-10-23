@@ -34,6 +34,8 @@ const vimExtension = vim({ status: true });
 let view: EditorView | null = null;
 let scrollElement: HTMLElement | null = null;
 let scrollFrame = 0;
+let resizeFrame = 0;
+let resizeObserver: ResizeObserver | null = null;
 
 const syntaxTheme = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--syntax-keyword)' },
@@ -227,6 +229,14 @@ onMounted(() => {
   });
   scrollElement = view.scrollDOM;
   scrollElement.addEventListener('scroll', handleScroll, { passive: true });
+  resizeObserver = new ResizeObserver(() => {
+    if (resizeFrame) return;
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0;
+      emitScrollSync();
+    });
+  });
+  resizeObserver.observe(scrollElement);
   view.focus();
   scheduleScrollSync();
   emitCursor();
@@ -256,6 +266,12 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(scrollFrame);
     scrollFrame = 0;
   }
+  if (resizeFrame) {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = 0;
+  }
+  resizeObserver?.disconnect();
+  resizeObserver = null;
   scrollElement?.removeEventListener('scroll', handleScroll);
   scrollElement = null;
   view?.destroy();
@@ -280,13 +296,25 @@ function revealLine(lineNumber: number, column = 1): void {
   view.focus();
 }
 
+function scrollToLine(lineNumber: number): void {
+  if (!view) return;
+  const safeLine = Math.min(
+    Math.max(1, Math.round(lineNumber)),
+    view.state.doc.lines,
+  );
+  const target = view.state.doc.line(safeLine);
+  view.dispatch({
+    effects: EditorView.scrollIntoView(target.from, { y: 'center' }),
+  });
+}
+
 function refresh(): void {
   if (!view) return;
   view.requestMeasure();
   view.focus();
 }
 
-defineExpose({ revealLine, refresh });
+defineExpose({ revealLine, refresh, scrollToLine });
 </script>
 
 <template>

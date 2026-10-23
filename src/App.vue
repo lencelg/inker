@@ -61,9 +61,11 @@ const previewFocusLine = ref(1);
 const cursorLine = ref<number | null>(null);
 const cursorColumn = ref<number | null>(null);
 let cursorSyncTime = 0;
+let previewScrollLock = 0;
 const editorPane = ref<{
   revealLine: (line: number, column?: number) => void;
   refresh: () => void;
+  scrollToLine: (line: number) => void;
 } | null>(null);
 
 applyPreferences(preferences.value);
@@ -424,10 +426,17 @@ function handleContentChange(value: string): void {
 }
 
 function handleEditorScroll(position: { line: number; ratio: number }): void {
+  if (performance.now() < previewScrollLock) return;
   editorScrollRatio.value = position.ratio;
   if (performance.now() - cursorSyncTime > 150) {
     previewFocusLine.value = position.line;
   }
+}
+
+function handlePreviewScroll(line: number): void {
+  if (viewMode.value !== 'side') return;
+  previewScrollLock = performance.now() + 180;
+  editorPane.value?.scrollToLine(line);
 }
 
 function handleGlobalKeydown(event: KeyboardEvent): void {
@@ -907,6 +916,7 @@ function errorMessage(err: unknown): string {
             :note-path="activeTab.path"
             :focus-line="previewFocusLine"
             :scroll-ratio="editorScrollRatio"
+            @sync-source="handlePreviewScroll"
           />
         </div>
       </template>
