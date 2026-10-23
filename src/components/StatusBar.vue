@@ -227,6 +227,11 @@ function onMenuKeyDown(event: KeyboardEvent): void {
           class="mode-menu-item"
           role="menuitemradio"
           :aria-checked="item.id === mode"
+          :title="
+            item.id === 'wysiwyg'
+              ? '编辑时会规范化 Markdown 格式'
+              : undefined
+          "
           @click="selectMode(item.id)"
         >
           <span class="mode-menu-check" aria-hidden="true">

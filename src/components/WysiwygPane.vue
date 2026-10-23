@@ -18,6 +18,11 @@ import { trailing } from '@milkdown/kit/plugin/trailing';
 import { Plugin } from '@milkdown/kit/prose/state';
 import { $prose, $view, getMarkdown } from '@milkdown/kit/utils';
 import { api } from '../api';
+import {
+  applyLineEnding,
+  normalizeLineEndings,
+  usesCrlf,
+} from '../lib/lineEndings';
 import { isLocalImageSource } from '../lib/markdown';
 
 const props = defineProps<{
@@ -31,10 +36,12 @@ const emit = defineEmits<{ change: [content: string] }>();
 const host = ref<HTMLDivElement | null>(null);
 const error = ref('');
 const imageCache = new Map<string, string>();
+const keepsCrlf = usesCrlf(props.initialContent);
+const initialMarkdown = normalizeLineEndings(props.initialContent);
 let editor: Editor | null = null;
 let disposed = false;
 let ready = false;
-let lastMarkdown = props.initialContent;
+let lastMarkdown = initialMarkdown;
 
 const imageView = $view(imageSchema.node, () => (node) => {
   const image = document.createElement('img');
@@ -107,7 +114,7 @@ const syncPlugin = $prose((ctx) => {
         const markdown = ctx.get(serializerCtx)(view.state.doc);
         if (markdown === lastMarkdown) return;
         lastMarkdown = markdown;
-        emit('change', markdown);
+        emit('change', applyLineEnding(markdown, keepsCrlf));
       },
     }),
   });
@@ -119,7 +126,7 @@ async function createEditor(): Promise<void> {
 
   editor = Editor.make().config((ctx) => {
     ctx.set(rootCtx, target);
-    ctx.set(defaultValueCtx, props.initialContent);
+    ctx.set(defaultValueCtx, initialMarkdown);
     ctx.set(editorViewOptionsCtx, {
       attributes: {
         class: 'wysiwyg-content',

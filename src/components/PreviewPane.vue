@@ -4,23 +4,21 @@ import renderMathInElement from 'katex/contrib/auto-render';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { api } from '../api';
 import { isLocalImageSource } from '../lib/markdown';
+import {
+  previewScrollTop,
+  sourceLineAtOffset,
+  type SourceAnchor,
+} from '../lib/previewSync';
 
 const props = defineProps<{
   html: string;
   notePath: string;
   focusLine: number;
   scrollRatio?: number;
+  layoutKey?: string;
 }>();
 
 const emit = defineEmits<{ syncSource: [line: number] }>();
-
-interface SourceAnchor {
-  start: number;
-  end: number;
-  top: number;
-  bottom: number;
-  height: number;
-}
 
 // Notes may contain raw HTML, so all rendered HTML is sanitized before v-html.
 const safeHtml = computed(() =>
@@ -35,6 +33,7 @@ let resolveRun = 0;
 let suppressScrollUntil = 0;
 let scrollFrame = 0;
 let resizeFrame = 0;
+let layoutFrame = 0;
 let resizeObserver: ResizeObserver | null = null;
 let observedWidth = 0;
 
@@ -166,46 +165,9 @@ function collectAnchors(): void {
 function sourceLineAtCenter(): number | null {
   const element = bodyRef.value;
   if (!element || anchors.length === 0) return null;
-
-  const offset = element.scrollTop + element.clientHeight / 2;
-  let containing: SourceAnchor | null = null;
-  for (const anchor of anchors) {
-    if (offset < anchor.top || offset > anchor.bottom) continue;
-    if (!containing || anchor.height < containing.height) {
-      containing = anchor;
-    }
-  }
-
-  if (containing) {
-    const progress =
-      containing.height > 0
-        ? (offset - containing.top) / containing.height
-        : 0;
-    return Math.round(
-      containing.start + (containing.end - containing.start) * progress,
-    );
-  }
-
-  let previous: SourceAnchor | null = null;
-  let next: SourceAnchor | null = null;
-  for (const anchor of anchors) {
-    if (anchor.bottom <= offset) {
-      previous = anchor;
-    } else if (anchor.top >= offset) {
-      next = anchor;
-      break;
-    }
-  }
-
-  if (!previous) return next?.start ?? null;
-  if (!next) return previous.end;
-
-  const progress = Math.min(
-    1,
-    Math.max(0, (offset - previous.bottom) / Math.max(1, next.top - previous.bottom)),
-  );
-  return Math.round(
-    previous.end + (Math.max(previous.end, next.start) - previous.end) * progress,
+  return sourceLineAtOffset(
+    anchors,
+    element.scrollTop + element.clientHeight / 2,
   );
 }
 
@@ -245,6 +207,7 @@ function observeBody(): void {
 onBeforeUnmount(() => {
   if (scrollFrame) cancelAnimationFrame(scrollFrame);
   if (resizeFrame) cancelAnimationFrame(resizeFrame);
+  if (layoutFrame) cancelAnimationFrame(layoutFrame);
   resizeObserver?.disconnect();
   resizeObserver = null;
 });
@@ -255,62 +218,13 @@ function applyScrollSync(): void {
   const maximum = element.scrollHeight - element.clientHeight;
   if (maximum <= 0) return;
 
-  let top: number;
-  let center = true;
-  if (anchors.length === 0) {
-    top = Math.min(1, Math.max(0, props.scrollRatio ?? 0)) * maximum;
-    center = false;
-  } else {
-    const targetLine = Math.max(1, props.focusLine);
-    let containing: SourceAnchor | null = null;
-    for (const anchor of anchors) {
-      if (targetLine < anchor.start || targetLine > anchor.end) continue;
-      if (
-        !containing ||
-        anchor.end - anchor.start < containing.end - containing.start ||
-        (anchor.end - anchor.start === containing.end - containing.start &&
-          anchor.height < containing.height)
-      ) {
-        containing = anchor;
-      }
-    }
-
-    if (containing) {
-      const range = containing.end - containing.start;
-      const progress = range > 0
-        ? (targetLine - containing.start) / range
-        : 0;
-      top = containing.top + containing.height * progress;
-    } else {
-      let previous: SourceAnchor | null = null;
-      let next: SourceAnchor | null = null;
-      for (const anchor of anchors) {
-        if (anchor.start <= targetLine) {
-          previous = anchor;
-        } else {
-          next = anchor;
-          break;
-        }
-      }
-
-      if (!previous) {
-        top = 0;
-      } else if (!next) {
-        top = previous.bottom;
-      } else {
-        const gapStart = previous.end;
-        const gap = Math.max(1, next.start - gapStart);
-        const progress = Math.min(
-          1,
-          Math.max(0, (targetLine - gapStart) / gap),
-        );
-        top = previous.bottom + (next.top - previous.bottom) * progress;
-      }
-    }
-  }
-
-  const offset = center ? top - element.clientHeight / 2 : top;
-  const nextTop = Math.min(maximum, Math.max(0, offset));
+  const nextTop = previewScrollTop(
+    anchors,
+    props.focusLine,
+    props.scrollRatio ?? 0,
+    maximum,
+    element.clientHeight,
+  );
   if (Math.abs(element.scrollTop - nextTop) >= 0.5) {
     suppressScrollUntil = performance.now() + 120;
     element.scrollTop = nextTop;
@@ -338,6 +252,19 @@ watch(
   async () => {
     await nextTick();
     applyScrollSync();
+  },
+);
+
+watch(
+  () => props.layoutKey,
+  async () => {
+    await nextTick();
+    if (layoutFrame) return;
+    layoutFrame = requestAnimationFrame(() => {
+      layoutFrame = 0;
+      collectAnchors();
+      applyScrollSync();
+    });
   },
 );
 </script>

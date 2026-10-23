@@ -17,6 +17,7 @@ const props = defineProps<{
   initialContent: string;
   vimEnabled: boolean;
   readOnly: boolean;
+  layoutKey?: string;
 }>();
 
 const emit = defineEmits<{
@@ -261,6 +262,18 @@ watch(
   },
 );
 
+watch(
+  () => props.layoutKey,
+  () => {
+    if (resizeFrame) return;
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0;
+      view?.requestMeasure();
+      emitScrollSync();
+    });
+  },
+);
+
 onBeforeUnmount(() => {
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame);
@@ -308,13 +321,54 @@ function scrollToLine(lineNumber: number): void {
   });
 }
 
+interface EditorViewState {
+  line: number;
+  column: number;
+  scrollTop: number;
+}
+
+function captureState(): EditorViewState | null {
+  if (!view || !scrollElement) return null;
+  const head = view.state.selection.main.head;
+  const line = view.state.doc.lineAt(head);
+  return {
+    line: line.number,
+    column: head - line.from + 1,
+    scrollTop: scrollElement.scrollTop,
+  };
+}
+
+function restoreState(state: EditorViewState): void {
+  if (!view || !scrollElement) return;
+  const lineNumber = Math.min(
+    Math.max(1, Math.round(state.line)),
+    view.state.doc.lines,
+  );
+  const line = view.state.doc.line(lineNumber);
+  const column = Math.min(
+    Math.max(1, Math.round(state.column)),
+    line.length + 1,
+  );
+  view.dispatch({
+    selection: { anchor: line.from + column - 1 },
+  });
+  view.requestMeasure();
+
+  const top = Math.max(0, state.scrollTop);
+  requestAnimationFrame(() => {
+    if (!view || !scrollElement) return;
+    scrollElement.scrollTop = top;
+    view.focus();
+  });
+}
+
 function refresh(): void {
   if (!view) return;
   view.requestMeasure();
   view.focus();
 }
 
-defineExpose({ revealLine, refresh, scrollToLine });
+defineExpose({ revealLine, refresh, scrollToLine, captureState, restoreState });
 </script>
 
 <template>

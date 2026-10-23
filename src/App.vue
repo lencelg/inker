@@ -66,10 +66,24 @@ const cursorLine = ref<number | null>(null);
 const cursorColumn = ref<number | null>(null);
 let cursorSyncTime = 0;
 let previewScrollLock = 0;
+const pendingEditorRestore = ref<{
+  path: string;
+  state: { line: number; column: number; scrollTop: number };
+} | null>(null);
 const editorPane = ref<{
   revealLine: (line: number, column?: number) => void;
   refresh: () => void;
   scrollToLine: (line: number) => void;
+  captureState: () => {
+    line: number;
+    column: number;
+    scrollTop: number;
+  } | null;
+  restoreState: (state: {
+    line: number;
+    column: number;
+    scrollTop: number;
+  }) => void;
 } | null>(null);
 
 applyPreferences(preferences.value);
@@ -84,6 +98,10 @@ const busy = computed(() => switching.value || mutating.value);
 const vimEnabled = computed(() => preferences.value.vimEnabled);
 const lineEnding = computed(() =>
   activeTab.value?.content.includes('\r\n') ? 'CRLF' : 'LF',
+);
+const previewLayoutKey = computed(
+  () =>
+    `${preferences.value.theme}:${preferences.value.fontFamily}:${preferences.value.fontSize}`,
 );
 const tabItems = computed(() =>
   tabs.value.map((tab) => ({
@@ -306,6 +324,14 @@ async function setViewMode(mode: ViewMode): Promise<void> {
   if (viewMode.value === mode) return;
   const leavingWysiwyg = viewMode.value === 'wysiwyg';
   const enteringWysiwyg = mode === 'wysiwyg';
+
+  if (enteringWysiwyg) {
+    const state = editorPane.value?.captureState() ?? null;
+    const path = activeTab.value?.path;
+    pendingEditorRestore.value =
+      state && path ? { path, state } : null;
+  }
+
   viewMode.value = mode;
   if (leavingWysiwyg || enteringWysiwyg) {
     editorSession.value += 1;
@@ -316,7 +342,16 @@ async function setViewMode(mode: ViewMode): Promise<void> {
     }
   }
   await nextTick();
-  if (mode !== 'preview' && mode !== 'wysiwyg') {
+
+  if (leavingWysiwyg) {
+    const pending = pendingEditorRestore.value;
+    pendingEditorRestore.value = null;
+    if (pending && pending.path === activeTab.value?.path) {
+      editorPane.value?.restoreState(pending.state);
+    } else if (mode !== 'preview') {
+      editorPane.value?.refresh();
+    }
+  } else if (mode !== 'preview' && mode !== 'wysiwyg') {
     editorPane.value?.refresh();
   }
 }
@@ -915,6 +950,7 @@ function errorMessage(err: unknown): string {
               :initial-content="activeTab.content"
               :vim-enabled="vimEnabled"
               :read-only="switching || mutating"
+              :layout-key="previewLayoutKey"
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"
@@ -944,6 +980,7 @@ function errorMessage(err: unknown): string {
             :note-path="activeTab.path"
             :focus-line="previewFocusLine"
             :scroll-ratio="editorScrollRatio"
+            :layout-key="previewLayoutKey"
             @sync-source="handlePreviewScroll"
           />
         </div>
