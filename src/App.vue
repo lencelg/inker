@@ -56,10 +56,11 @@ const splitRatio = ref(readSplitRatio());
 const resizing = ref(false);
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
-const editorScrollLine = ref(1);
 const editorScrollRatio = ref(0);
+const previewFocusLine = ref(1);
 const cursorLine = ref<number | null>(null);
 const cursorColumn = ref<number | null>(null);
+let cursorSyncTime = 0;
 const editorPane = ref<{
   revealLine: (line: number, column?: number) => void;
   refresh: () => void;
@@ -291,6 +292,8 @@ function handleCursor(position: {
 }): void {
   cursorLine.value = position.line;
   cursorColumn.value = position.column;
+  cursorSyncTime = performance.now();
+  previewFocusLine.value = position.line;
 }
 
 async function setViewMode(mode: ViewMode): Promise<void> {
@@ -357,8 +360,8 @@ function pruneTabs(): void {
     activePath.value = null;
   }
   editorSession.value += 1;
-  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  previewFocusLine.value = 1;
   cursorLine.value = null;
   cursorColumn.value = null;
 }
@@ -398,8 +401,8 @@ function activateTab(path: string): void {
   }
   activePath.value = path;
   editorSession.value += 1;
-  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  previewFocusLine.value = 1;
   cursorLine.value = null;
   cursorColumn.value = null;
   clearFeedback();
@@ -421,8 +424,10 @@ function handleContentChange(value: string): void {
 }
 
 function handleEditorScroll(position: { line: number; ratio: number }): void {
-  editorScrollLine.value = position.line;
   editorScrollRatio.value = position.ratio;
+  if (performance.now() - cursorSyncTime > 150) {
+    previewFocusLine.value = position.line;
+  }
 }
 
 function handleGlobalKeydown(event: KeyboardEvent): void {
@@ -559,8 +564,8 @@ function resetTabs(): void {
   tabs.value = [];
   activePath.value = null;
   editorSession.value += 1;
-  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  previewFocusLine.value = 1;
   cursorLine.value = null;
   cursorColumn.value = null;
 }
@@ -726,8 +731,8 @@ async function requestCloseTab(path: string): Promise<void> {
     activePath.value = null;
   }
   editorSession.value += 1;
-  editorScrollLine.value = 1;
   editorScrollRatio.value = 0;
+  previewFocusLine.value = 1;
   cursorLine.value = null;
   cursorColumn.value = null;
   clearFeedback();
@@ -900,7 +905,7 @@ function errorMessage(err: unknown): string {
             :key="editorSession"
             :html="previewHtml"
             :note-path="activeTab.path"
-            :focus-line="cursorLine ?? editorScrollLine"
+            :focus-line="previewFocusLine"
             :scroll-ratio="editorScrollRatio"
           />
         </div>

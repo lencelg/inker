@@ -163,8 +163,10 @@ function applyScrollSync(): void {
   if (maximum <= 0) return;
 
   let top: number;
+  let center = true;
   if (anchors.length === 0) {
     top = Math.min(1, Math.max(0, props.scrollRatio ?? 0)) * maximum;
+    center = false;
   } else {
     const targetLine = Math.max(1, props.focusLine);
     let containing: SourceAnchor | null = null;
@@ -214,7 +216,8 @@ function applyScrollSync(): void {
     }
   }
 
-  element.scrollTop = Math.min(maximum, Math.max(0, top - 1));
+  const offset = center ? top - element.clientHeight / 2 : top;
+  element.scrollTop = Math.min(maximum, Math.max(0, offset));
 }
 
 watch(

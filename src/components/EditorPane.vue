@@ -156,8 +156,15 @@ function emitScrollSync(): void {
   if (!view || !scrollElement) return;
   const maximum = scrollElement.scrollHeight - scrollElement.clientHeight;
   const ratio = maximum > 0 ? scrollElement.scrollTop / maximum : 0;
-  const block = view.lineBlockAtHeight(scrollElement.scrollTop + 8);
-  const line = view.state.doc.lineAt(block.from).number;
+  const rect = scrollElement.getBoundingClientRect();
+  const position = view.posAtCoords({
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  });
+  const line =
+    position === null
+      ? view.state.doc.lines
+      : view.state.doc.lineAt(position).number;
   emit('scrollSync', { line, ratio });
 }
 
