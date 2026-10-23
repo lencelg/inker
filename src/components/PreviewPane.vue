@@ -28,7 +28,6 @@ const safeHtml = computed(() =>
       'data-md-src',
       'data-source-line',
       'data-source-line-end',
-      'data-mermaid',
     ],
   }),
 );
@@ -118,11 +117,12 @@ async function renderDiagrams(run: number): Promise<void> {
   if (!root) return;
 
   const blocks = Array.from(
-    root.querySelectorAll<HTMLElement>('[data-mermaid]'),
+    root.querySelectorAll<HTMLElement>('.mermaid-block'),
   );
   await Promise.all(
     blocks.map(async (block) => {
-      const source = block.dataset.mermaid ?? '';
+      const source =
+        block.querySelector('.mermaid-source')?.textContent ?? '';
       if (!source.trim()) return;
       try {
         const svg = await renderMermaid(source);

@@ -56,7 +56,7 @@ markdown.renderer.rules.fence = (tokens, idx) => {
   const info = token.info.trim().split(/\s+/)[0] ?? '';
   if (info === 'mermaid') {
     const source = escapeHtml(token.content);
-    return `<div class="mermaid-block" data-mermaid="${source}"${sourceLine}><pre class="mermaid-source">${source}</pre></div>\n`;
+    return `<div class="mermaid-block"${sourceLine}><pre class="mermaid-source">${source}</pre></div>\n`;
   }
   const language = info ? hljs.getLanguage(info) : undefined;
   const code = language

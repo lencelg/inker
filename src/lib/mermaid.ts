@@ -1,7 +1,4 @@
-import DOMPurify from 'dompurify';
-
 type MermaidModule = typeof import('mermaid');
-
 let loader: Promise<MermaidModule> | null = null;
 let renderQueue: Promise<unknown> = Promise.resolve();
 let renderCount = 0;
@@ -30,13 +27,9 @@ export function renderMermaid(source: string): Promise<string> {
     const id = `markleaf-mermaid-${++renderCount}`;
     const { svg } = await module.default.render(id, source);
     document.getElementById(id)?.remove();
-    const safeSvg = DOMPurify.sanitize(svg, {
-      USE_PROFILES: { svg: true, svgFilters: true },
-      ADD_TAGS: ['style'],
-      ADD_ATTR: ['style'],
-    });
-    cache.set(source, safeSvg);
-    return safeSvg;
+    // securityLevel strict already sanitizes labels; an extra SVG pass strips them.
+    cache.set(source, svg);
+    return svg;
   });
 
   renderQueue = task.then(
