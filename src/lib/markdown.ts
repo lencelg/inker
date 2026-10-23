@@ -30,7 +30,12 @@ interface SourceMappedToken {
 
 function annotateSourceLine(token: SourceMappedToken): void {
   if (token.map && token.nesting !== -1) {
-    token.attrSet('data-source-line', String(token.map[0] + 1));
+    const start = token.map[0] + 1;
+    token.attrSet('data-source-line', String(start));
+    token.attrSet(
+      'data-source-line-end',
+      String(Math.max(start, token.map[1])),
+    );
   }
 }
 
@@ -43,7 +48,10 @@ markdown.renderer.renderToken = (tokens, idx, options) => {
 markdown.renderer.rules.fence = (tokens, idx) => {
   const token = tokens[idx];
   const sourceLine = token.map
-    ? ` data-source-line="${token.map[0] + 1}"`
+    ? ` data-source-line="${token.map[0] + 1}" data-source-line-end="${Math.max(
+        token.map[0] + 1,
+        token.map[1],
+      )}"`
     : '';
   const info = token.info.trim().split(/\s+/)[0] ?? '';
   const language = info ? hljs.getLanguage(info) : undefined;

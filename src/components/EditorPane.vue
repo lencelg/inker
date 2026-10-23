@@ -22,7 +22,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   change: [content: string];
   scrollSync: [position: { line: number; ratio: number }];
-  cursor: [position: { line: number; column: number; ratio: number }];
+  cursor: [position: { line: number; column: number }];
   saveRequest: [];
 }>();
 
@@ -34,7 +34,6 @@ const vimExtension = vim({ status: true });
 let view: EditorView | null = null;
 let scrollElement: HTMLElement | null = null;
 let scrollFrame = 0;
-let cursorFrame = 0;
 
 const syntaxTheme = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--syntax-keyword)' },
@@ -178,27 +177,9 @@ function emitCursor(): void {
   if (!view) return;
   const head = view.state.selection.main.head;
   const line = view.state.doc.lineAt(head);
-  const coordinates = view.coordsAtPos(head);
-  let ratio = 0.5;
-  if (coordinates) {
-    const rect = view.scrollDOM.getBoundingClientRect();
-    ratio = Math.min(
-      1,
-      Math.max(0, (coordinates.top - rect.top) / Math.max(1, rect.height)),
-    );
-  }
   emit('cursor', {
     line: line.number,
     column: head - line.from + 1,
-    ratio,
-  });
-}
-
-function scheduleCursorSync(): void {
-  if (cursorFrame) return;
-  cursorFrame = requestAnimationFrame(() => {
-    cursorFrame = 0;
-    emitCursor();
   });
 }
 
@@ -231,7 +212,7 @@ onMounted(() => {
             scheduleScrollSync();
           }
           if (update.docChanged || update.selectionSet) {
-            scheduleCursorSync();
+            emitCursor();
           }
         }),
       ],
@@ -241,7 +222,7 @@ onMounted(() => {
   scrollElement.addEventListener('scroll', handleScroll, { passive: true });
   view.focus();
   scheduleScrollSync();
-  scheduleCursorSync();
+  emitCursor();
 });
 
 watch(
@@ -267,10 +248,6 @@ onBeforeUnmount(() => {
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame);
     scrollFrame = 0;
-  }
-  if (cursorFrame) {
-    cancelAnimationFrame(cursorFrame);
-    cursorFrame = 0;
   }
   scrollElement?.removeEventListener('scroll', handleScroll);
   scrollElement = null;

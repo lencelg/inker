@@ -9,19 +9,21 @@ const props = defineProps<{
   html: string;
   notePath: string;
   focusLine: number;
-  focusRatio: number;
   scrollRatio?: number;
 }>();
 
 interface SourceAnchor {
-  line: number;
+  start: number;
+  end: number;
   top: number;
+  bottom: number;
+  height: number;
 }
 
 // Notes may contain raw HTML, so all rendered HTML is sanitized before v-html.
 const safeHtml = computed(() =>
   DOMPurify.sanitize(props.html, {
-    ADD_ATTR: ['data-md-src', 'data-source-line'],
+    ADD_ATTR: ['data-md-src', 'data-source-line', 'data-source-line-end'],
   }),
 );
 const bodyRef = ref<HTMLElement | null>(null);
@@ -113,23 +115,45 @@ function collectAnchors(): void {
     return;
   }
 
-  const rootTop = root.getBoundingClientRect().top;
-  const byLine = new Map<number, number>();
+  const rootRect = root.getBoundingClientRect();
+  const byStart = new Map<number, SourceAnchor>();
   const elements = root.querySelectorAll<HTMLElement>('[data-source-line]');
   for (const element of elements) {
-    const line = Number(element.dataset.sourceLine);
-    if (!Number.isFinite(line) || line < 1 || byLine.has(line)) continue;
-    const top = element.getBoundingClientRect().top - rootTop + root.scrollTop;
-    byLine.set(line, top);
+    const start = Number(element.dataset.sourceLine);
+    const endValue = Number(element.dataset.sourceLineEnd);
+    const end = Number.isFinite(endValue)
+      ? Math.max(start, endValue)
+      : start;
+    if (!Number.isFinite(start) || start < 1) continue;
+
+    const rect = element.getBoundingClientRect();
+    if (rect.height <= 0 || rect.width <= 0) continue;
+
+    const top = rect.top - rootRect.top + root.scrollTop;
+    const anchor: SourceAnchor = {
+      start,
+      end,
+      top,
+      bottom: top + rect.height,
+      height: rect.height,
+    };
+    const existing = byStart.get(start);
+    if (!existing) {
+      byStart.set(start, anchor);
+      continue;
+    }
+
+    const existingRange = existing.end - existing.start;
+    const range = anchor.end - anchor.start;
+    if (
+      range < existingRange ||
+      (range === existingRange && anchor.height < existing.height)
+    ) {
+      byStart.set(start, anchor);
+    }
   }
 
-  const collected = [...byLine.entries()]
-    .map(([line, top]) => ({ line, top }))
-    .sort((a, b) => a.line - b.line);
-  if (collected.length > 0 && collected[0].line > 1) {
-    collected.unshift({ line: 1, top: 0 });
-  }
-  anchors = collected;
+  anchors = [...byStart.values()].sort((a, b) => a.start - b.start);
 }
 
 function applyScrollSync(): void {
@@ -139,34 +163,58 @@ function applyScrollSync(): void {
   if (maximum <= 0) return;
 
   let top: number;
-  if (anchors.length > 0) {
-    const targetLine = Math.max(1, props.focusLine);
-    let index = 0;
-    while (
-      index + 1 < anchors.length &&
-      anchors[index + 1].line <= targetLine
-    ) {
-      index += 1;
-    }
-    const start = anchors[index];
-    const next = anchors[index + 1];
-    top = start.top;
-    if (next && next.line > start.line && targetLine > start.line) {
-      const progress = Math.min(
-        1,
-        (targetLine - start.line) / (next.line - start.line),
-      );
-      top = start.top + (next.top - start.top) * progress;
-    }
+  if (anchors.length === 0) {
+    top = Math.min(1, Math.max(0, props.scrollRatio ?? 0)) * maximum;
   } else {
-    const ratio = Math.min(1, Math.max(0, props.scrollRatio ?? 0));
-    top = ratio * maximum;
+    const targetLine = Math.max(1, props.focusLine);
+    let containing: SourceAnchor | null = null;
+    for (const anchor of anchors) {
+      if (targetLine < anchor.start || targetLine > anchor.end) continue;
+      if (
+        !containing ||
+        anchor.end - anchor.start < containing.end - containing.start ||
+        (anchor.end - anchor.start === containing.end - containing.start &&
+          anchor.height < containing.height)
+      ) {
+        containing = anchor;
+      }
+    }
+
+    if (containing) {
+      const range = containing.end - containing.start;
+      const progress = range > 0
+        ? (targetLine - containing.start) / range
+        : 0;
+      top = containing.top + containing.height * progress;
+    } else {
+      let previous: SourceAnchor | null = null;
+      let next: SourceAnchor | null = null;
+      for (const anchor of anchors) {
+        if (anchor.start <= targetLine) {
+          previous = anchor;
+        } else {
+          next = anchor;
+          break;
+        }
+      }
+
+      if (!previous) {
+        top = 0;
+      } else if (!next) {
+        top = previous.bottom;
+      } else {
+        const gapStart = previous.end;
+        const gap = Math.max(1, next.start - gapStart);
+        const progress = Math.min(
+          1,
+          Math.max(0, (targetLine - gapStart) / gap),
+        );
+        top = previous.bottom + (next.top - previous.bottom) * progress;
+      }
+    }
   }
 
-  const focusOffset =
-    element.clientHeight *
-    Math.min(0.9, Math.max(0.1, props.focusRatio));
-  element.scrollTop = Math.min(maximum, Math.max(0, top - focusOffset));
+  element.scrollTop = Math.min(maximum, Math.max(0, top - 1));
 }
 
 watch(
@@ -184,7 +232,7 @@ watch(
 );
 
 watch(
-  [() => props.focusLine, () => props.focusRatio, () => props.scrollRatio],
+  [() => props.focusLine, () => props.scrollRatio],
   async () => {
     await nextTick();
     applyScrollSync();

@@ -55,7 +55,6 @@ const editorScrollLine = ref(1);
 const editorScrollRatio = ref(0);
 const cursorLine = ref<number | null>(null);
 const cursorColumn = ref<number | null>(null);
-const cursorRatio = ref(0.5);
 const editorPane = ref<{
   revealLine: (line: number, column?: number) => void;
   refresh: () => void;
@@ -204,11 +203,9 @@ function handleGlobalWheel(event: WheelEvent): void {
 function handleCursor(position: {
   line: number;
   column: number;
-  ratio: number;
 }): void {
   cursorLine.value = position.line;
   cursorColumn.value = position.column;
-  cursorRatio.value = position.ratio;
 }
 
 async function setViewMode(mode: ViewMode): Promise<void> {
@@ -279,7 +276,6 @@ function pruneTabs(): void {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
-  cursorRatio.value = 0.5;
 }
 
 async function openNote(path: string): Promise<boolean> {
@@ -321,7 +317,6 @@ function activateTab(path: string): void {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
-  cursorRatio.value = 0.5;
   clearFeedback();
   revealPath(path);
 }
@@ -483,7 +478,6 @@ function resetTabs(): void {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
-  cursorRatio.value = 0.5;
 }
 
 function toggleFolder(path: string): void {
@@ -651,7 +645,6 @@ async function requestCloseTab(path: string): Promise<void> {
   editorScrollRatio.value = 0;
   cursorLine.value = null;
   cursorColumn.value = null;
-  cursorRatio.value = 0.5;
   clearFeedback();
 }
 
@@ -794,7 +787,6 @@ function errorMessage(err: unknown): string {
             :html="previewHtml"
             :note-path="activeTab.path"
             :focus-line="cursorLine ?? editorScrollLine"
-            :focus-ratio="cursorRatio"
             :scroll-ratio="editorScrollRatio"
           />
         </div>
