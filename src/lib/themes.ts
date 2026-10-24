@@ -10,7 +10,8 @@ export const THEMES = [
 export type ThemeId = (typeof THEMES)[number]['id'];
 
 export const DEFAULT_THEME: ThemeId = 'paper';
-export const THEME_STORAGE_KEY = 'markleaf-theme';
+export const THEME_STORAGE_KEY = 'inker-theme';
+export const LEGACY_THEME_STORAGE_KEY = 'markleaf-theme';
 
 export function isThemeId(value: unknown): value is ThemeId {
   return (

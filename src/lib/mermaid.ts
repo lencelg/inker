@@ -24,7 +24,7 @@ export function renderMermaid(source: string): Promise<string> {
 
   const task = renderQueue.then(async () => {
     const module = await loadMermaid();
-    const id = `markleaf-mermaid-${++renderCount}`;
+    const id = `inker-mermaid-${++renderCount}`;
     const { svg } = await module.default.render(id, source);
     document.getElementById(id)?.remove();
     // securityLevel strict already sanitizes labels; an extra SVG pass strips them.

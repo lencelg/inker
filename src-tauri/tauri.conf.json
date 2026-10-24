@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "markleaf",
+  "productName": "Inker",
   "version": "0.1.0",
   "identifier": "com.lencelg.markdownnotes",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "markleaf",
+        "title": "Inker",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
@@ -29,8 +29,8 @@
       "deb"
     ],
     "category": "Productivity",
-    "shortDescription": "markleaf - local-first Markdown notes",
-    "longDescription": "markleaf is a local-first Markdown notes app with a file tree, full-text search, tabs, themes, source/preview/live modes, optional Vim editing, math, code highlighting, images, and HTML preview.",
+    "shortDescription": "Inker - local-first Markdown notes",
+    "longDescription": "Inker is a local-first Markdown notes app with a file tree, full-text search, tabs, themes, source/preview/live modes, optional Vim editing, math, code highlighting, images, and HTML preview.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

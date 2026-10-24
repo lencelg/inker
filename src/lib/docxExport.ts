@@ -516,7 +516,7 @@ export async function docxToBase64(
   const children = await convertChildren(container);
   const document = new Document({
     title,
-    creator: 'markleaf',
+    creator: 'Inker',
     styles: {
       default: {
         document: {

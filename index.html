@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
       try {
-        const theme = localStorage.getItem('markleaf-theme');
+        const theme =
+          localStorage.getItem('inker-theme') ??
+          localStorage.getItem('markleaf-theme');
         if (
           ['paper', 'white', 'dark', 'vscode-light', 'vscode-dark', 'vscode-hc'].includes(
             theme,
@@ -13,7 +15,9 @@
         ) {
           document.documentElement.dataset.theme = theme;
         }
-        const font = localStorage.getItem('markleaf-font-family');
+        const font =
+          localStorage.getItem('inker-font-family') ??
+          localStorage.getItem('markleaf-font-family');
         if (
           ['jetbrains-mono', 'fira-code', 'source-code-pro', 'system-mono'].includes(
             font,
@@ -21,7 +25,10 @@
         ) {
           document.documentElement.dataset.font = font;
         }
-        const fontSize = Number(localStorage.getItem('markleaf-font-size'));
+        const rawFontSize =
+          localStorage.getItem('inker-font-size') ??
+          localStorage.getItem('markleaf-font-size');
+        const fontSize = Number(rawFontSize);
         if (Number.isFinite(fontSize) && fontSize >= 11 && fontSize <= 28) {
           document.documentElement.style.setProperty(
             '--content-font-size',
@@ -32,7 +39,7 @@
         // Ignore storage errors and use the defaults.
       }
     </script>
-    <title>markleaf</title>
+    <title>Inker</title>
   </head>
   <body>
     <div id="app"></div>

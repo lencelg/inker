@@ -1,11 +1,11 @@
-# markleaf
+# Inker
 
 一个基于 **Tauri 2 + Vue 3** 的本地优先 Markdown 笔记桌面应用。
 
-markleaf 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` 文件保存在用户选择的文件夹中。应用提供文件树、全文搜索、多标签页、源码编辑、实时预览、Mermaid、KaTeX、图片、Vim、主题和多格式导出等能力。
+Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` 文件保存在用户选择的文件夹中。应用提供文件树、全文搜索、多标签页、源码编辑、实时预览、Mermaid、KaTeX、图片、Vim、主题和多格式导出等能力。
 
 - 当前版本：`0.1.0`
-- 应用标识：`com.lencelg.markdownnotes`
+- 应用标识：`com.lencelg.markdownnotes`（为兼容已有配置保持不变）
 - 界面语言：中文
 - 主要开发环境：Linux / Wayland / niri
 - 发布包：Debian `.deb`（编译产物约 8 MiB）
@@ -22,7 +22,7 @@ markleaf 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown`
 | 前端 | Vue 3 Composition API + TypeScript |
 | 构建工具 | Vite 8 + `@vitejs/plugin-vue` |
 | 样式 | 原生 CSS + CSS 变量主题系统 |
-| 图标 | Lucide (`@lucide/vue`) + 内联 SVG |
+| 图标 | Lucide (`@lucide/vue`) + Inker 品牌标记 + 内联 SVG |
 | 源码编辑器 | CodeMirror 6 |
 | Vim | `@replit/codemirror-vim` |
 | 富文本编辑器 | Milkdown 7 / ProseMirror |
@@ -318,6 +318,9 @@ markdown-note-taking/
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
+├── assets/
+│   └── icons/
+│       └── inker.svg              # 应用图标源文件
 ├── src/
 │   ├── main.ts                    # Vue 启动、全局外链处理
 │   ├── App.vue                    # 应用总状态与布局编排
@@ -340,7 +343,7 @@ markdown-note-taking/
 │   │   ├── ConfirmDialog.vue
 │   │   ├── PromptDialog.vue
 │   │   ├── PrintPreview.vue
-│   │   ├── LeafIcon.vue
+│   │   ├── InkerMark.vue
 │   │   └── settings/
 │   │       ├── SettingsHeader.vue
 │   │       ├── SettingsSidebar.vue
@@ -489,14 +492,16 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 
 | Key | 含义 |
 | --- | --- |
-| `markleaf-theme` | 主题 |
-| `markleaf-font-size` | 字体大小 |
-| `markleaf-font-family` | 编辑器字体 |
-| `markleaf-vim` | Vim 模式 |
-| `markleaf-immersive` | 沉浸式写作 |
-| `markleaf-code-highlight` | 预览代码高亮 |
-| `markleaf-split-ratio` | 侧边预览分隔比例 |
-| `markleaf-sidebar-width` | 文件栏宽度 |
+| `inker-theme` | 主题 |
+| `inker-font-size` | 字体大小 |
+| `inker-font-family` | 编辑器字体 |
+| `inker-vim` | Vim 模式 |
+| `inker-immersive` | 沉浸式写作 |
+| `inker-code-highlight` | 预览代码高亮 |
+| `inker-split-ratio` | 侧边预览分隔比例 |
+| `inker-sidebar-width` | 文件栏宽度 |
+
+应用会兼容读取旧的 `markleaf-*` 偏好键，并在首次读取时迁移到 `inker-*`。
 
 ### 4.6 页面布局
 
@@ -755,7 +760,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：13 个测试文件，48 个测试通过
+- 前端：13 个测试文件，49 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -783,10 +788,26 @@ cargo tauri build
 当前产物：
 
 ```text
-target/release/bundle/deb/markleaf_0.1.0_amd64.deb
+target/release/bundle/deb/Inker_0.1.0_amd64.deb
 ```
 
 构建时可能出现 Vite 的 chunk 体积警告，但不影响构建结果。
+
+### 8.7 应用图标
+
+图标源文件：
+
+```text
+assets/icons/inker.svg
+```
+
+重新生成所有桌面和移动端图标：
+
+```bash
+cargo tauri icon assets/icons/inker.svg
+```
+
+生成结果位于 `src-tauri/icons/`，并会同步用于 Tauri 打包与网页 favicon。
 
 ---
 
@@ -842,7 +863,7 @@ target/release/bundle/deb/markleaf_0.1.0_amd64.deb
 
 ## 11. 项目定位
 
-markleaf 的目标是一个轻量、离线优先、文件可迁移的 Markdown 笔记桌面工具：
+Inker 的目标是一个轻量、离线优先、文件可迁移的 Markdown 笔记桌面工具：
 
 - 不使用专有数据库锁住内容。
 - 所有笔记都是普通 Markdown 文件。

@@ -9,7 +9,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
 import ImagePane from './components/ImagePane.vue';
-import LeafIcon from './components/LeafIcon.vue';
+import InkerMark from './components/InkerMark.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
 import PrintPreview from './components/PrintPreview.vue';
@@ -51,8 +51,10 @@ interface NoteTab {
   savedContent: string;
 }
 
-const SPLIT_STORAGE_KEY = 'markleaf-split-ratio';
-const SIDEBAR_WIDTH_STORAGE_KEY = 'markleaf-sidebar-width';
+const SPLIT_STORAGE_KEY = 'inker-split-ratio';
+const LEGACY_SPLIT_STORAGE_KEY = 'markleaf-split-ratio';
+const SIDEBAR_WIDTH_STORAGE_KEY = 'inker-sidebar-width';
+const LEGACY_SIDEBAR_WIDTH_STORAGE_KEY = 'markleaf-sidebar-width';
 const DEFAULT_SIDEBAR_WIDTH = 252;
 const MIN_SIDEBAR_WIDTH = 180;
 const MAX_SIDEBAR_WIDTH = 480;
@@ -179,7 +181,9 @@ let wheelAccumulator = 0;
 
 function readSplitRatio(): number {
   try {
-    const raw = window.localStorage.getItem(SPLIT_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(SPLIT_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_SPLIT_STORAGE_KEY);
     if (raw !== null) {
       const value = Number(raw);
       if (Number.isFinite(value)) {
@@ -198,6 +202,7 @@ function persistSplitRatio(): void {
       SPLIT_STORAGE_KEY,
       String(splitRatio.value),
     );
+    window.localStorage.removeItem(LEGACY_SPLIT_STORAGE_KEY);
   } catch {
     // Persisting the layout is optional.
   }
@@ -205,7 +210,9 @@ function persistSplitRatio(): void {
 
 function readSidebarWidth(): number {
   try {
-    const raw = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_SIDEBAR_WIDTH_STORAGE_KEY);
     if (raw !== null) {
       const value = Number(raw);
       if (Number.isFinite(value)) {
@@ -231,6 +238,7 @@ function persistSidebarWidth(): void {
       SIDEBAR_WIDTH_STORAGE_KEY,
       String(sidebarWidth.value),
     );
+    window.localStorage.removeItem(LEGACY_SIDEBAR_WIDTH_STORAGE_KEY);
   } catch {
     // Persisting the layout is optional.
   }
@@ -1352,8 +1360,8 @@ function errorMessage(err: unknown): string {
 
     <main v-if="notesDir === null" class="workspace welcome">
       <div class="welcome-card">
-        <span class="welcome-icon"><LeafIcon /></span>
-        <h1>markleaf</h1>
+        <span class="welcome-icon"><InkerMark /></span>
+        <h1>Inker</h1>
         <p>选择一个文件夹，笔记会以 .md 文件保存在其中。</p>
         <button class="btn primary" type="button" @click="chooseFolder">
           选择笔记文件夹
@@ -1446,7 +1454,7 @@ function errorMessage(err: unknown): string {
       </template>
 
       <div v-else class="workspace-empty">
-        <span class="workspace-empty-icon"><LeafIcon /></span>
+        <span class="workspace-empty-icon"><InkerMark /></span>
         <h1>还没有打开笔记</h1>
         <p>在左侧文件树中打开或新建一个 Markdown 文件。</p>
       </div>
