@@ -81,6 +81,10 @@ function onImmersiveChange(event: Event): void {
   update({ immersive: (event.target as HTMLInputElement).checked });
 }
 
+function onCodeHighlightChange(event: Event): void {
+  update({ codeHighlight: (event.target as HTMLInputElement).checked });
+}
+
 function closeWindow(): void {
   void getCurrentWindow().close();
 }
@@ -207,6 +211,25 @@ function closeWindow(): void {
               :checked="preferences.immersive"
               aria-label="沉浸式写作"
               @change="onImmersiveChange"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="setting-section">
+        <h2>预览</h2>
+        <div class="settings-card">
+          <div class="setting-row">
+            <span>
+              <strong>代码高亮</strong>
+              <small>为预览中的代码块启用语法高亮，并显示代码语言。</small>
+            </span>
+            <input
+              class="switch"
+              type="checkbox"
+              :checked="preferences.codeHighlight"
+              aria-label="预览代码高亮"
+              @change="onCodeHighlightChange"
             />
           </div>
         </div>

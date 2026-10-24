@@ -92,7 +92,11 @@ const activeTab = computed(
   () => tabs.value.find((tab) => tab.path === activePath.value) ?? null,
 );
 const selectedPath = computed(() => activeTab.value?.path ?? null);
-const previewHtml = computed(() => renderMarkdown(activeTab.value?.content ?? ''));
+const previewHtml = computed(() =>
+  renderMarkdown(activeTab.value?.content ?? '', {
+    codeHighlight: preferences.value.codeHighlight,
+  }),
+);
 const anySaving = computed(() => savingPaths.value.length > 0);
 const busy = computed(() => switching.value || mutating.value);
 const vimEnabled = computed(() => preferences.value.vimEnabled);

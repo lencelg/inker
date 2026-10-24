@@ -45,7 +45,7 @@ markdown.renderer.renderToken = (tokens, idx, options) => {
   return originalRenderToken(tokens, idx, options);
 };
 
-markdown.renderer.rules.fence = (tokens, idx) => {
+markdown.renderer.rules.fence = (tokens, idx, _options, env) => {
   const token = tokens[idx];
   const sourceLine = token.map
     ? ` data-source-line="${token.map[0] + 1}" data-source-line-end="${Math.max(
@@ -58,18 +58,41 @@ markdown.renderer.rules.fence = (tokens, idx) => {
     const source = escapeHtml(token.content);
     return `<div class="mermaid-block"${sourceLine}><pre class="mermaid-source">${source}</pre></div>\n`;
   }
-  const language = info ? hljs.getLanguage(info) : undefined;
-  const code = language
-    ? hljs.highlight(token.content, {
-        language: info,
-        ignoreIllegals: true,
-      }).value
-    : escapeHtml(token.content);
-  const languageClass = info
-    ? ` class="language-${escapeHtml(info)}"`
-    : '';
 
-  return `<pre class="hljs"${sourceLine}><code${languageClass}>${code}</code></pre>\n`;
+  const highlightEnabled =
+    (env as { codeHighlight?: boolean } | undefined)?.codeHighlight !==
+    false;
+  const knownLanguage = info ? hljs.getLanguage(info) : undefined;
+  let highlighted: { value: string; language?: string } = {
+    value: escapeHtml(token.content),
+  };
+  let displayLanguage = info || 'text';
+
+  if (highlightEnabled) {
+    if (knownLanguage) {
+      highlighted = {
+        value: hljs.highlight(token.content, {
+          language: info,
+          ignoreIllegals: true,
+        }).value,
+        language: info,
+      };
+    } else {
+      const detected = hljs.highlightAuto(token.content);
+      highlighted = {
+        value: detected.value,
+        language: detected.language,
+      };
+      displayLanguage = info || detected.language || 'text';
+    }
+  }
+
+  const languageClass = displayLanguage
+    ? ` class="language-${escapeHtml(displayLanguage)}"`
+    : '';
+  const badge = escapeHtml(displayLanguage || 'text');
+
+  return `<div class="code-block"${sourceLine}><span class="code-language">${badge}</span><pre class="hljs"><code${languageClass}>${highlighted.value}</code></pre></div>\n`;
 };
 
 const originalCodeBlockRenderer = markdown.renderer.rules.code_block;
@@ -106,6 +129,15 @@ export function isLocalImageSource(source: string): boolean {
   return !/^[a-z][a-z0-9+.-]*:/i.test(value) && !value.startsWith('//');
 }
 
-export function renderMarkdown(source: string): string {
-  return markdown.render(source);
+export interface RenderOptions {
+  codeHighlight?: boolean;
+}
+
+export function renderMarkdown(
+  source: string,
+  options: RenderOptions = {},
+): string {
+  return markdown.render(source, {
+    codeHighlight: options.codeHighlight !== false,
+  });
 }
