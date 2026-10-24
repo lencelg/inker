@@ -516,6 +516,15 @@ button:disabled {
   min-width: 0;
 }
 
+.workspace-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
 .banner {
   display: flex;
   flex-shrink: 0;

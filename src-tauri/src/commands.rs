@@ -7,6 +7,8 @@ use crate::notes::{
     SearchResults,
 };
 use crate::settings::{load_settings, save_settings, Settings};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -55,6 +57,32 @@ pub fn save_note_image(
         &file_name,
         &data,
     )
+}
+
+#[tauri::command]
+pub fn save_export(
+    path: String,
+    data: String,
+    binary: bool,
+) -> Result<(), String> {
+    let destination = PathBuf::from(path);
+    if destination.as_os_str().is_empty() {
+        return Err("导出路径不能为空".to_string());
+    }
+    let parent = destination
+        .parent()
+        .ok_or_else(|| "无法确定导出目录".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("创建导出目录失败：{error}"))?;
+    let bytes = if binary {
+        BASE64
+            .decode(data)
+            .map_err(|_| "导出数据无效".to_string())?
+    } else {
+        data.into_bytes()
+    };
+    fs::write(&destination, bytes)
+        .map_err(|error| format!("写入导出文件失败：{error}"))
 }
 
 #[tauri::command]

@@ -46,6 +46,7 @@ export interface NotesApi {
     fileName: string,
     data: string,
   ): Promise<string>;
+  saveExport(path: string, data: string, binary: boolean): Promise<void>;
   readAsset(notePath: string, source: string): Promise<NoteAsset>;
   searchNotes(query: string): Promise<SearchResults>;
   createFile(parent: string, name: string): Promise<string>;

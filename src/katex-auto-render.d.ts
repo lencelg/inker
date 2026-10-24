@@ -12,6 +12,7 @@ declare module 'katex/contrib/auto-render' {
     ignoredClasses?: string[];
     errorCallback?: (msg: string, err: Error) => void;
     displayMode?: boolean;
+    output?: 'html' | 'mathml' | 'htmlAndMathml';
     macros?: Record<string, string>;
     throwOnError?: boolean;
   }

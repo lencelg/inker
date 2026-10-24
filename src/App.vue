@@ -6,12 +6,19 @@ import ActivityBar from './components/ActivityBar.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
+import ExportMenu from './components/ExportMenu.vue';
 import LeafIcon from './components/LeafIcon.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
+import PrintPreview from './components/PrintPreview.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import SearchPanel from './components/SearchPanel.vue';
 import StatusBar from './components/StatusBar.vue';
+import {
+  prepareExport,
+  saveDocxExport,
+  saveHtmlExport,
+} from './lib/exportContent';
 import { renderMarkdown } from './lib/markdown';
 import {
   ancestorDirs,
@@ -53,6 +60,8 @@ const previewOpenTasks = new Map<string, Promise<void>>();
 const switching = ref(false);
 const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
+const exporting = ref(false);
+const printPreview = ref<{ title: string; html: string } | null>(null);
 const error = ref('');
 const preferences = ref<Preferences>(readPreferences());
 const activeView = ref<'explorer' | 'search'>('explorer');
@@ -372,6 +381,37 @@ async function openSettings(): Promise<void> {
     await api.openSettingsWindow();
   } catch (err) {
     setError(err);
+  }
+}
+
+async function handleExport(
+  format: 'pdf' | 'html' | 'docx',
+): Promise<void> {
+  const tab = activeTab.value;
+  if (!tab || exporting.value) return;
+
+  exporting.value = true;
+  clearFeedback();
+  try {
+    const prepared = await prepareExport(tab.path, tab.content, {
+      codeHighlight: preferences.value.codeHighlight,
+    });
+    if (format === 'pdf') {
+      printPreview.value = {
+        title: prepared.title,
+        html: prepared.documentHtml,
+      };
+      return;
+    }
+    if (format === 'html') {
+      await saveHtmlExport(prepared);
+    } else {
+      await saveDocxExport(prepared);
+    }
+  } catch (err) {
+    setError(err);
+  } finally {
+    exporting.value = false;
   }
 }
 
@@ -1035,6 +1075,13 @@ function errorMessage(err: unknown): string {
             @pin="pinPreview"
             @close="requestCloseTab"
           />
+          <div class="workspace-actions">
+            <ExportMenu
+              :disabled="exporting || !activeTab"
+              :busy="exporting"
+              @export="handleExport"
+            />
+          </div>
         </header>
 
         <WysiwygPane
@@ -1145,6 +1192,13 @@ function errorMessage(err: unknown): string {
       :error="prompt.error"
       @confirm="submitPrompt"
       @cancel="cancelPrompt"
+    />
+
+    <PrintPreview
+      v-if="printPreview"
+      :title="printPreview.title"
+      :html="printPreview.html"
+      @close="printPreview = null"
     />
   </div>
 </template>

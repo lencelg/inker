@@ -31,6 +31,9 @@ export const api: NotesApi = {
   saveImage: (notePath, fileName, data) =>
     invoke<string>('save_note_image', { notePath, fileName, data }),
 
+  saveExport: (path, data, binary) =>
+    invoke<void>('save_export', { path, data, binary }),
+
   readAsset: (notePath, source) =>
     invoke<NoteAsset>('read_note_asset', { notePath, source }),
 
