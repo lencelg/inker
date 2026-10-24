@@ -489,14 +489,14 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 252px minmax(0, 1fr);
-  grid-template-rows: 38px minmax(0, 1fr) 26px;
+  grid-template-columns: 48px 252px minmax(0, 1fr);
+  grid-template-rows: 38px minmax(0, 1fr) 31px;
   height: 100vh;
   overflow: hidden;
 }
 
 .app-shell.sidebar-hidden {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
 }
 
 .titlebar {
@@ -913,21 +913,21 @@ button:disabled {
 
 @media (max-width: 1080px) {
   .app-shell {
-    grid-template-columns: 228px minmax(0, 1fr);
+    grid-template-columns: 44px 228px minmax(0, 1fr);
   }
 
   .app-shell.sidebar-hidden {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
   }
 }
 
 @media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: 204px minmax(0, 1fr);
+    grid-template-columns: 44px 204px minmax(0, 1fr);
   }
 
   .app-shell.sidebar-hidden {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
   }
 }
 

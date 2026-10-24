@@ -273,7 +273,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   grid-row: 3;
   align-items: center;
   justify-content: space-between;
-  height: 26px;
+  height: 31px;
   padding: 0 8px 0 6px;
   overflow: hidden;
   background: var(--statusbar-bg);

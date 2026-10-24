@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from './api';
+import ActivityRail from './components/ActivityRail.vue';
 import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
@@ -195,6 +196,15 @@ function toggleSidebar(): void {
 
 function showActivity(view: 'explorer' | 'search'): void {
   activeView.value = view;
+  sidebarVisible.value = true;
+}
+
+function selectExplorer(): void {
+  if (activeView.value === 'explorer' && sidebarVisible.value) {
+    sidebarVisible.value = false;
+    return;
+  }
+  activeView.value = 'explorer';
   sidebarVisible.value = true;
 }
 
@@ -1110,24 +1120,6 @@ function errorMessage(err: unknown): string {
         <button
           type="button"
           class="titlebar-button"
-          :class="{ active: sidebarVisible && activeView === 'explorer' }"
-          title="文件"
-          aria-label="文件"
-          @click="showActivity('explorer')"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9.5A1.5 1.5 0 0 1 21 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5v-9Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="titlebar-button"
           :class="{ active: sidebarVisible && activeView === 'search' }"
           title="搜索"
           aria-label="搜索"
@@ -1200,6 +1192,13 @@ function errorMessage(err: unknown): string {
         </div>
       </div>
     </header>
+
+    <ActivityRail
+      :active-view="activeView"
+      :sidebar-visible="sidebarVisible"
+      @select-explorer="selectExplorer"
+      @open-settings="openSettings"
+    />
 
     <NoteSidebar
       v-if="sidebarVisible && activeView === 'explorer'"
