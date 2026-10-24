@@ -194,17 +194,21 @@ function toggleSidebar(): void {
   sidebarVisible.value = !sidebarVisible.value;
 }
 
-function showActivity(view: 'explorer' | 'search'): void {
-  activeView.value = view;
-  sidebarVisible.value = true;
-}
-
 function selectExplorer(): void {
   if (activeView.value === 'explorer' && sidebarVisible.value) {
     sidebarVisible.value = false;
     return;
   }
   activeView.value = 'explorer';
+  sidebarVisible.value = true;
+}
+
+function selectSearch(): void {
+  if (activeView.value === 'search' && sidebarVisible.value) {
+    sidebarVisible.value = false;
+    return;
+  }
+  activeView.value = 'search';
   sidebarVisible.value = true;
 }
 
@@ -1117,19 +1121,6 @@ function errorMessage(err: unknown): string {
             <path d="M9.5 4.5v15" fill="none" stroke="currentColor" stroke-width="1.6" />
           </svg>
         </button>
-        <button
-          type="button"
-          class="titlebar-button"
-          :class="{ active: sidebarVisible && activeView === 'search' }"
-          title="搜索"
-          aria-label="搜索"
-          @click="showActivity('search')"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6" />
-            <path d="m15 15 5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-        </button>
       </div>
 
       <EditorTabs
@@ -1197,6 +1188,7 @@ function errorMessage(err: unknown): string {
       :active-view="activeView"
       :sidebar-visible="sidebarVisible"
       @select-explorer="selectExplorer"
+      @select-search="selectSearch"
       @open-settings="openSettings"
     />
 
