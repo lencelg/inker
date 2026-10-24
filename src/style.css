@@ -489,7 +489,7 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 48px 252px minmax(0, 1fr);
+  grid-template-columns: 48px var(--sidebar-width, 252px) minmax(0, 1fr);
   grid-template-rows: 38px minmax(0, 1fr) 31px;
   height: 100vh;
   overflow: hidden;
@@ -499,9 +499,70 @@ button:disabled {
   grid-template-columns: 48px minmax(0, 1fr);
 }
 
+.app-shell > .activity-rail {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.app-shell > .sidebar,
+.app-shell > .search-panel {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.app-shell > .workspace {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.app-shell.sidebar-hidden > .workspace {
+  grid-column: 2;
+}
+
+.app-shell.resizing-sidebar,
+.app-shell.resizing-sidebar * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.sidebar-resizer {
+  position: relative;
+  z-index: 4;
+  grid-column: 2;
+  grid-row: 2;
+  align-self: stretch;
+  justify-self: end;
+  width: 5px;
+  margin-right: -2px;
+  outline: none;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resizer::before {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  content: '';
+  transition:
+    width 0.1s ease,
+    background 0.1s ease;
+}
+
+.sidebar-resizer:hover::before,
+.sidebar-resizer:focus-visible::before,
+.resizing-sidebar .sidebar-resizer::before {
+  right: 1px;
+  width: 2px;
+  background: var(--accent);
+}
+
 .titlebar {
   display: grid;
-  grid-template-columns: 48px 252px minmax(0, 1fr);
+  grid-template-columns: 48px var(--sidebar-width, 252px) minmax(0, 1fr);
   grid-column: 1 / -1;
   grid-row: 1;
   align-items: stretch;
@@ -522,7 +583,7 @@ button:disabled {
   min-width: 0;
   align-items: center;
   gap: 4px;
-  padding: 0 5px;
+  padding: 0 12px;
   overflow: hidden;
   border-right: 1px solid var(--border);
 }
@@ -550,34 +611,6 @@ button:disabled {
 
 .app-shell.sidebar-hidden .titlebar-main {
   grid-column: 2;
-}
-
-.titlebar-button {
-  display: grid;
-  flex-shrink: 0;
-  width: 32px;
-  height: 100%;
-  place-items: center;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--activity-icon);
-  cursor: pointer;
-}
-
-.titlebar-button:hover {
-  background: var(--hover);
-  color: var(--ink);
-}
-
-.titlebar-button.active {
-  background: var(--activity-active-bg);
-  color: var(--activity-icon-active);
-}
-
-.titlebar-button svg {
-  width: 16px;
-  height: 16px;
 }
 
 .app-shell .titlebar .tabline {
@@ -947,7 +980,7 @@ button:disabled {
 
 @media (max-width: 1080px) {
   .app-shell {
-    grid-template-columns: 44px 228px minmax(0, 1fr);
+    grid-template-columns: 44px var(--sidebar-width, 252px) minmax(0, 1fr);
   }
 
   .app-shell.sidebar-hidden {
@@ -955,7 +988,7 @@ button:disabled {
   }
 
   .titlebar {
-    grid-template-columns: 44px 228px minmax(0, 1fr);
+    grid-template-columns: 44px var(--sidebar-width, 252px) minmax(0, 1fr);
   }
 
   .app-shell.sidebar-hidden .titlebar {
@@ -965,7 +998,7 @@ button:disabled {
 
 @media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: 44px 204px minmax(0, 1fr);
+    grid-template-columns: 44px var(--sidebar-width, 252px) minmax(0, 1fr);
   }
 
   .app-shell.sidebar-hidden {
@@ -973,7 +1006,7 @@ button:disabled {
   }
 
   .titlebar {
-    grid-template-columns: 44px 204px minmax(0, 1fr);
+    grid-template-columns: 44px var(--sidebar-width, 252px) minmax(0, 1fr);
   }
 
   .app-shell.sidebar-hidden .titlebar {

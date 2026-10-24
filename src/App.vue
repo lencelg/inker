@@ -8,6 +8,7 @@ import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
+import ImagePane from './components/ImagePane.vue';
 import LeafIcon from './components/LeafIcon.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
@@ -21,6 +22,7 @@ import {
   saveDocxExport,
   saveHtmlExport,
 } from './lib/exportContent';
+import { isImagePath } from './lib/fileKinds';
 import { renderMarkdown } from './lib/markdown';
 import {
   ancestorDirs,
@@ -50,6 +52,10 @@ interface NoteTab {
 }
 
 const SPLIT_STORAGE_KEY = 'markleaf-split-ratio';
+const SIDEBAR_WIDTH_STORAGE_KEY = 'markleaf-sidebar-width';
+const DEFAULT_SIDEBAR_WIDTH = 252;
+const MIN_SIDEBAR_WIDTH = 180;
+const MAX_SIDEBAR_WIDTH = 480;
 
 const entries = ref<FileEntry[]>([]);
 const notesDir = ref<string | null>(null);
@@ -68,8 +74,11 @@ const appWindow = getCurrentWindow();
 let unlistenWindow: UnlistenFn | null = null;
 const error = ref('');
 const preferences = ref<Preferences>(readPreferences());
+const vimMode = ref<string | null>('NORMAL');
 const activeView = ref<'explorer' | 'search'>('explorer');
 const sidebarVisible = ref(true);
+const sidebarWidth = ref(readSidebarWidth());
+const resizingSidebar = ref(false);
 const viewMode = ref<ViewMode>('source');
 const splitRatio = ref(readSplitRatio());
 const resizing = ref(false);
@@ -107,6 +116,11 @@ const activeTab = computed(
   () => tabs.value.find((tab) => tab.path === activePath.value) ?? null,
 );
 const selectedPath = computed(() => activeTab.value?.path ?? null);
+const activeImagePath = computed(() =>
+  activeTab.value && isImagePath(activeTab.value.path)
+    ? activeTab.value.path
+    : null,
+);
 const previewHtml = computed(() =>
   renderMarkdown(activeTab.value?.content ?? '', {
     codeHighlight: preferences.value.codeHighlight,
@@ -128,6 +142,7 @@ const tabItems = computed(() =>
     path: tab.path,
     name: basename(tab.path),
     dirty: tab.content !== tab.savedContent,
+    kind: isImagePath(tab.path) ? ('image' as const) : ('note' as const),
   })),
 );
 
@@ -188,8 +203,81 @@ function persistSplitRatio(): void {
   }
 }
 
-function toggleSidebar(): void {
-  sidebarVisible.value = !sidebarVisible.value;
+function readSidebarWidth(): number {
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    if (raw !== null) {
+      const value = Number(raw);
+      if (Number.isFinite(value)) {
+        return clampSidebarWidth(value);
+      }
+    }
+  } catch {
+    // Use the default width when storage is unavailable.
+  }
+  return DEFAULT_SIDEBAR_WIDTH;
+}
+
+function clampSidebarWidth(value: number): number {
+  return Math.min(
+    MAX_SIDEBAR_WIDTH,
+    Math.max(MIN_SIDEBAR_WIDTH, Math.round(value)),
+  );
+}
+
+function persistSidebarWidth(): void {
+  try {
+    window.localStorage.setItem(
+      SIDEBAR_WIDTH_STORAGE_KEY,
+      String(sidebarWidth.value),
+    );
+  } catch {
+    // Persisting the layout is optional.
+  }
+}
+
+function resetSidebarWidth(): void {
+  sidebarWidth.value = DEFAULT_SIDEBAR_WIDTH;
+  persistSidebarWidth();
+}
+
+function startSidebarResize(event: PointerEvent): void {
+  if (event.button !== 0 || !sidebarVisible.value) return;
+  event.preventDefault();
+
+  const handle = event.currentTarget as HTMLElement;
+  const startX = event.clientX;
+  const startWidth = sidebarWidth.value;
+  resizingSidebar.value = true;
+  handle.setPointerCapture(event.pointerId);
+
+  const move = (moveEvent: PointerEvent): void => {
+    sidebarWidth.value = clampSidebarWidth(
+      startWidth + moveEvent.clientX - startX,
+    );
+  };
+  const stop = (): void => {
+    resizingSidebar.value = false;
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', stop);
+    handle.removeEventListener('pointercancel', stop);
+    if (handle.hasPointerCapture(event.pointerId)) {
+      handle.releasePointerCapture(event.pointerId);
+    }
+    persistSidebarWidth();
+  };
+
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', stop);
+  handle.addEventListener('pointercancel', stop);
+}
+
+function onSidebarResizerKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  event.preventDefault();
+  const delta = event.key === 'ArrowLeft' ? -12 : 12;
+  sidebarWidth.value = clampSidebarWidth(sidebarWidth.value + delta);
+  persistSidebarWidth();
 }
 
 function selectExplorer(): void {
@@ -293,9 +381,9 @@ async function bootstrap(): Promise<void> {
   try {
     const state = await api.getState();
     applyState(state);
-    const first = flattenFiles(state.entries)[0];
+    const first = firstNotePath(state.entries);
     if (first) {
-      await openNote(first.path);
+      await openNote(first);
     }
   } catch (err) {
     setError(err);
@@ -347,6 +435,10 @@ function handleCursor(position: {
   cursorColumn.value = position.column;
   cursorSyncTime = performance.now();
   previewFocusLine.value = position.line;
+}
+
+function handleVimMode(mode: string | null): void {
+  vimMode.value = mode;
 }
 
 async function setViewMode(mode: ViewMode): Promise<void> {
@@ -437,7 +529,7 @@ async function handleExport(
   format: 'pdf' | 'html' | 'docx',
 ): Promise<void> {
   const tab = activeTab.value;
-  if (!tab || exporting.value) return;
+  if (!tab || isImagePath(tab.path) || exporting.value) return;
 
   exporting.value = true;
   clearFeedback();
@@ -531,6 +623,11 @@ function pruneTabs(): void {
 }
 
 async function openNote(path: string): Promise<boolean> {
+  if (isImagePath(path)) {
+    openImagePinned(path);
+    return true;
+  }
+
   const existing = tabs.value.find((tab) => tab.path === path);
   if (existing) {
     activateTab(path);
@@ -555,6 +652,49 @@ async function openNote(path: string): Promise<boolean> {
     setError(err);
     return false;
   }
+}
+
+function firstNotePath(list: FileEntry[]): string | null {
+  return (
+    flattenFiles(list).find((entry) => !isImagePath(entry.path))?.path ?? null
+  );
+}
+
+function openImagePreview(path: string): void {
+  const existing = tabs.value.find((tab) => tab.path === path);
+  if (existing) {
+    activateTab(path);
+    return;
+  }
+
+  const previewIndex = previewPath.value
+    ? tabs.value.findIndex((tab) => tab.path === previewPath.value)
+    : -1;
+  const previewTab = previewIndex >= 0 ? tabs.value[previewIndex] : null;
+  const replaceable =
+    previewTab !== null && previewTab.content === previewTab.savedContent;
+  const next: NoteTab = { path, content: '', savedContent: '' };
+
+  if (replaceable && previewIndex >= 0) {
+    tabs.value.splice(previewIndex, 1, next);
+  } else {
+    tabs.value.push(next);
+  }
+  previewPath.value = path;
+  activateTab(path);
+}
+
+function openImagePinned(path: string): void {
+  const existing = tabs.value.find((tab) => tab.path === path);
+  if (existing) {
+    if (previewPath.value === path) previewPath.value = null;
+    activateTab(path);
+    return;
+  }
+
+  tabs.value.push({ path, content: '', savedContent: '' });
+  if (previewPath.value === path) previewPath.value = null;
+  activateTab(path);
 }
 
 function activateTab(path: string): void {
@@ -583,7 +723,7 @@ function revealPath(path: string): void {
 
 function handleContentChange(value: string): void {
   const tab = activeTab.value;
-  if (!tab) return;
+  if (!tab || isImagePath(tab.path)) return;
   tab.content = value;
   if (
     previewPath.value === tab.path &&
@@ -740,6 +880,11 @@ async function openPreviewNote(path: string): Promise<void> {
 async function selectNote(path: string): Promise<void> {
   if (busy.value || path === activePath.value) return;
 
+  if (isImagePath(path)) {
+    openImagePreview(path);
+    return;
+  }
+
   const existing = tabs.value.find((tab) => tab.path === path);
   if (existing) {
     activateTab(path);
@@ -763,6 +908,11 @@ async function selectNote(path: string): Promise<void> {
 }
 
 async function pinNote(path: string): Promise<void> {
+  if (isImagePath(path)) {
+    openImagePinned(path);
+    return;
+  }
+
   const pending = previewOpenTasks.get(path);
   if (pending) await pending;
   if (busy.value) return;
@@ -808,9 +958,9 @@ async function chooseFolder(): Promise<void> {
     expandedPaths.value = [];
     applyState(state);
 
-    const first = flattenFiles(state.entries)[0];
+    const first = firstNotePath(state.entries);
     if (first) {
-      await openNote(first.path);
+      await openNote(first);
     }
   } catch (err) {
     setError(err);
@@ -886,12 +1036,21 @@ function requestCreateFolder(parent: string): void {
 }
 
 function requestRename(entry: FileEntry): void {
+  const image = !entry.isDir && isImagePath(entry.path);
   openPrompt({
-    title: entry.isDir ? '重命名文件夹' : '重命名文件',
+    title: entry.isDir
+      ? '重命名文件夹'
+      : image
+        ? '重命名图片'
+        : '重命名文件',
     label: '新名称',
     initialValue: entry.name,
     confirmLabel: '重命名',
-    placeholder: entry.isDir ? '文件夹名称' : '例如：笔记.md',
+    placeholder: entry.isDir
+      ? '文件夹名称'
+      : image
+        ? '例如：cover.png'
+        : '例如：笔记.md',
     submit: async (name) => {
       if (mutating.value || switching.value || anySaving.value) {
         throw new Error('请稍后再试。');
@@ -955,9 +1114,9 @@ async function requestDelete(entry: FileEntry): Promise<void> {
     await refreshEntries();
 
     if (activeWasAffected && tabs.value.length === 0) {
-      const next = flattenFiles(entries.value)[0];
+      const next = firstNotePath(entries.value);
       if (next) {
-        await openNote(next.path);
+        await openNote(next);
       }
     }
   } catch (err) {
@@ -1064,7 +1223,11 @@ function errorMessage(err: unknown): string {
 <template>
   <div
     class="app-shell"
-    :class="{ 'sidebar-hidden': !sidebarVisible }"
+    :class="{
+      'sidebar-hidden': !sidebarVisible,
+      'resizing-sidebar': resizingSidebar,
+    }"
+    :style="{ '--sidebar-width': `${sidebarWidth}px` }"
   >
     <header
       class="titlebar"
@@ -1072,19 +1235,6 @@ function errorMessage(err: unknown): string {
       @dblclick="onTitlebarDoubleClick"
     >
       <div class="titlebar-left">
-        <button
-          type="button"
-          class="titlebar-button"
-          :class="{ active: sidebarVisible }"
-          title="切换侧边栏"
-          aria-label="切换侧边栏"
-          @click="toggleSidebar"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
-            <path d="M9.5 4.5v15" fill="none" stroke="currentColor" stroke-width="1.6" />
-          </svg>
-        </button>
         <span v-if="sidebarVisible" class="titlebar-title">
           {{ activeView === 'search' ? '搜索' : '资源管理器' }}
         </span>
@@ -1184,6 +1334,22 @@ function errorMessage(err: unknown): string {
       @open="openSearchResult"
     />
 
+    <div
+      v-if="sidebarVisible"
+      class="sidebar-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      :aria-valuenow="sidebarWidth"
+      :aria-valuemin="MIN_SIDEBAR_WIDTH"
+      :aria-valuemax="MAX_SIDEBAR_WIDTH"
+      :aria-label="`调整侧边栏宽度，当前 ${sidebarWidth} 像素`"
+      tabindex="0"
+      title="拖动调整侧边栏宽度，双击恢复默认"
+      @pointerdown="startSidebarResize"
+      @keydown="onSidebarResizerKeydown"
+      @dblclick="resetSidebarWidth"
+    ></div>
+
     <main v-if="notesDir === null" class="workspace welcome">
       <div class="welcome-card">
         <span class="welcome-icon"><LeafIcon /></span>
@@ -1203,8 +1369,14 @@ function errorMessage(err: unknown): string {
       </div>
 
       <template v-if="activeTab">
+        <ImagePane
+          v-if="activeImagePath"
+          :key="activeImagePath"
+          :path="activeImagePath"
+        />
+
         <WysiwygPane
-          v-if="viewMode === 'wysiwyg'"
+          v-else-if="viewMode === 'wysiwyg'"
           :key="editorSession"
           :initial-content="activeTab.content"
           :note-path="activeTab.path"
@@ -1240,6 +1412,7 @@ function errorMessage(err: unknown): string {
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"
+              @vim-mode="handleVimMode"
               @save-request="saveCurrentNote"
             />
           </section>
@@ -1282,16 +1455,30 @@ function errorMessage(err: unknown): string {
     <SettingsOverlay
       v-if="settingsOpen"
       :preferences="preferences"
+      :maximized="isMaximized"
       @update="updatePreferences"
       @close="settingsOpen = false"
+      @minimize="minimizeWindow"
+      @maximize="toggleMaximizeWindow"
     />
 
     <StatusBar
-      :line="activeTab && viewMode !== 'wysiwyg' ? cursorLine : null"
-      :column="activeTab && viewMode !== 'wysiwyg' ? cursorColumn : null"
+      :line="
+        activeTab && !activeImagePath && viewMode !== 'wysiwyg'
+          ? cursorLine
+          : null
+      "
+      :column="
+        activeTab && !activeImagePath && viewMode !== 'wysiwyg'
+          ? cursorColumn
+          : null
+      "
       :mode="viewMode"
-      :vim-enabled="vimEnabled && viewMode !== 'wysiwyg'"
-      :line-ending="lineEnding"
+      :vim-enabled="
+        vimEnabled && !activeImagePath && viewMode !== 'wysiwyg'
+      "
+      :vim-mode="vimMode"
+      :line-ending="activeImagePath ? '图片' : lineEnding"
       :immersive="immersiveEnabled"
       @mode-change="setViewMode"
       @immersive-toggle="toggleImmersive"

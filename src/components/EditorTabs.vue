@@ -6,6 +6,7 @@ interface TabItem {
   path: string;
   name: string;
   dirty: boolean;
+  kind: 'note' | 'image';
 }
 
 const props = defineProps<{
@@ -83,7 +84,17 @@ watch(
       @keydown.space.prevent="emit('select', tab.path)"
       @auxclick="onAuxClick($event, tab.path)"
     >
-      <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <svg
+        v-if="tab.kind === 'image'"
+        class="tab-icon"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+        <circle cx="8.5" cy="9.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.4" />
+        <path d="m4.5 17 4.5-4.5 3.5 3.5 2.5-2.5 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+      </svg>
+      <svg v-else class="tab-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path
           d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20V3.5Z"
           fill="none"

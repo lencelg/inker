@@ -37,6 +37,8 @@ export const api: NotesApi = {
   readAsset: (notePath, source) =>
     invoke<NoteAsset>('read_note_asset', { notePath, source }),
 
+  readImage: (path) => invoke<NoteAsset>('read_image', { path }),
+
   searchNotes: (query) => invoke<SearchResults>('search_notes', { query }),
 
   createFile: (parent, name) => invoke<string>('create_file', { parent, name }),

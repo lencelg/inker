@@ -1,7 +1,9 @@
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css';
 import MarkdownIt from 'markdown-it';
+import type { StateCore, Token } from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
+import { headingSlug } from './anchors';
 
 const TRANSPARENT_IMAGE =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -13,6 +15,35 @@ const markdown = new MarkdownIt({
 });
 
 markdown.use(taskLists, { enabled: true, label: false });
+
+function inlineText(token: Token | undefined): string {
+  if (!token) return '';
+  if (!token.children?.length) return token.content;
+  return token.children
+    .map((child) => {
+      if (child.type === 'image') {
+        return child.content || child.attrGet('alt') || '';
+      }
+      return child.content;
+    })
+    .join('');
+}
+
+function addHeadingIds(state: StateCore): void {
+  const used = new Map<string, number>();
+  for (let index = 0; index < state.tokens.length; index += 1) {
+    const token = state.tokens[index];
+    if (token.type !== 'heading_open') continue;
+    const base =
+      headingSlug(inlineText(state.tokens[index + 1])) ||
+      `section-${index + 1}`;
+    const count = used.get(base) ?? 0;
+    used.set(base, count + 1);
+    token.attrSet('id', count === 0 ? base : `${base}-${count}`);
+  }
+}
+
+markdown.core.ruler.push('heading_ids', addHeadingIds);
 
 function escapeHtml(value: string): string {
   return value

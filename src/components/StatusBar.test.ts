@@ -24,6 +24,7 @@ afterEach(() => {
 describe('StatusBar mode menu', () => {
   it('opens the menu and emits the selected mode', async () => {
     const wrapper = mountStatusBar();
+    expect(wrapper.find('.status-mode').attributes('title')).toBeUndefined();
     await wrapper.find('.status-mode').trigger('click');
     await nextTick();
 
@@ -60,6 +61,24 @@ describe('StatusBar mode menu', () => {
     const wrapper = mountStatusBar();
     await wrapper.find('.status-focus').trigger('click');
     expect(wrapper.emitted('immersiveToggle')).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('shows the active Vim mode in the bottom bar', () => {
+    const wrapper = mount(StatusBar, {
+      attachTo: document.body,
+      props: {
+        line: 1,
+        column: 1,
+        mode: 'source',
+        vimEnabled: true,
+        vimMode: 'INSERT',
+        lineEnding: 'LF',
+        immersive: false,
+      },
+    });
+
+    expect(wrapper.find('.status-vim').text()).toBe('INSERT');
     wrapper.unmount();
   });
 });

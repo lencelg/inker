@@ -25,7 +25,8 @@ import {
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { tags } from '@lezer/highlight';
-import { Vim, vim } from '@replit/codemirror-vim';
+import { Vim, getCM, vim } from '@replit/codemirror-vim';
+import { formatVimMode } from '../lib/vimMode';
 
 const props = defineProps<{
   initialContent: string;
@@ -40,20 +41,86 @@ const emit = defineEmits<{
   scrollSync: [position: { line: number; ratio: number }];
   cursor: [position: { line: number; column: number }];
   saveRequest: [];
+  vimMode: [mode: string | null];
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
 const vimCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
 const immersiveCompartment = new Compartment();
-const vimExtension = vim({ status: true });
+const vimExtension = vim({ status: false });
 
 let view: EditorView | null = null;
 let scrollElement: HTMLElement | null = null;
 let scrollFrame = 0;
 let resizeFrame = 0;
 let centerFrame = 0;
+let vimStatusFrame = 0;
 let resizeObserver: ResizeObserver | null = null;
+
+interface VimModeEvent {
+  mode?: string;
+  subMode?: string;
+}
+
+function scheduleVimStatus(): void {
+  if (vimStatusFrame) cancelAnimationFrame(vimStatusFrame);
+  vimStatusFrame = requestAnimationFrame(() => {
+    vimStatusFrame = 0;
+    attachVimStatus();
+  });
+}
+
+function attachVimStatus(): void {
+  if (!view) return;
+  if (!props.vimEnabled) {
+    emit('vimMode', null);
+    return;
+  }
+
+  const cm = getCM(view);
+  if (!cm) {
+    emit('vimMode', 'NORMAL');
+    return;
+  }
+
+  const commandHost = document.querySelector<HTMLElement>(
+    '.status-vim-command',
+  );
+  if (commandHost) {
+    commandHost.replaceChildren();
+    cm.state.statusbar = commandHost;
+    const plugin = cm.state.vimPlugin as
+      | {
+          statusButton?: HTMLElement;
+          spacer?: HTMLElement;
+          dom?: HTMLElement;
+          updateStatus?: () => void;
+        }
+      | undefined;
+    if (plugin?.statusButton) plugin.statusButton.hidden = true;
+    if (plugin?.spacer) plugin.spacer.style.display = 'none';
+    const syncCommandHint = (): void => {
+      if (plugin?.dom) {
+        plugin.dom.style.display = cm.state.dialog ? 'none' : '';
+      }
+    };
+    cm.on('dialog', syncCommandHint);
+    syncCommandHint();
+    plugin?.updateStatus?.();
+  }
+
+  cm.on('vim-mode-change', (event: VimModeEvent) => {
+    emit('vimMode', formatVimMode(event));
+  });
+  cm.on('vim-command-done', () => {
+    emit(
+      'vimMode',
+      formatVimMode({ mode: cm.state.vim?.mode ?? 'normal' }),
+    );
+  });
+  emit('vimMode', formatVimMode({ mode: cm.state.vim?.mode ?? 'normal' }));
+}
 
 const syntaxTheme = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--syntax-keyword)' },
@@ -424,6 +491,7 @@ onMounted(() => {
   view.focus();
   scheduleScrollSync();
   emitCursor();
+  scheduleVimStatus();
 });
 
 watch(
@@ -432,6 +500,7 @@ watch(
     view?.dispatch({
       effects: vimCompartment.reconfigure(enabled ? vimExtension : []),
     });
+    scheduleVimStatus();
     view?.focus();
   },
 );
@@ -481,6 +550,10 @@ onBeforeUnmount(() => {
   if (centerFrame) {
     cancelAnimationFrame(centerFrame);
     centerFrame = 0;
+  }
+  if (vimStatusFrame) {
+    cancelAnimationFrame(vimStatusFrame);
+    vimStatusFrame = 0;
   }
   resizeObserver?.disconnect();
   resizeObserver = null;

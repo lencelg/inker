@@ -16,6 +16,7 @@ pub fn run() {
             commands::save_note_image,
             commands::save_export,
             commands::read_note_asset,
+            commands::read_image,
             commands::search_notes,
             commands::create_file,
             commands::create_folder,

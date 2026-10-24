@@ -27,3 +27,15 @@ describe('fenced code rendering', () => {
     expect(html).toMatch(/class="code-language">[^<]+<\/span>/);
   });
 });
+
+describe('heading anchors', () => {
+  it('adds stable ids for latin, formatted and duplicate headings', () => {
+    const html = renderMarkdown(
+      '# 安装\n\n## Install **Setup**\n\n## 安装',
+    );
+
+    expect(html).toContain('id="安装"');
+    expect(html).toContain('id="install-setup"');
+    expect(html).toContain('id="安装-1"');
+  });
+});

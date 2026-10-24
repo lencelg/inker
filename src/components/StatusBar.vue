@@ -7,6 +7,7 @@ const props = defineProps<{
   column: number | null;
   mode: ViewMode;
   vimEnabled: boolean;
+  vimMode?: string | null;
   lineEnding: string;
   immersive: boolean;
 }>();
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 const modeLabel = computed(
   () => VIEW_MODES.find((item) => item.id === props.mode)?.label ?? '源码模式',
 );
+const vimModeLabel = computed(() => props.vimMode || 'NORMAL');
 
 const osName = detectOs();
 
@@ -58,21 +60,25 @@ async function openMenu(edge: 'current' | 'first' | 'last' = 'current'): Promise
   const rect = trigger.getBoundingClientRect();
   const margin = 8;
   menuStyle.value = {
-    left: `${Math.round(Math.max(margin, rect.left))}px`,
-    bottom: `${Math.round(window.innerHeight - rect.top + 4)}px`,
+    left: `${Math.round(rect.left)}px`,
+    bottom: '35px',
     visibility: 'hidden',
   };
   menuOpen.value = true;
   await nextTick();
 
   const width = menuElement.value?.offsetWidth ?? 0;
+  const viewportWidth = Math.min(
+    window.innerWidth,
+    document.documentElement.clientWidth || window.innerWidth,
+  );
   const left = Math.min(
     Math.max(margin, rect.left),
-    Math.max(margin, window.innerWidth - width - margin),
+    Math.max(margin, viewportWidth - width - margin),
   );
   menuStyle.value = {
     left: `${Math.round(left)}px`,
-    bottom: `${Math.round(window.innerHeight - rect.top + 4)}px`,
+    bottom: '35px',
     visibility: 'visible',
   };
 
@@ -172,7 +178,13 @@ function onMenuKeyDown(event: KeyboardEvent): void {
 <template>
   <footer class="status-bar">
     <div class="status-left">
-      <span v-if="vimEnabled" class="status-vim">Vim</span>
+      <span
+        v-if="vimEnabled"
+        class="status-vim"
+        :aria-label="`Vim 模式：${vimModeLabel}`"
+      >
+        {{ vimModeLabel }}
+      </span>
       <button
         type="button"
         class="status-focus"
@@ -183,6 +195,11 @@ function onMenuKeyDown(event: KeyboardEvent): void {
       >
         专注
       </button>
+      <div
+        v-if="vimEnabled"
+        class="status-vim-command"
+        aria-label="Vim 命令输入"
+      ></div>
     </div>
 
     <div class="status-right">
@@ -191,7 +208,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         type="button"
         class="status-mode"
         :class="{ open: menuOpen }"
-        title="切换编辑模式"
+        aria-label="切换编辑模式"
         aria-haspopup="menu"
         :aria-expanded="menuOpen"
         aria-controls="status-mode-menu"
@@ -292,10 +309,56 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   gap: 2px;
 }
 
+.status-left {
+  flex: 1;
+  overflow: hidden;
+}
+
 .status-right {
+  flex-shrink: 0;
   gap: 12px;
   padding-right: 4px;
   overflow: hidden;
+}
+
+.status-vim-command {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  height: 100%;
+  padding-left: 6px;
+  overflow: hidden;
+}
+
+.status-vim-command :deep(> div) {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.status-vim-command :deep(input) {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--statusbar-ink);
+  caret-color: var(--statusbar-ink);
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+}
+
+.status-vim-command :deep(span) {
+  flex-shrink: 0;
+  color: var(--statusbar-ink);
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  white-space: nowrap;
 }
 
 .status-mode {
@@ -336,11 +399,13 @@ function onMenuKeyDown(event: KeyboardEvent): void {
 
 .mode-menu {
   position: fixed;
-  z-index: 90;
+  z-index: 150;
   display: flex;
   flex-direction: column;
   min-width: 176px;
+  max-height: calc(100vh - 44px);
   padding: 4px;
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -348,6 +413,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   color: var(--ink);
   font-size: 12.5px;
   user-select: none;
+  scrollbar-width: thin;
 }
 
 .mode-menu-item {

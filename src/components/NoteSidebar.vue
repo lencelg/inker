@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { isImagePath } from '../lib/fileKinds';
 import { dirname } from '../lib/paths';
 import type { FileEntry } from '../types';
 
@@ -132,6 +133,10 @@ function pinNode(node: TreeNode): void {
   }
 }
 
+function isImageNode(node: TreeNode): boolean {
+  return !node.isDir && isImagePath(node.path);
+}
+
 function onRowContextMenu(event: MouseEvent, node: TreeNode): void {
   openMenu(event, {
     path: node.path,
@@ -234,7 +239,11 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
         v-for="row in rows"
         :key="row.node.path"
         class="tree-row"
-        :class="{ selected: row.node.path === selectedPath, folder: row.node.isDir }"
+        :class="{
+          selected: row.node.path === selectedPath,
+          folder: row.node.isDir,
+          'image-file': isImageNode(row.node),
+        }"
         :style="{ paddingLeft: `${10 + row.depth * 14}px` }"
         role="treeitem"
         :aria-expanded="row.node.isDir ? expanded.has(row.node.path) : undefined"
@@ -264,6 +273,11 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
               stroke-width="1.6"
               stroke-linejoin="round"
             />
+          </svg>
+          <svg v-else-if="isImageNode(row.node)" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <circle cx="8.5" cy="9.5" r="1.5" fill="none" stroke="currentColor" stroke-width="1.4" />
+            <path d="m4.5 17 4.5-4.5 3.5 3.5 2.5-2.5 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
           </svg>
           <svg v-else viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -425,6 +439,10 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
 
 .tree-row.folder .entry-icon {
   color: var(--folder-icon);
+}
+
+.tree-row.image-file .entry-icon {
+  color: var(--accent);
 }
 
 .tree-row.selected .entry-icon {

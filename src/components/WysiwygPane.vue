@@ -31,6 +31,11 @@ import {
 import { $prose, $view, getMarkdown } from '@milkdown/kit/utils';
 import { api } from '../api';
 import {
+  findAnchorTarget,
+  fragmentFromHref,
+  scrollToAnchor,
+} from '../lib/anchors';
+import {
   applyLineEnding,
   normalizeLineEndings,
   usesCrlf,
@@ -279,6 +284,31 @@ function findScrollParent(element: HTMLElement): HTMLElement | null {
     node = node.parentElement;
   }
   return null;
+}
+
+function onWysiwygClick(event: MouseEvent): void {
+  const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>(
+    'a[href]',
+  );
+  if (!anchor) return;
+  const fragment = fragmentFromHref(anchor.getAttribute('href'));
+  if (fragment === null) return;
+
+  const root = host.value;
+  if (!root) return;
+  event.preventDefault();
+
+  if (!fragment.trim()) {
+    if (typeof root.scrollTo === 'function') {
+      root.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      root.scrollTop = 0;
+    }
+    return;
+  }
+
+  const target = findAnchorTarget(root, fragment);
+  if (target) scrollToAnchor(root, target);
 }
 
 function scheduleCenter(view: EditorView): void {
@@ -587,7 +617,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="wysiwyg-pane">
-    <div ref="host" class="wysiwyg-host"></div>
+    <div ref="host" class="wysiwyg-host" @click="onWysiwygClick"></div>
     <div v-if="error" class="wysiwyg-error" role="alert">{{ error }}</div>
   </section>
 </template>

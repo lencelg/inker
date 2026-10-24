@@ -10,6 +10,11 @@ import {
   watch,
 } from 'vue';
 import { api } from '../api';
+import {
+  findAnchorTarget,
+  fragmentFromHref,
+  scrollToAnchor,
+} from '../lib/anchors';
 import { isLocalImageSource } from '../lib/markdown';
 import { renderMermaid } from '../lib/mermaid';
 import {
@@ -293,6 +298,40 @@ function onPreviewScroll(): void {
   });
 }
 
+function onPreviewClick(event: MouseEvent): void {
+  const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>(
+    'a[href]',
+  );
+  if (!anchor) return;
+  const fragment = fragmentFromHref(anchor.getAttribute('href'));
+  if (fragment === null) return;
+
+  const root = bodyRef.value;
+  if (!root) return;
+  event.preventDefault();
+  suppressScrollUntil = performance.now() + 650;
+
+  if (!fragment.trim()) {
+    if (typeof root.scrollTo === 'function') {
+      root.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      root.scrollTop = 0;
+    }
+    return;
+  }
+
+  const target = findAnchorTarget(root, fragment);
+  if (!target) return;
+  scrollToAnchor(root, target);
+
+  const lineElement =
+    target.closest<HTMLElement>('[data-source-line]') ?? target;
+  const line = Number(lineElement.dataset.sourceLine);
+  if (Number.isFinite(line) && line > 0) {
+    emit('syncSource', line);
+  }
+}
+
 function observeBody(): void {
   if (!bodyRef.value) {
     resizeObserver?.disconnect();
@@ -409,6 +448,7 @@ watch(
       ref="bodyRef"
       class="markdown-body"
       v-html="safeHtml"
+      @click="onPreviewClick"
       @scroll.passive="onPreviewScroll"
       @wheel.passive="markUserScroll"
       @pointerdown="onPointerDown"

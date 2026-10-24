@@ -1,473 +1,254 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import LeafIcon from './LeafIcon.vue';
-import { FONTS, fontById, type FontId } from '../lib/fonts';
+import { computed, nextTick, ref, watch } from 'vue';
+import SettingsContent from './settings/SettingsContent.vue';
+import SettingsHeader from './settings/SettingsHeader.vue';
+import SettingsSidebar from './settings/SettingsSidebar.vue';
+import type { Preferences } from '../lib/preferences';
 import {
-  MAX_FONT_SIZE,
-  MIN_FONT_SIZE,
-  clampFontSize,
-  type Preferences,
-} from '../lib/preferences';
-import { THEMES, type ThemeId } from '../lib/themes';
+  SETTINGS_CATEGORIES,
+  createSettingsSchema,
+  isSettingModified,
+  matchesSetting,
+  type SettingDefinition,
+  type SettingsCategoryId,
+  type SettingsScope,
+  type SettingsSection,
+  type SettingsValue,
+} from '../lib/settingsSchema';
 
 const props = defineProps<{
   preferences: Preferences;
+  maximized: boolean;
 }>();
 
 const emit = defineEmits<{
   update: [patch: Partial<Preferences>];
   close: [];
+  minimize: [];
+  maximize: [];
 }>();
 
-const currentFont = computed(() => fontById(props.preferences.fontFamily));
+const scope = ref<SettingsScope>('user');
+const query = ref('');
+const modifiedOnly = ref(false);
+const activeCategory = ref<SettingsCategoryId>('common');
+const expandedCategories = ref<SettingsCategoryId[]>(
+  SETTINGS_CATEGORIES.map((category) => category.id),
+);
+const localValues = ref<Record<string, SettingsValue>>({});
+const contentRef = ref<{
+  scrollToCategory: (category: SettingsCategoryId) => Promise<void>;
+  scrollToSetting: (setting: SettingDefinition) => Promise<void>;
+  scrollToTop: () => void;
+} | null>(null);
 
-function update(patch: Partial<Preferences>): void {
-  emit('update', patch);
+const settings = computed(() =>
+  createSettingsSchema(props.preferences, localValues.value),
+);
+const normalizedQuery = computed(() => query.value.trim());
+const searching = computed(() => normalizedQuery.value.length > 0);
+const filtering = computed(() => searching.value || modifiedOnly.value);
+
+const filteredSettings = computed(() =>
+  settings.value.filter(
+    (setting) =>
+      (!modifiedOnly.value || isSettingModified(setting)) &&
+      matchesSetting(setting, normalizedQuery.value),
+  ),
+);
+
+const matchedIds = computed(() =>
+  filteredSettings.value.map((setting) => setting.id),
+);
+
+const matchCounts = computed(
+  () =>
+    Object.fromEntries(
+      SETTINGS_CATEGORIES.map((category) => [
+        category.id,
+        filteredSettings.value.filter(
+          (setting) => setting.category === category.id,
+        ).length,
+      ]),
+    ) as Record<SettingsCategoryId, number>,
+);
+
+const sections = computed<SettingsSection[]>(() =>
+  SETTINGS_CATEGORIES.map((category) => ({
+    ...category,
+    items: filteredSettings.value.filter(
+      (setting) => setting.category === category.id,
+    ),
+  })).filter((section) => section.items.length > 0),
+);
+
+const allSections = computed<SettingsSection[]>(() =>
+  SETTINGS_CATEGORIES.map((category) => ({
+    ...category,
+    items: settings.value.filter(
+      (setting) => setting.category === category.id,
+    ),
+  })),
+);
+
+const modifiedCount = computed(
+  () => settings.value.filter(isSettingModified).length,
+);
+const totalCount = computed(() => settings.value.length);
+
+watch([normalizedQuery, modifiedOnly], async () => {
+  if (scope.value !== 'user') return;
+  await nextTick();
+  const first = sections.value[0];
+  activeCategory.value = first?.id ?? SETTINGS_CATEGORIES[0].id;
+  contentRef.value?.scrollToTop();
+});
+
+function changeScope(next: SettingsScope): void {
+  if (scope.value === next) return;
+  scope.value = next;
+  query.value = '';
+  modifiedOnly.value = false;
+
+  if (next === 'user') {
+    activeCategory.value = SETTINGS_CATEGORIES[0].id;
+    void nextTick(() => contentRef.value?.scrollToTop());
+  }
 }
 
-function onThemeChange(event: Event): void {
-  update({ theme: (event.target as HTMLSelectElement).value as ThemeId });
+function updateQuery(value: string): void {
+  query.value = value;
 }
 
-function onFontChange(event: Event): void {
-  update({ fontFamily: (event.target as HTMLSelectElement).value as FontId });
+function clearSearch(): void {
+  query.value = '';
 }
 
-function onFontSizeChange(event: Event): void {
-  update({ fontSize: clampFontSize(Number((event.target as HTMLInputElement).value)) });
+function toggleFilter(): void {
+  modifiedOnly.value = !modifiedOnly.value;
 }
 
-function changeFontSize(delta: number): void {
-  update({ fontSize: props.preferences.fontSize + delta });
+function clearFilters(): void {
+  query.value = '';
+  modifiedOnly.value = false;
 }
 
-function onVimChange(event: Event): void {
-  update({ vimEnabled: (event.target as HTMLInputElement).checked });
+function toggleCategory(category: SettingsCategoryId): void {
+  const expanded = expandedCategories.value;
+  expandedCategories.value = expanded.includes(category)
+    ? expanded.filter((id) => id !== category)
+    : [...expanded, category];
 }
 
-function onImmersiveChange(event: Event): void {
-  update({ immersive: (event.target as HTMLInputElement).checked });
+function selectCategory(category: SettingsCategoryId): void {
+  if (scope.value !== 'user') return;
+  activeCategory.value = category;
+  void contentRef.value?.scrollToCategory(category);
 }
 
-function onCodeHighlightChange(event: Event): void {
-  update({ codeHighlight: (event.target as HTMLInputElement).checked });
+function selectSetting(setting: SettingDefinition): void {
+  activeCategory.value = setting.category;
+  void contentRef.value?.scrollToSetting(setting);
 }
 
-function closeWindow(): void {
-  emit('close');
+function updateSetting(
+  setting: SettingDefinition,
+  value: SettingsValue,
+): void {
+  if (setting.preference) {
+    emit('update', {
+      [setting.preference]: value,
+    } as Partial<Preferences>);
+    return;
+  }
+  localValues.value = { ...localValues.value, [setting.id]: value };
+}
+
+function resetSetting(setting: SettingDefinition): void {
+  updateSetting(setting, setting.defaultValue);
+}
+
+function onActiveChange(category: SettingsCategoryId): void {
+  activeCategory.value = category;
 }
 </script>
 
 <template>
-  <div class="settings-page">
-    <header class="settings-header">
-      <div class="settings-brand">
-        <span class="settings-logo"><LeafIcon /></span>
-        <div>
-          <p>markleaf</p>
-          <h1>设置</h1>
-        </div>
-      </div>
-      <button
-        class="close-button"
-        type="button"
-        aria-label="关闭设置"
-        title="关闭设置"
-        @click="closeWindow"
-      >
-        ×
-      </button>
-    </header>
+  <div class="settings-workbench">
+    <SettingsHeader
+      :query="query"
+      :filter-active="modifiedOnly"
+      :search-disabled="scope === 'workspace'"
+      :maximized="maximized"
+      @update:query="updateQuery"
+      @clear-search="clearSearch"
+      @toggle-filter="toggleFilter"
+      @minimize="emit('minimize')"
+      @maximize="emit('maximize')"
+      @close="emit('close')"
+    />
 
-    <main class="settings-content">
-      <section class="setting-section">
-        <h2>外观</h2>
-        <div class="settings-card">
-          <label class="setting-row">
-            <span>
-              <strong>主题</strong>
-              <small>界面、编辑器和预览的颜色。</small>
-            </span>
-            <select class="select" :value="preferences.theme" @change="onThemeChange">
-              <option v-for="theme in THEMES" :key="theme.id" :value="theme.id">
-                {{ theme.label }}
-              </option>
-            </select>
-          </label>
-        </div>
-      </section>
+    <div class="settings-body">
+      <SettingsSidebar
+        :scope="scope"
+        :categories="SETTINGS_CATEGORIES"
+        :sections="allSections"
+        :active-category="activeCategory"
+        :expanded-categories="expandedCategories"
+        :match-counts="matchCounts"
+        :matched-ids="matchedIds"
+        :filtering="filtering"
+        @change-scope="changeScope"
+        @select-category="selectCategory"
+        @toggle-category="toggleCategory"
+        @select-setting="selectSetting"
+      />
 
-      <section class="setting-section">
-        <h2>编辑器</h2>
-        <div class="settings-card">
-          <label class="setting-row">
-            <span>
-              <strong>字体</strong>
-              <small>用于编辑器、标签页和文件树。</small>
-            </span>
-            <select class="select" :value="preferences.fontFamily" @change="onFontChange">
-              <option v-for="font in FONTS" :key="font.id" :value="font.id">
-                {{ font.label }}
-              </option>
-            </select>
-          </label>
-
-          <div class="font-preview" :style="{ fontFamily: currentFont.stack }">
-            <span>// {{ currentFont.label }}</span>
-            <code>const markleaf = 'notes';</code>
-          </div>
-
-          <div class="setting-row font-size-row">
-            <span>
-              <strong>字体大小</strong>
-              <small>按住 Ctrl 并滚动鼠标滚轮也可以调整。</small>
-            </span>
-            <div class="stepper">
-              <button
-                type="button"
-                aria-label="减小字体"
-                :disabled="preferences.fontSize <= MIN_FONT_SIZE"
-                @click="changeFontSize(-1)"
-              >
-                −
-              </button>
-              <span>{{ preferences.fontSize }} px</span>
-              <button
-                type="button"
-                aria-label="增大字体"
-                :disabled="preferences.fontSize >= MAX_FONT_SIZE"
-                @click="changeFontSize(1)"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          <input
-            class="font-slider"
-            type="range"
-            :min="MIN_FONT_SIZE"
-            :max="MAX_FONT_SIZE"
-            step="1"
-            :value="preferences.fontSize"
-            aria-label="字体大小"
-            @input="onFontSizeChange"
-          />
-
-          <div class="setting-row vim-row">
-            <span>
-              <strong>Vim 模式</strong>
-              <small>使用 Vim 键位编辑，支持搜索、替换、宏和常用 ex 命令。</small>
-            </span>
-            <input
-              class="switch"
-              type="checkbox"
-              :checked="preferences.vimEnabled"
-              aria-label="Vim 模式"
-              @change="onVimChange"
-            />
-          </div>
-
-          <div class="setting-row immersive-row">
-            <span>
-              <strong>沉浸式写作</strong>
-              <small>打字机模式让当前行保持居中，并淡化其他内容。</small>
-            </span>
-            <input
-              class="switch"
-              type="checkbox"
-              :checked="preferences.immersive"
-              aria-label="沉浸式写作"
-              @change="onImmersiveChange"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section class="setting-section">
-        <h2>预览</h2>
-        <div class="settings-card">
-          <div class="setting-row">
-            <span>
-              <strong>代码高亮</strong>
-              <small>为预览中的代码块启用语法高亮，并显示代码语言。</small>
-            </span>
-            <input
-              class="switch"
-              type="checkbox"
-              :checked="preferences.codeHighlight"
-              aria-label="预览代码高亮"
-              @change="onCodeHighlightChange"
-            />
-          </div>
-        </div>
-      </section>
-
-      <p class="settings-footer">更改会立即保存并应用到笔记窗口。</p>
-    </main>
+      <SettingsContent
+        ref="contentRef"
+        :scope="scope"
+        :active-category="activeCategory"
+        :sections="sections"
+        :query="query"
+        :filtering="filtering"
+        :modified-only="modifiedOnly"
+        :modified-count="modifiedCount"
+        :total-count="totalCount"
+        @update-setting="updateSetting"
+        @reset-setting="resetSetting"
+        @active-change="onActiveChange"
+        @open-user="changeScope('user')"
+        @clear-filters="clearFilters"
+      />
+    </div>
   </div>
 </template>
 
 <style scoped>
-.settings-page {
-  height: 100%;
-  overflow: auto;
-  padding: 24px 28px 28px;
-  background: var(--panel);
-  color: var(--ink);
-}
-
-.settings-header {
-  display: flex;
-  max-width: 680px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 auto 24px;
-}
-
-.settings-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.close-button {
+.settings-workbench {
   display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--muted);
-  font-size: 19px;
-  line-height: 1;
-}
-
-.close-button:hover {
-  background: var(--btn-hover-bg);
-  border-color: var(--btn-hover-border);
-  color: var(--ink);
-}
-
-.settings-logo {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
-  background: linear-gradient(135deg, var(--leaf), var(--leaf-strong));
-  color: #fff;
-}
-
-.settings-logo svg {
-  width: 25px;
-  height: 25px;
-}
-
-.settings-header p {
-  margin: 0 0 2px;
-  color: var(--muted);
-  font-family: var(--mono-font);
-  font-size: 11px;
-}
-
-.settings-header h1 {
-  margin: 0;
-  font-size: 22px;
-  letter-spacing: -0.02em;
-}
-
-.settings-content {
-  max-width: 680px;
-  margin: 0 auto;
-}
-
-.setting-section + .setting-section {
-  margin-top: 22px;
-}
-
-.setting-section h2 {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.settings-card {
-  padding: 4px 18px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-}
-
-.setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 22px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-card > :last-child {
-  border-bottom: 0;
-}
-
-.setting-row > span {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.setting-row strong {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.setting-row small {
-  color: var(--muted);
-  font-size: 11.5px;
-  line-height: 1.55;
-}
-
-.select {
-  min-width: 170px;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-soft);
-  color: var(--ink);
-  font-size: 12.5px;
-}
-
-.select:focus {
-  border-color: var(--accent);
-  outline: none;
-  box-shadow: 0 0 0 2px var(--focus-ring);
-}
-
-.font-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 12px 0;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-soft);
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.font-preview code {
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-}
-
-.font-size-row {
-  border-bottom: 0;
-  padding-bottom: 4px;
-}
-
-.stepper {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 4px;
-}
-
-.stepper button {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-soft);
-  color: var(--ink);
-  font-size: 14px;
-  line-height: 1;
-}
-
-.stepper button:hover:not(:disabled) {
-  background: var(--btn-hover-bg);
-  border-color: var(--btn-hover-border);
-}
-
-.stepper span {
-  min-width: 54px;
-  font-family: var(--mono-font);
-  font-size: 12px;
-  text-align: center;
-}
-
-.font-slider {
+  grid-template-rows: 44px minmax(0, 1fr);
   width: 100%;
-  margin: 0 0 14px;
-  accent-color: var(--accent);
-}
-
-.vim-row {
-  border-top: 1px solid var(--border);
-}
-
-.immersive-row {
-  border-top: 1px solid var(--border);
-}
-
-.switch {
-  position: relative;
-  flex-shrink: 0;
-  width: 38px;
-  height: 21px;
-  margin: 0;
-  border-radius: 999px;
-  background: var(--border);
-  appearance: none;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.switch::before {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
+  height: 100%;
+  overflow: hidden;
   background: var(--panel);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  content: '';
-  transition: transform 0.15s ease;
+  color: var(--ink);
+  font-family:
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui,
+    -apple-system, sans-serif;
 }
 
-.switch:checked {
-  background: var(--accent);
+.settings-body {
+  display: grid;
+  grid-template-columns: 218px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.switch:checked::before {
-  transform: translateX(17px);
-}
-
-.switch:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.settings-footer {
-  margin: 20px 0 0;
-  color: var(--muted);
-  font-size: 11.5px;
-  text-align: center;
+@media (max-width: 620px) {
+  .settings-body {
+    grid-template-columns: 178px minmax(0, 1fr);
+  }
 }
 </style>

@@ -120,7 +120,9 @@ pub fn list_entries(notes_dir: &Path) -> Result<Vec<FileEntry>, String> {
                     is_dir: true,
                 });
                 pending.push((entry.path(), path, depth + 1));
-            } else if file_type.is_file() && is_markdown_name(&name) {
+            } else if file_type.is_file()
+                && (is_markdown_name(&name) || is_image_name(&name))
+            {
                 entries.push(FileEntry {
                     path,
                     name,
@@ -251,8 +253,18 @@ pub fn read_note_asset(
         .parent()
         .ok_or_else(|| "无法确定笔记所在文件夹".to_string())?;
     let target = base.join(&relative);
+    read_image_asset(&root, &target)
+}
+
+pub fn read_image(notes_dir: &Path, relative: &str) -> Result<NoteAsset, String> {
+    let root = canonical_dir(notes_dir)?;
+    let target = resolve_existing_file(notes_dir, relative)?;
+    read_image_asset(&root, &target)
+}
+
+fn read_image_asset(root: &Path, target: &Path) -> Result<NoteAsset, String> {
     let metadata =
-        fs::symlink_metadata(&target).map_err(|error| format!("读取图片失败：{error}"))?;
+        fs::symlink_metadata(target).map_err(|error| format!("读取图片失败：{error}"))?;
     if metadata.file_type().is_symlink() {
         return Err("不允许访问符号链接".to_string());
     }
@@ -264,8 +276,8 @@ pub fn read_note_asset(
     }
 
     let canonical =
-        fs::canonicalize(&target).map_err(|error| format!("读取图片失败：{error}"))?;
-    if !canonical.starts_with(&root) {
+        fs::canonicalize(target).map_err(|error| format!("读取图片失败：{error}"))?;
+    if !canonical.starts_with(root) {
         return Err("图片路径超出笔记文件夹".to_string());
     }
     let mime = image_mime(&canonical).ok_or_else(|| "不支持的图片格式".to_string())?;
@@ -295,7 +307,10 @@ pub fn search_notes(notes_dir: &Path, query: &str) -> Result<SearchResults, Stri
     let mut matches = Vec::new();
     let mut truncated = false;
 
-    'files: for entry in entries.iter().filter(|entry| !entry.is_dir) {
+    'files: for entry in entries
+        .iter()
+        .filter(|entry| !entry.is_dir && is_markdown_name(&entry.name))
+    {
         let path = root.join(&entry.path);
         let metadata = match fs::metadata(&path) {
             Ok(value) => value,
@@ -403,7 +418,7 @@ pub fn rename_entry(notes_dir: &Path, relative: &str, name: &str) -> Result<Stri
     let new_name = if is_dir {
         normalize_folder_name(name)?
     } else {
-        normalize_file_name(name)?
+        normalize_rename_file_name(name, &old_name)?
     };
     if new_name == old_name {
         return Ok(relative.to_string());
@@ -468,9 +483,10 @@ fn resolve_existing_entry(root: &Path, relative: &str) -> Result<(PathBuf, bool)
         return Err("不允许访问符号链接".to_string());
     }
     if !file_type.is_dir()
-        && !(file_type.is_file() && is_markdown_name(name))
+        && !(file_type.is_file()
+            && (is_markdown_name(name) || is_image_name(name)))
     {
-        return Err("条目不是文件夹或 Markdown 文件".to_string());
+        return Err("条目不是文件夹、Markdown 笔记或图片".to_string());
     }
 
     let canonical = fs::canonicalize(&target)
@@ -609,6 +625,39 @@ fn is_markdown_name(name: &str) -> bool {
     lower.ends_with(".md") || lower.ends_with(".markdown")
 }
 
+fn is_image_name(name: &str) -> bool {
+    image_mime(Path::new(name)).is_some()
+}
+
+fn normalize_rename_file_name(value: &str, original: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    validate_component(trimmed)?;
+
+    let original_is_note = is_markdown_name(original);
+    let original_is_image = is_image_name(original);
+    let extension = Path::new(trimmed)
+        .extension()
+        .and_then(|part| part.to_str())
+        .map(|part| part.to_ascii_lowercase());
+
+    let file_name = match extension.as_deref() {
+        None if original_is_note => format!("{trimmed}.md"),
+        None if original_is_image => {
+            let extension = Path::new(original)
+                .extension()
+                .and_then(|part| part.to_str())
+                .unwrap_or("png");
+            format!("{trimmed}.{extension}")
+        }
+        Some("md" | "markdown") if original_is_note => trimmed.to_string(),
+        Some(_) if original_is_image && is_image_name(trimmed) => trimmed.to_string(),
+        Some(_) => return Err("重命名时不能更改文件类型".to_string()),
+        None => return Err("无法确定文件类型".to_string()),
+    };
+    validate_component(&file_name)?;
+    Ok(file_name)
+}
+
 fn decode_asset_source(source: &str) -> Result<String, String> {
     let source = source.trim();
     if source.is_empty() {
@@ -736,6 +785,7 @@ mod tests {
         fs::write(root.join("Root.md"), "# Root").unwrap();
         fs::write(root.join("Journal/Entry.md"), "").unwrap();
         fs::write(root.join("Journal/2026/Plan.markdown"), "").unwrap();
+        fs::write(root.join("cover.PNG"), [0x89, b'P', b'N', b'G']).unwrap();
         fs::write(root.join("ignore.txt"), "").unwrap();
         fs::write(root.join(".hidden.md"), "").unwrap();
 
@@ -746,6 +796,7 @@ mod tests {
         assert!(paths.contains(&"Journal/Entry.md"));
         assert!(paths.contains(&"Journal/2026"));
         assert!(paths.contains(&"Journal/2026/Plan.markdown"));
+        assert!(paths.contains(&"cover.PNG"));
         assert!(!paths.contains(&"ignore.txt"));
         assert!(!paths.contains(&".hidden.md"));
     }
@@ -793,6 +844,23 @@ mod tests {
     }
 
     #[test]
+    fn reads_image_files_from_the_tree() {
+        let (_temp, root) = setup();
+        fs::create_dir(root.join("assets")).unwrap();
+        fs::write(root.join("assets/pixel.png"), [0x89, b'P', b'N', b'G']).unwrap();
+        fs::write(root.join("note.txt"), "text").unwrap();
+
+        let image = read_image(&root, "assets/pixel.png").unwrap();
+        assert_eq!(image.mime, "image/png");
+        assert_eq!(
+            BASE64.decode(image.data).unwrap(),
+            vec![0x89, b'P', b'N', b'G']
+        );
+        assert!(read_image(&root, "note.txt").is_err());
+        assert!(read_image(&root, "../secret.png").is_err());
+    }
+
+    #[test]
     fn rejects_unsafe_or_unsupported_assets() {
         let (temp, root) = setup();
         fs::create_dir(root.join("Assets")).unwrap();
@@ -832,6 +900,7 @@ mod tests {
         )
         .unwrap();
         fs::write(root.join("Other.md"), "no match").unwrap();
+        fs::write(root.join("image.png"), "needle").unwrap();
         fs::write(root.join("ignore.txt"), "needle").unwrap();
 
         let results = search_notes(&root, "needle").unwrap();
@@ -906,6 +975,12 @@ mod tests {
         assert!(!root.join("Inbox").exists());
         assert!(root.join("Archive/Entry.md").exists());
         assert!(read_note(&root, &nested).is_err());
+
+        fs::write(root.join("cover.png"), [0x89, b'P', b'N', b'G']).unwrap();
+        let renamed_image = rename_entry(&root, "cover.png", "hero").unwrap();
+        assert_eq!(renamed_image, "hero.png");
+        assert!(root.join("hero.png").exists());
+        assert!(rename_entry(&root, "hero.png", "hero.md").is_err());
     }
 
     #[test]
