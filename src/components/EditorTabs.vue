@@ -11,11 +11,13 @@ interface TabItem {
 const props = defineProps<{
   tabs: TabItem[];
   activePath: string | null;
+  previewPath: string | null;
 }>();
 
 const emit = defineEmits<{
   select: [path: string];
   close: [path: string];
+  pin: [path: string];
 }>();
 
 const tabElements = ref(new Map<string, HTMLElement>());
@@ -62,12 +64,21 @@ watch(
       :key="tab.path"
       :ref="(element) => setTabRef(tab.path, element)"
       class="tab"
-      :class="{ active: tab.path === activePath, dirty: tab.dirty }"
+      :class="{
+        active: tab.path === activePath,
+        dirty: tab.dirty,
+        preview: tab.path === previewPath,
+      }"
       role="tab"
       :aria-selected="tab.path === activePath"
       :tabindex="tab.path === activePath ? 0 : -1"
-      :title="tab.path"
+      :title="
+        tab.path === previewPath
+          ? `${tab.path}（预览标签，双击固定）`
+          : tab.path
+      "
       @click="emit('select', tab.path)"
+      @dblclick="emit('pin', tab.path)"
       @keydown.enter.prevent="emit('select', tab.path)"
       @keydown.space.prevent="emit('select', tab.path)"
       @auxclick="onAuxClick($event, tab.path)"
@@ -171,6 +182,11 @@ watch(
   font-family: var(--mono-font);
   font-size: 13px;
   text-overflow: ellipsis;
+}
+
+.tab.preview .tab-name {
+  font-style: italic;
+  opacity: 0.88;
 }
 
 .tab.active .tab-name {

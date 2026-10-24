@@ -13,6 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [path: string];
+  pin: [path: string];
   toggleFolder: [path: string];
   chooseFolder: [];
   createFile: [parent: string];
@@ -125,6 +126,12 @@ function toggleFolder(node: TreeNode): void {
   }
 }
 
+function pinNode(node: TreeNode): void {
+  if (!node.isDir) {
+    emit('pin', node.path);
+  }
+}
+
 function onRowContextMenu(event: MouseEvent, node: TreeNode): void {
   openMenu(event, {
     path: node.path,
@@ -234,6 +241,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
         tabindex="0"
         :title="row.node.path"
         @click="activate(row.node)"
+        @dblclick.stop="pinNode(row.node)"
         @keydown.enter.prevent="activate(row.node)"
         @keydown.space.prevent="activate(row.node)"
         @contextmenu.stop.prevent="onRowContextMenu($event, row.node)"

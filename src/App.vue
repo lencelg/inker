@@ -48,6 +48,8 @@ const entries = ref<FileEntry[]>([]);
 const notesDir = ref<string | null>(null);
 const tabs = ref<NoteTab[]>([]);
 const activePath = ref<string | null>(null);
+const previewPath = ref<string | null>(null);
+const previewOpenTasks = new Map<string, Promise<void>>();
 const switching = ref(false);
 const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
@@ -380,6 +382,9 @@ async function openSearchResult(match: SearchMatch): Promise<void> {
   } else if (activePath.value !== match.path) {
     activateTab(match.path);
   }
+  if (previewPath.value === match.path) {
+    previewPath.value = null;
+  }
 
   if (viewMode.value === 'wysiwyg') {
     await setViewMode('source');
@@ -414,6 +419,12 @@ function pruneTabs(): void {
   const activeRemoved =
     activeIndex >= 0 && stale.some((tab) => tab.path === activePath.value);
   tabs.value = tabs.value.filter((tab) => files.has(tab.path));
+  if (
+    previewPath.value !== null &&
+    !tabs.value.some((tab) => tab.path === previewPath.value)
+  ) {
+    previewPath.value = null;
+  }
   if (!activeRemoved) return;
 
   const fallback = tabs.value[Math.max(0, Math.min(activeIndex, tabs.value.length - 1))];
@@ -485,6 +496,12 @@ function handleContentChange(value: string): void {
   const tab = activeTab.value;
   if (!tab) return;
   tab.content = value;
+  if (
+    previewPath.value === tab.path &&
+    tab.content !== tab.savedContent
+  ) {
+    previewPath.value = null;
+  }
 }
 
 function handleEditorScroll(position: { line: number; ratio: number }): void {
@@ -593,6 +610,44 @@ async function saveAllDirtyTabs(): Promise<boolean> {
   return true;
 }
 
+async function openPreviewNote(path: string): Promise<void> {
+  try {
+    const detail = await api.readNote(path);
+    const opened = tabs.value.find((tab) => tab.path === detail.path);
+    if (opened) {
+      activateTab(detail.path);
+      return;
+    }
+
+    const previewIndex = previewPath.value
+      ? tabs.value.findIndex((tab) => tab.path === previewPath.value)
+      : -1;
+    const previewTab =
+      previewIndex >= 0 ? tabs.value[previewIndex] : null;
+    const replaceable =
+      previewTab !== null &&
+      previewTab.content === previewTab.savedContent;
+    if (previewTab && !replaceable) {
+      previewPath.value = null;
+    }
+
+    const next: NoteTab = {
+      path: detail.path,
+      content: detail.content,
+      savedContent: detail.content,
+    };
+    if (replaceable && previewIndex >= 0) {
+      tabs.value.splice(previewIndex, 1, next);
+    } else {
+      tabs.value.push(next);
+    }
+    previewPath.value = detail.path;
+    activateTab(detail.path);
+  } catch (err) {
+    setError(err);
+  }
+}
+
 async function selectNote(path: string): Promise<void> {
   if (busy.value || path === activePath.value) return;
 
@@ -602,13 +657,46 @@ async function selectNote(path: string): Promise<void> {
     return;
   }
 
+  const pending = previewOpenTasks.get(path);
+  if (pending) {
+    await pending;
+    return;
+  }
+
+  switching.value = true;
+  clearFeedback();
+  const task = openPreviewNote(path).finally(() => {
+    previewOpenTasks.delete(path);
+    switching.value = false;
+  });
+  previewOpenTasks.set(path, task);
+  await task;
+}
+
+async function pinNote(path: string): Promise<void> {
+  const pending = previewOpenTasks.get(path);
+  if (pending) await pending;
+  if (busy.value) return;
+
+  const existing = tabs.value.find((tab) => tab.path === path);
+  if (existing) {
+    if (previewPath.value === path) previewPath.value = null;
+    activateTab(path);
+    return;
+  }
+
   switching.value = true;
   clearFeedback();
   try {
     await openNote(path);
+    if (previewPath.value === path) previewPath.value = null;
   } finally {
     switching.value = false;
   }
+}
+
+function pinPreview(path: string): void {
+  if (previewPath.value === path) previewPath.value = null;
 }
 
 async function chooseFolder(): Promise<void> {
@@ -643,6 +731,7 @@ async function chooseFolder(): Promise<void> {
 function resetTabs(): void {
   tabs.value = [];
   activePath.value = null;
+  previewPath.value = null;
   editorSession.value += 1;
   editorScrollRatio.value = 0;
   previewFocusLine.value = 1;
@@ -724,6 +813,13 @@ function requestRename(entry: FileEntry): void {
         for (const tab of tabs.value) {
           tab.path = replacePrefix(tab.path, entry.path, newPath);
         }
+        if (previewPath.value) {
+          previewPath.value = replacePrefix(
+            previewPath.value,
+            entry.path,
+            newPath,
+          );
+        }
         if (activePath.value) {
           activePath.value = replacePrefix(activePath.value, entry.path, newPath);
         }
@@ -801,6 +897,7 @@ async function requestCloseTab(path: string): Promise<void> {
   if (index === -1) return;
   const wasActive = activePath.value === path;
   tabs.value.splice(index, 1);
+  if (previewPath.value === path) previewPath.value = null;
 
   if (!wasActive) return;
   const next = tabs.value[Math.min(index, tabs.value.length - 1)];
@@ -895,6 +992,7 @@ function errorMessage(err: unknown): string {
       :expanded-paths="expandedPaths"
       :busy="busy || anySaving"
       @select="selectNote"
+      @pin="pinNote"
       @toggle-folder="toggleFolder"
       @choose-folder="chooseFolder"
       @create-file="requestCreateFile"
@@ -932,7 +1030,9 @@ function errorMessage(err: unknown): string {
           <EditorTabs
             :tabs="tabItems"
             :active-path="activePath"
+            :preview-path="previewPath"
             @select="activateTab"
+            @pin="pinPreview"
             @close="requestCloseTab"
           />
         </header>

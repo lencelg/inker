@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DOMPurify from 'dompurify';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   Editor,
@@ -11,6 +12,7 @@ import {
 import {
   commonmark,
   codeBlockSchema,
+  htmlSchema,
   imageSchema,
 } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
@@ -129,8 +131,59 @@ const imageView = $view(imageSchema.node, () => (node) => {
   };
 });
 
-const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {
-  const wrapper = document.createElement('div');
+const htmlView = $view(htmlSchema.node, () => (node) => {
+  const container = document.createElement('span');
+  container.className = 'wysiwyg-html';
+
+  const render = (next: typeof node): void => {
+    const value = String(next.attrs.value ?? '');
+    container.classList.toggle(
+      'is-block',
+      /<(table|div|section|p|ul|ol|pre|h[1-6]|blockquote|figure)\b/i.test(
+        value,
+      ),
+    );
+    container.innerHTML = DOMPurify.sanitize(value, {
+      ADD_TAGS: [
+        'table',
+        'thead',
+        'tbody',
+        'tfoot',
+        'tr',
+        'th',
+        'td',
+        'caption',
+        'colgroup',
+        'col',
+      ],
+      ADD_ATTR: [
+        'style',
+        'colspan',
+        'rowspan',
+        'align',
+        'valign',
+        'width',
+        'height',
+        'cellpadding',
+        'cellspacing',
+        'border',
+        'bgcolor',
+      ],
+    });
+  };
+
+  render(node);
+  return {
+    dom: container,
+    update: (next) => {
+      render(next);
+      return true;
+    },
+    ignoreMutation: () => true,
+  };
+});
+
+const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const wrapper = document.createElement('div');
   wrapper.className = 'code-block-node';
   const toolbar = document.createElement('div');
   toolbar.className = 'mermaid-toolbar';
@@ -469,6 +522,7 @@ async function createEditor(): Promise<void> {
     .use(indent)
     .use(trailing)
     .use(imageView)
+    .use(htmlView)
     .use(mermaidView)
     .use(syncPlugin)
     .use(immersiveDecorations)
@@ -835,6 +889,34 @@ onBeforeUnmount(() => {
 
 .wysiwyg-host :deep(.pm-multi-selection) {
   background: var(--editor-selection);
+}
+
+.wysiwyg-host :deep(.wysiwyg-html) {
+  display: inline;
+  vertical-align: baseline;
+}
+
+.wysiwyg-host :deep(.wysiwyg-html.is-block) {
+  display: block;
+  width: 100%;
+  margin: 0.7em 0;
+}
+
+.wysiwyg-host :deep(.wysiwyg-html table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.wysiwyg-host :deep(.wysiwyg-html th),
+.wysiwyg-host :deep(.wysiwyg-html td) {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.wysiwyg-host :deep(.wysiwyg-html img) {
+  max-width: 100%;
 }
 
 .wysiwyg-host :deep(.ProseMirror-gapcursor::after) {
