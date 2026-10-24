@@ -1,10 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for the notes and settings windows",
+  "description": "Default permissions for the notes window",
   "windows": [
-    "main",
-    "settings"
+    "main"
   ],
   "permissions": [
     "core:default",

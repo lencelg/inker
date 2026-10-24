@@ -18,8 +18,6 @@ export const FONT_FAMILY_STORAGE_KEY = 'markleaf-font-family';
 export const VIM_STORAGE_KEY = 'markleaf-vim';
 export const IMMERSIVE_STORAGE_KEY = 'markleaf-immersive';
 export const CODE_HIGHLIGHT_STORAGE_KEY = 'markleaf-code-highlight';
-export const PREFERENCES_EVENT = 'markleaf-preferences';
-export const PREFERENCES_REQUEST_EVENT = 'markleaf-preferences-request';
 
 export interface Preferences {
   theme: ThemeId;

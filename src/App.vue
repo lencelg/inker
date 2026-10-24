@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from './api';
 import ActivityRail from './components/ActivityRail.vue';
@@ -14,6 +14,7 @@ import PreviewPane from './components/PreviewPane.vue';
 import PrintPreview from './components/PrintPreview.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import SearchPanel from './components/SearchPanel.vue';
+import SettingsOverlay from './components/SettingsOverlay.vue';
 import StatusBar from './components/StatusBar.vue';
 import {
   prepareExport,
@@ -29,8 +30,6 @@ import {
   replacePrefix,
 } from './lib/paths';
 import {
-  PREFERENCES_EVENT,
-  PREFERENCES_REQUEST_EVENT,
   applyPreferences,
   normalizePreferences,
   readPreferences,
@@ -63,6 +62,7 @@ const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
 const exporting = ref(false);
 const printPreview = ref<{ title: string; html: string } | null>(null);
+const settingsOpen = ref(false);
 const isMaximized = ref(false);
 const appWindow = getCurrentWindow();
 let unlistenWindow: UnlistenFn | null = null;
@@ -161,8 +161,6 @@ const confirmation = ref<PendingConfirmation | null>(null);
 const prompt = ref<PromptState | null>(null);
 const saveTasks = new Map<string, Promise<boolean>>();
 let wheelAccumulator = 0;
-let unlistenPreferences: UnlistenFn | null = null;
-let unlistenPreferencesRequest: UnlistenFn | null = null;
 
 function readSplitRatio(): number {
   try {
@@ -282,41 +280,14 @@ onMounted(() => {
       unlistenWindow = unlisten;
     })
     .catch(() => undefined);
-  void setupPreferenceSync();
   void bootstrap();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown, true);
   window.removeEventListener('wheel', handleGlobalWheel, true);
-  unlistenPreferences?.();
-  unlistenPreferencesRequest?.();
   unlistenWindow?.();
 });
-
-async function setupPreferenceSync(): Promise<void> {
-  try {
-    unlistenPreferences = await listen<Preferences>(
-      PREFERENCES_EVENT,
-      (event) => {
-        const next = normalizePreferences(event.payload);
-        preferences.value = next;
-        savePreferences(next);
-        applyPreferences(next);
-      },
-    );
-    unlistenPreferencesRequest = await listen(
-      PREFERENCES_REQUEST_EVENT,
-      () => {
-        void emit(PREFERENCES_EVENT, preferences.value).catch(() => {
-          // Live sync is best-effort; local storage still applies.
-        });
-      },
-    );
-  } catch {
-    // Preferences remain usable without cross-window events.
-  }
-}
 
 async function bootstrap(): Promise<void> {
   try {
@@ -336,9 +307,6 @@ function updatePreferences(patch: Partial<Preferences>): void {
   preferences.value = next;
   savePreferences(next);
   applyPreferences(next);
-  void emit(PREFERENCES_EVENT, next).catch(() => {
-    // Persistence has already happened locally.
-  });
 }
 
 function setFontSize(value: number): void {
@@ -417,12 +385,8 @@ async function setViewMode(mode: ViewMode): Promise<void> {
   }
 }
 
-async function openSettings(): Promise<void> {
-  try {
-    await api.openSettingsWindow();
-  } catch (err) {
-    setError(err);
-  }
+function openSettings(): void {
+  settingsOpen.value = true;
 }
 
 async function minimizeWindow(): Promise<void> {
@@ -1314,6 +1278,13 @@ function errorMessage(err: unknown): string {
         <p>在左侧文件树中打开或新建一个 Markdown 文件。</p>
       </div>
     </main>
+
+    <SettingsOverlay
+      v-if="settingsOpen"
+      :preferences="preferences"
+      @update="updatePreferences"
+      @close="settingsOpen = false"
+    />
 
     <StatusBar
       :line="activeTab && viewMode !== 'wysiwyg' ? cursorLine : null"

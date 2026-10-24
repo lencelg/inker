@@ -20,8 +20,7 @@ pub fn run() {
             commands::create_file,
             commands::create_folder,
             commands::rename_entry,
-            commands::delete_entry,
-            commands::open_settings_window
+            commands::delete_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

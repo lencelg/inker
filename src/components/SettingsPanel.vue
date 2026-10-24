@@ -1,60 +1,28 @@
 <script setup lang="ts">
-import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import LeafIcon from './components/LeafIcon.vue';
-import {
-  FONTS,
-  fontById,
-  type FontId,
-} from './lib/fonts';
+import { computed } from 'vue';
+import LeafIcon from './LeafIcon.vue';
+import { FONTS, fontById, type FontId } from '../lib/fonts';
 import {
   MAX_FONT_SIZE,
   MIN_FONT_SIZE,
-  PREFERENCES_EVENT,
-  PREFERENCES_REQUEST_EVENT,
-  applyPreferences,
   clampFontSize,
-  normalizePreferences,
-  readPreferences,
-  savePreferences,
   type Preferences,
-} from './lib/preferences';
-import { THEMES, type ThemeId } from './lib/themes';
+} from '../lib/preferences';
+import { THEMES, type ThemeId } from '../lib/themes';
 
-const preferences = ref<Preferences>(readPreferences());
-const currentFont = computed(() => fontById(preferences.value.fontFamily));
-let unlisten: UnlistenFn | null = null;
+const props = defineProps<{
+  preferences: Preferences;
+}>();
 
-applyPreferences(preferences.value);
+const emit = defineEmits<{
+  update: [patch: Partial<Preferences>];
+  close: [];
+}>();
 
-onMounted(async () => {
-  try {
-    unlisten = await listen<Preferences>(PREFERENCES_EVENT, (event) => {
-      applyIncoming(normalizePreferences(event.payload));
-    });
-    await emit(PREFERENCES_REQUEST_EVENT);
-  } catch {
-    // The window still works with locally stored preferences.
-  }
-});
-
-onBeforeUnmount(() => {
-  unlisten?.();
-});
-
-function applyIncoming(next: Preferences): void {
-  preferences.value = next;
-  savePreferences(next);
-  applyPreferences(next);
-}
+const currentFont = computed(() => fontById(props.preferences.fontFamily));
 
 function update(patch: Partial<Preferences>): void {
-  const next = normalizePreferences({ ...preferences.value, ...patch });
-  applyIncoming(next);
-  void emit(PREFERENCES_EVENT, next).catch(() => {
-    // Persistence has already happened locally.
-  });
+  emit('update', patch);
 }
 
 function onThemeChange(event: Event): void {
@@ -70,7 +38,7 @@ function onFontSizeChange(event: Event): void {
 }
 
 function changeFontSize(delta: number): void {
-  update({ fontSize: preferences.value.fontSize + delta });
+  update({ fontSize: props.preferences.fontSize + delta });
 }
 
 function onVimChange(event: Event): void {
@@ -86,7 +54,7 @@ function onCodeHighlightChange(event: Event): void {
 }
 
 function closeWindow(): void {
-  void getCurrentWindow().close();
+  emit('close');
 }
 </script>
 
@@ -242,12 +210,10 @@ function closeWindow(): void {
 
 <style scoped>
 .settings-page {
-  height: 100vh;
+  height: 100%;
   overflow: auto;
-  padding: 30px 34px 36px;
-  background:
-    radial-gradient(circle at top left, var(--body-glow), transparent 30rem),
-    var(--bg);
+  padding: 24px 28px 28px;
+  background: var(--panel);
   color: var(--ink);
 }
 
