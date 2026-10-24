@@ -1,19 +1,26 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref } from 'vue';
+import { VIEW_MODES, type ViewMode } from '../lib/viewModes';
 
 type ExportFormat = 'pdf' | 'html' | 'docx';
 
 const props = defineProps<{
-  disabled?: boolean;
-  busy?: boolean;
+  viewMode: ViewMode;
+  vimEnabled: boolean;
+  exporting: boolean;
 }>();
 
-const emit = defineEmits<{ export: [format: ExportFormat] }>();
+const emit = defineEmits<{
+  modeChange: [mode: ViewMode];
+  export: [format: ExportFormat];
+  toggleVim: [];
+  openSettings: [];
+}>();
 
-const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
-  { id: 'pdf', label: 'PDF', hint: '打开打印视图，可另存为 PDF' },
-  { id: 'html', label: 'HTML', hint: '自包含的网页文件' },
-  { id: 'docx', label: 'Word', hint: 'Microsoft Word 文档' },
+const EXPORTS: { id: ExportFormat; label: string }[] = [
+  { id: 'pdf', label: 'PDF（打印）' },
+  { id: 'html', label: 'HTML' },
+  { id: 'docx', label: 'Word (.docx)' },
 ];
 
 const menuOpen = ref(false);
@@ -25,7 +32,6 @@ let detachMenu: (() => void) | null = null;
 onBeforeUnmount(() => closeMenu());
 
 function toggleMenu(): void {
-  if (props.disabled) return;
   if (menuOpen.value) closeMenu(true);
   else void openMenu();
 }
@@ -33,29 +39,19 @@ function toggleMenu(): void {
 async function openMenu(): Promise<void> {
   const trigger = triggerElement.value;
   if (!trigger) return;
-
   const rect = trigger.getBoundingClientRect();
   menuStyle.value = {
-    left: `${Math.round(
-      Math.max(8, Math.min(rect.right - 200, window.innerWidth - 208)),
-    )}px`,
+    right: `${Math.round(window.innerWidth - rect.right)}px`,
     top: `${Math.round(rect.bottom + 4)}px`,
     visibility: 'hidden',
   };
   menuOpen.value = true;
   await nextTick();
-
-  const width = menuElement.value?.offsetWidth ?? 200;
-  const left = Math.min(
-    Math.max(8, rect.right - width),
-    Math.max(8, window.innerWidth - width - 8),
-  );
   menuStyle.value = {
-    left: `${Math.round(left)}px`,
+    right: `${Math.round(window.innerWidth - rect.right)}px`,
     top: `${Math.round(rect.bottom + 4)}px`,
     visibility: 'visible',
   };
-
   attachDismissListeners();
   menuItems()[0]?.focus();
 }
@@ -63,7 +59,9 @@ async function openMenu(): Promise<void> {
 function menuItems(): HTMLButtonElement[] {
   if (!menuElement.value) return [];
   return Array.from(
-    menuElement.value.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+    menuElement.value.querySelectorAll<HTMLButtonElement>(
+      '[role="menuitem"], [role="menuitemradio"]',
+    ),
   );
 }
 
@@ -110,9 +108,25 @@ function closeMenu(restoreFocus = false): void {
   if (restoreFocus) triggerElement.value?.focus({ preventScroll: true });
 }
 
-function choose(format: ExportFormat): void {
+function chooseMode(mode: ViewMode): void {
+  closeMenu(true);
+  emit('modeChange', mode);
+}
+
+function chooseExport(format: ExportFormat): void {
+  if (props.exporting) return;
   closeMenu(true);
   emit('export', format);
+}
+
+function toggleVim(): void {
+  closeMenu(true);
+  emit('toggleVim');
+}
+
+function openSettings(): void {
+  closeMenu(true);
+  emit('openSettings');
 }
 
 function onMenuKeyDown(event: KeyboardEvent): void {
@@ -141,23 +155,21 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   <button
     ref="triggerElement"
     type="button"
-    class="export-trigger"
-    :disabled="disabled"
+    class="app-menu-trigger"
     :class="{ open: menuOpen }"
     aria-haspopup="menu"
     :aria-expanded="menuOpen"
-    aria-controls="export-menu"
-    title="导出当前笔记"
+    aria-controls="app-menu"
+    title="更多"
     @click="toggleMenu"
     @keydown.down.prevent="openMenu"
   >
-    <span>{{ busy ? '导出中…' : '导出' }}</span>
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
-        d="m8 10 4 4 4-4"
+        d="m7 9.5 5 5 5-5"
         fill="none"
         stroke="currentColor"
-        stroke-width="1.8"
+        stroke-width="1.7"
         stroke-linecap="round"
         stroke-linejoin="round"
       />
@@ -167,79 +179,125 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   <Teleport to="body">
     <div
       v-if="menuOpen"
-      id="export-menu"
+      id="app-menu"
       ref="menuElement"
-      class="export-menu"
+      class="app-menu"
       role="menu"
-      aria-label="导出格式"
+      aria-label="应用菜单"
       :style="menuStyle"
       @keydown="onMenuKeyDown"
     >
-      <p class="export-menu-label">导出当前笔记</p>
+      <p class="app-menu-label">渲染模式</p>
       <button
-        v-for="format in FORMATS"
+        v-for="mode in VIEW_MODES"
+        :key="mode.id"
+        type="button"
+        class="app-menu-item"
+        role="menuitemradio"
+        :aria-checked="mode.id === viewMode"
+        @click="chooseMode(mode.id)"
+      >
+        <span class="app-menu-check" aria-hidden="true">
+          <svg v-if="mode.id === viewMode" viewBox="0 0 24 24">
+            <path
+              d="m5 12.5 4.2 4.2L19 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <span>{{ mode.label }}</span>
+      </button>
+
+      <div class="app-menu-separator"></div>
+      <p class="app-menu-label">导出</p>
+      <button
+        v-for="format in EXPORTS"
         :key="format.id"
         type="button"
-        class="export-item"
+        class="app-menu-item"
         role="menuitem"
-        :disabled="busy"
-        @click="choose(format.id)"
+        :disabled="exporting"
+        @click="chooseExport(format.id)"
       >
-        <span class="export-item-main">{{ format.label }}</span>
-        <span class="export-item-hint">{{ format.hint }}</span>
+        <span class="app-menu-check" aria-hidden="true"></span>
+        <span>{{ format.label }}</span>
+      </button>
+
+      <div class="app-menu-separator"></div>
+      <button
+        type="button"
+        class="app-menu-item"
+        role="menuitemcheckbox"
+        :aria-checked="vimEnabled"
+        @click="toggleVim"
+      >
+        <span class="app-menu-check" aria-hidden="true">
+          <svg v-if="vimEnabled" viewBox="0 0 24 24">
+            <path
+              d="m5 12.5 4.2 4.2L19 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <span>Vim 模式</span>
+      </button>
+      <button
+        type="button"
+        class="app-menu-item"
+        role="menuitem"
+        @click="openSettings"
+      >
+        <span class="app-menu-check" aria-hidden="true"></span>
+        <span>设置</span>
       </button>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.export-trigger {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
+.app-menu-trigger {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 38px;
+  height: 100%;
+  border: 0;
+  background: transparent;
   color: var(--muted);
-  font: inherit;
-  font-size: 11.5px;
   cursor: pointer;
 }
 
-.export-trigger:hover:not(:disabled),
-.export-trigger.open {
-  border-color: var(--btn-hover-border);
-  background: var(--btn-hover-bg);
+.app-menu-trigger:hover,
+.app-menu-trigger.open {
+  background: var(--hover);
   color: var(--ink);
 }
 
-.export-trigger:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.export-trigger:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.export-trigger svg {
-  width: 12px;
-  height: 12px;
+.app-menu-trigger svg {
+  width: 14px;
+  height: 14px;
   transition: transform 120ms ease;
 }
 
-.export-trigger.open svg {
+.app-menu-trigger.open svg {
   transform: rotate(180deg);
 }
 
-.export-menu {
+.app-menu {
   position: fixed;
   z-index: 120;
-  width: 220px;
+  width: 224px;
+  max-height: calc(100vh - 60px);
   padding: 5px;
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -247,46 +305,59 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   color: var(--ink);
 }
 
-.export-menu-label {
-  margin: 3px 7px 5px;
+.app-menu-label {
+  margin: 4px 8px 5px;
   color: var(--muted);
   font-size: 10.5px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
-.export-item {
+.app-menu-item {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 5px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 6px 8px 6px 6px;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 12.5px;
   text-align: left;
   cursor: pointer;
 }
 
-.export-item:hover:not(:disabled),
-.export-item:focus-visible {
+.app-menu-item:hover:not(:disabled),
+.app-menu-item:focus-visible {
   background: var(--accent-soft);
   outline: none;
 }
 
-.export-item:disabled {
+.app-menu-item:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-.export-item-main {
-  font-size: 12.5px;
+.app-menu-check {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
 }
 
-.export-item-hint {
-  color: var(--muted);
-  font-size: 10.5px;
+.app-menu-check svg {
+  width: 14px;
+  height: 14px;
+}
+
+.app-menu-separator {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border);
 }
 </style>

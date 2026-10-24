@@ -172,6 +172,20 @@ function onMenuKeyDown(event: KeyboardEvent): void {
 <template>
   <footer class="status-bar">
     <div class="status-left">
+      <span v-if="vimEnabled" class="status-vim">Vim</span>
+      <button
+        type="button"
+        class="status-focus"
+        :class="{ active: immersive }"
+        :aria-pressed="immersive"
+        title="沉浸式写作（Ctrl+Shift+M）"
+        @click="emit('immersiveToggle')"
+      >
+        专注
+      </button>
+    </div>
+
+    <div class="status-right">
       <button
         ref="triggerElement"
         type="button"
@@ -197,21 +211,6 @@ function onMenuKeyDown(event: KeyboardEvent): void {
           />
         </svg>
       </button>
-
-      <span v-if="vimEnabled" class="status-vim">Vim</span>
-      <button
-        type="button"
-        class="status-focus"
-        :class="{ active: immersive }"
-        :aria-pressed="immersive"
-        title="沉浸式写作（Ctrl+Shift+M）"
-        @click="emit('immersiveToggle')"
-      >
-        专注
-      </button>
-    </div>
-
-    <div class="status-right">
       <span class="status-item">
         行 {{ line ?? '-' }}, 列 {{ column ?? '-' }}
       </span>
@@ -271,6 +270,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
 .status-bar {
   display: flex;
   grid-column: 1 / -1;
+  grid-row: 3;
   align-items: center;
   justify-content: space-between;
   height: 26px;

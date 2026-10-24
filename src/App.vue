@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from './api';
-import ActivityBar from './components/ActivityBar.vue';
+import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
-import ExportMenu from './components/ExportMenu.vue';
 import LeafIcon from './components/LeafIcon.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
@@ -62,6 +62,9 @@ const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
 const exporting = ref(false);
 const printPreview = ref<{ title: string; html: string } | null>(null);
+const isMaximized = ref(false);
+const appWindow = getCurrentWindow();
+let unlistenWindow: UnlistenFn | null = null;
 const error = ref('');
 const preferences = ref<Preferences>(readPreferences());
 const activeView = ref<'explorer' | 'search'>('explorer');
@@ -186,13 +189,13 @@ function persistSplitRatio(): void {
   }
 }
 
-function selectActivity(view: 'explorer' | 'search'): void {
-  if (activeView.value === view) {
-    sidebarVisible.value = !sidebarVisible.value;
-  } else {
-    activeView.value = view;
-    sidebarVisible.value = true;
-  }
+function toggleSidebar(): void {
+  sidebarVisible.value = !sidebarVisible.value;
+}
+
+function showActivity(view: 'explorer' | 'search'): void {
+  activeView.value = view;
+  sidebarVisible.value = true;
 }
 
 function startResize(event: PointerEvent): void {
@@ -246,6 +249,25 @@ onMounted(() => {
     capture: true,
     passive: false,
   });
+  void appWindow
+    .isMaximized()
+    .then((maximized) => {
+      isMaximized.value = maximized;
+    })
+    .catch(() => undefined);
+  void appWindow
+    .onResized(() => {
+      void appWindow
+        .isMaximized()
+        .then((maximized) => {
+          isMaximized.value = maximized;
+        })
+        .catch(() => undefined);
+    })
+    .then((unlisten) => {
+      unlistenWindow = unlisten;
+    })
+    .catch(() => undefined);
   void setupPreferenceSync();
   void bootstrap();
 });
@@ -255,6 +277,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('wheel', handleGlobalWheel, true);
   unlistenPreferences?.();
   unlistenPreferencesRequest?.();
+  unlistenWindow?.();
 });
 
 async function setupPreferenceSync(): Promise<void> {
@@ -310,6 +333,10 @@ function setFontSize(value: number): void {
 
 function toggleImmersive(): void {
   updatePreferences({ immersive: !preferences.value.immersive });
+}
+
+function toggleVim(): void {
+  updatePreferences({ vimEnabled: !preferences.value.vimEnabled });
 }
 
 function handleGlobalWheel(event: WheelEvent): void {
@@ -382,6 +409,50 @@ async function openSettings(): Promise<void> {
   } catch (err) {
     setError(err);
   }
+}
+
+async function minimizeWindow(): Promise<void> {
+  try {
+    await appWindow.minimize();
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function toggleMaximizeWindow(): Promise<void> {
+  try {
+    await appWindow.toggleMaximize();
+    isMaximized.value = await appWindow.isMaximized();
+  } catch (err) {
+    setError(err);
+  }
+}
+
+async function closeWindow(): Promise<void> {
+  try {
+    await appWindow.close();
+  } catch (err) {
+    setError(err);
+  }
+}
+
+function isTitlebarInteractive(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest(
+      'button, .tab, input, select, textarea, a, [role="menu"], [data-no-drag]',
+    ) !== null
+  );
+}
+
+function onTitlebarPointerDown(event: PointerEvent): void {
+  if (event.button !== 0 || isTitlebarInteractive(event.target)) return;
+  void appWindow.startDragging().catch(() => undefined);
+}
+
+function onTitlebarDoubleClick(event: MouseEvent): void {
+  if (isTitlebarInteractive(event.target)) return;
+  void toggleMaximizeWindow();
 }
 
 async function handleExport(
@@ -1017,12 +1088,118 @@ function errorMessage(err: unknown): string {
     class="app-shell"
     :class="{ 'sidebar-hidden': !sidebarVisible }"
   >
-    <ActivityBar
-      :active-view="activeView"
-      :sidebar-visible="sidebarVisible"
-      @change-view="selectActivity"
-      @open-settings="openSettings"
-    />
+    <header
+      class="titlebar"
+      @pointerdown="onTitlebarPointerDown"
+      @dblclick="onTitlebarDoubleClick"
+    >
+      <div class="titlebar-nav">
+        <button
+          type="button"
+          class="titlebar-button"
+          :class="{ active: sidebarVisible }"
+          title="切换侧边栏"
+          aria-label="切换侧边栏"
+          @click="toggleSidebar"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M9.5 4.5v15" fill="none" stroke="currentColor" stroke-width="1.6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="titlebar-button"
+          :class="{ active: sidebarVisible && activeView === 'explorer' }"
+          title="文件"
+          aria-label="文件"
+          @click="showActivity('explorer')"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l1.5 2h9.5A1.5 1.5 0 0 1 21 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5v-9Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="titlebar-button"
+          :class="{ active: sidebarVisible && activeView === 'search' }"
+          title="搜索"
+          aria-label="搜索"
+          @click="showActivity('search')"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="m15 15 5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+
+      <EditorTabs
+        :tabs="tabItems"
+        :active-path="activePath"
+        :preview-path="previewPath"
+        @select="activateTab"
+        @pin="pinPreview"
+        @close="requestCloseTab"
+      />
+
+      <div class="titlebar-actions">
+        <AppMenu
+          :view-mode="viewMode"
+          :vim-enabled="vimEnabled"
+          :exporting="exporting"
+          @mode-change="setViewMode"
+          @export="handleExport"
+          @toggle-vim="toggleVim"
+          @open-settings="openSettings"
+        />
+        <div class="window-controls">
+          <button
+            type="button"
+            class="window-control"
+            title="最小化"
+            aria-label="最小化"
+            @click="minimizeWindow"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="window-control"
+            :title="isMaximized ? '还原' : '最大化'"
+            :aria-label="isMaximized ? '还原' : '最大化'"
+            @click="toggleMaximizeWindow"
+          >
+            <svg v-if="isMaximized" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="7" y="7" width="10" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.4" />
+              <path d="M10 7V4.5h9.5V14H17" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.5" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="window-control close"
+            title="关闭"
+            aria-label="关闭"
+            @click="closeWindow"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
 
     <NoteSidebar
       v-if="sidebarVisible && activeView === 'explorer'"
@@ -1066,24 +1243,6 @@ function errorMessage(err: unknown): string {
       </div>
 
       <template v-if="activeTab">
-        <header class="workspace-header">
-          <EditorTabs
-            :tabs="tabItems"
-            :active-path="activePath"
-            :preview-path="previewPath"
-            @select="activateTab"
-            @pin="pinPreview"
-            @close="requestCloseTab"
-          />
-          <div class="workspace-actions">
-            <ExportMenu
-              :disabled="exporting || !activeTab"
-              :busy="exporting"
-              @export="handleExport"
-            />
-          </div>
-        </header>
-
         <WysiwygPane
           v-if="viewMode === 'wysiwyg'"
           :key="editorSession"
