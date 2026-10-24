@@ -1107,7 +1107,7 @@ function errorMessage(err: unknown): string {
       @pointerdown="onTitlebarPointerDown"
       @dblclick="onTitlebarDoubleClick"
     >
-      <div class="titlebar-nav">
+      <div class="titlebar-left">
         <button
           type="button"
           class="titlebar-button"
@@ -1121,18 +1121,22 @@ function errorMessage(err: unknown): string {
             <path d="M9.5 4.5v15" fill="none" stroke="currentColor" stroke-width="1.6" />
           </svg>
         </button>
+        <span v-if="sidebarVisible" class="titlebar-title">
+          {{ activeView === 'search' ? '搜索' : '资源管理器' }}
+        </span>
       </div>
 
-      <EditorTabs
-        :tabs="tabItems"
-        :active-path="activePath"
-        :preview-path="previewPath"
-        @select="activateTab"
-        @pin="pinPreview"
-        @close="requestCloseTab"
-      />
+      <div class="titlebar-main">
+        <EditorTabs
+          :tabs="tabItems"
+          :active-path="activePath"
+          :preview-path="previewPath"
+          @select="activateTab"
+          @pin="pinPreview"
+          @close="requestCloseTab"
+        />
 
-      <div class="titlebar-actions">
+        <div class="titlebar-actions">
         <AppMenu
           :view-mode="viewMode"
           :vim-enabled="vimEnabled"
@@ -1180,6 +1184,7 @@ function errorMessage(err: unknown): string {
               <path d="m7 7 10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
             </svg>
           </button>
+          </div>
         </div>
       </div>
     </header>
