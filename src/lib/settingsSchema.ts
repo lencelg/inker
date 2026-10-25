@@ -187,14 +187,14 @@ const SETTING_TEMPLATES: readonly SettingTemplate[] = [
   {
     id: 'editor.sourceHighlight',
     category: 'editor',
-    title: 'Editor: Source Highlight',
-    description: '控制源码模式中的 Markdown 与代码语法高亮。',
+    title: 'Editor: Code Block Highlight',
+    description: '控制源码模式中围栏代码块的语法高亮。',
     controlType: 'checkbox',
     defaultValue: true,
-    keywords: ['源码', '语法', '高亮', '代码', 'source', 'syntax', 'highlight'],
+    keywords: ['源码', '代码块', '语法', '高亮', 'source', 'code', 'syntax'],
     preference: 'sourceHighlight',
     hint: {
-      text: '关闭后源码仍可正常编辑，但会以单一文本颜色显示。',
+      text: '关闭后仅代码块显示为单色，Markdown 语法高亮不受影响。',
     },
   },
   {

@@ -5,6 +5,7 @@ import {
   HighlightStyle,
   indentUnit,
   syntaxHighlighting,
+  syntaxTree,
 } from '@codemirror/language';
 import {
   Compartment,
@@ -178,8 +179,8 @@ const syntaxTheme = HighlightStyle.define([
   { tag: tags.invalid, color: 'var(--syntax-invalid)' },
 ]);
 
-const plainTextHighlightTheme = EditorView.theme({
-  '.cm-content .cm-line span': {
+const plainCodeBlockTheme = EditorView.theme({
+  '.cm-codeblock-plain span': {
     color: 'inherit !important',
     fontStyle: 'inherit !important',
     fontWeight: 'inherit !important',
@@ -188,10 +189,72 @@ const plainTextHighlightTheme = EditorView.theme({
   },
 });
 
+function buildPlainCodeBlockDecorations(
+  view: EditorView,
+): DecorationSet {
+  const lines = new Set<number>();
+  const decorations: Range<Decoration>[] = [];
+
+  for (const { from, to } of view.visibleRanges) {
+    syntaxTree(view.state).iterate({
+      from,
+      to,
+      enter(node) {
+        if (node.name !== 'FencedCode' && node.name !== 'CodeBlock') {
+          return;
+        }
+
+        const first = view.state.doc.lineAt(node.from).number;
+        const last = view.state.doc.lineAt(
+          Math.min(
+            view.state.doc.length,
+            Math.max(node.from, node.to - 1),
+          ),
+        ).number;
+
+        for (let number = first; number <= last; number += 1) {
+          const line = view.state.doc.line(number);
+          if (lines.has(line.from)) continue;
+          lines.add(line.from);
+          decorations.push(
+            Decoration.line({ class: 'cm-codeblock-plain' }).range(
+              line.from,
+            ),
+          );
+        }
+        return false;
+      },
+    });
+  }
+
+  return Decoration.set(decorations, true);
+}
+
+const plainCodeBlocks = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildPlainCodeBlockDecorations(view);
+    }
+
+    update(update: ViewUpdate): void {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = buildPlainCodeBlockDecorations(
+          update.view,
+        );
+      }
+    }
+  },
+  {
+    decorations: (plugin) => plugin.decorations,
+  },
+);
+
 function sourceHighlightExtension(enabled: boolean) {
   return enabled
-    ? syntaxHighlighting(syntaxTheme)
-    : plainTextHighlightTheme;
+    ? []
+    : [plainCodeBlocks, plainCodeBlockTheme];
 }
 
 const theme = EditorView.theme({
@@ -479,6 +542,7 @@ onMounted(() => {
         multiCursorMouse,
         basicSetup,
         markdown({ codeLanguages: languages }),
+        syntaxHighlighting(syntaxTheme),
         indentUnit.of('    '),
         EditorState.tabSize.of(4),
         placeholder('从这里开始写…'),
