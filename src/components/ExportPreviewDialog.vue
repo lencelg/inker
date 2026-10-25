@@ -27,14 +27,26 @@ const error = ref('');
 const pageCount = ref(0);
 const overflow = ref(false);
 const zoom = ref(1);
+const progress = ref({ done: 0, total: 0 });
+let controller: AbortController | null = null;
 const zoomPercent = computed(() => `${Math.round(zoom.value * 100)}%`);
 const formatLabel = computed(() =>
   props.format === 'pdf' ? t('export.pdf') : t('export.docx'),
 );
 const actionLabel = computed(() =>
-  props.format === 'pdf'
-    ? t('print.action')
-    : t('export.docx.save'),
+  props.busy && props.format === 'docx'
+    ? t('export.preview.buildingDocx')
+    : props.format === 'pdf'
+      ? t('print.action')
+      : t('export.docx.save'),
+);
+const loadingLabel = computed(() =>
+  progress.value.total > 0
+    ? t('export.preview.progress', {
+        done: progress.value.done,
+        total: progress.value.total,
+      })
+    : t('export.preview.paginating'),
 );
 
 function setZoom(value: number): void {
@@ -48,11 +60,22 @@ function setZoom(value: number): void {
 async function preparePreview(): Promise<void> {
   const document = frame.value?.contentDocument;
   if (!document) return;
+  controller?.abort();
+  const currentController = new AbortController();
+  controller = currentController;
   ready.value = false;
   error.value = '';
+  progress.value = { done: 0, total: 0 };
   try {
     await waitForPreviewAssets(document);
-    const result = paginatePreview(document, props.format);
+    if (currentController.signal.aborted) return;
+    const result = await paginatePreview(document, props.format, {
+      signal: currentController.signal,
+      onProgress: (done, total) => {
+        progress.value = { done, total };
+      },
+    });
+    if (currentController.signal.aborted) return;
     pageCount.value = result.pageCount;
     overflow.value = result.overflow;
     setZoom(zoom.value);
@@ -60,7 +83,22 @@ async function preparePreview(): Promise<void> {
     document.body.scrollTop = 0;
     frame.value?.contentWindow?.scrollTo(0, 0);
     ready.value = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const current = frame.value?.contentDocument;
+        if (!current) return;
+        current.documentElement.scrollTop = 0;
+        current.body.scrollTop = 0;
+        frame.value?.contentWindow?.scrollTo(0, 0);
+      });
+    });
   } catch (err) {
+    if (
+      currentController.signal.aborted ||
+      (err instanceof DOMException && err.name === 'AbortError')
+    ) {
+      return;
+    }
     error.value = t('export.preview.failed', {
       message: localizeError(
         err instanceof Error ? err.message : String(err),
@@ -97,6 +135,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  controller?.abort();
+  controller = null;
   window.removeEventListener('keydown', onKeyDown, true);
 });
 </script>
@@ -188,7 +228,7 @@ onBeforeUnmount(() => {
           ></iframe>
           <div v-if="!ready && !error" class="export-preview-loading">
             <span class="export-preview-spinner" aria-hidden="true"></span>
-            <span>{{ t('export.preview.paginating') }}</span>
+            <span>{{ loadingLabel }}</span>
           </div>
           <div v-if="error" class="export-preview-error" role="alert">
             {{ error }}

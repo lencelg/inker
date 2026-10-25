@@ -1,9 +1,19 @@
+import { t } from './i18n';
 import {
   DOCX_PREVIEW_STYLES,
   EXPORT_PAGE_STYLES,
 } from './pageLayout';
 
 export type PreviewFormat = 'pdf' | 'docx';
+
+const MAX_PAGES = 2000;
+const MAX_BLOCK_ITERATIONS = 5000;
+const YIELD_EVERY = 8;
+
+export interface PaginationOptions {
+  signal?: AbortSignal;
+  onProgress?: (processed: number, total: number) => void;
+}
 
 interface PageState {
   page: HTMLElement;
@@ -16,6 +26,7 @@ interface PaginationContext {
   pages: PageState[];
   current: PageState;
   format: PreviewFormat;
+  signal?: AbortSignal;
   overflow: boolean;
 }
 
@@ -26,6 +37,18 @@ interface SplitResult {
 
 const BLOCK_TAGS =
   /^(ADDRESS|ARTICLE|ASIDE|BLOCKQUOTE|DIV|DL|FIELDSET|FIGCAPTION|FIGURE|FOOTER|FORM|H[1-6]|HEADER|HR|LI|MAIN|NAV|OL|P|PRE|SECTION|TABLE|UL)$/;
+
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('Pagination aborted', 'AbortError');
+  }
+}
 
 function injectStyles(document: Document, format: PreviewFormat): void {
   if (document.getElementById('inker-paged-export-styles')) return;
@@ -109,6 +132,9 @@ function measureFits(
 }
 
 function nextPage(context: PaginationContext): void {
+  if (context.pages.length >= MAX_PAGES) {
+    throw new Error(t('export.preview.tooManyPages'));
+  }
   context.pages.push(context.current);
   context.current = createPage(
     context.document,
@@ -314,35 +340,44 @@ function splitList(
   ) as HTMLElement[];
   if (items.length < 2) return null;
 
-  const fit = source.cloneNode(false) as HTMLElement;
-  fit.removeAttribute('id');
-  content.append(fit);
-  let included = 0;
-  for (const item of items) {
-    const clone = item.cloneNode(true) as HTMLElement;
-    fit.append(clone);
-    if (content.scrollHeight > content.clientHeight + 1) {
-      clone.remove();
-      break;
+  const buildList = (start: number, count: number): HTMLElement => {
+    const list = source.cloneNode(false) as HTMLElement;
+    list.removeAttribute('id');
+    for (const item of items.slice(start, start + count)) {
+      list.append(item.cloneNode(true));
     }
-    included += 1;
-  }
-  fit.remove();
-  if (included === 0) return null;
+    if (source.tagName === 'OL' && list.children.length > 0) {
+      const originalStart = Number(source.getAttribute('start') ?? '1');
+      const base =
+        Number.isFinite(originalStart) && originalStart > 0
+          ? originalStart
+          : 1;
+      list.setAttribute('start', String(base + start));
+    }
+    return list;
+  };
 
-  const rest = source.cloneNode(false) as HTMLElement;
-  rest.removeAttribute('id');
-  for (const item of items.slice(included)) {
-    rest.append(item.cloneNode(true));
+  let low = 1;
+  let high = items.length - 1;
+  let best = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = buildList(0, middle);
+    if (measureFits(content, candidate)) {
+      best = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
   }
-  if (source.tagName === 'OL' && rest.children.length > 0) {
-    const start = Number(source.getAttribute('start') ?? '1');
-    rest.setAttribute(
-      'start',
-      String((Number.isFinite(start) && start > 0 ? start : 1) + included),
-    );
-  }
-  return { fit, rest: rest.children.length > 0 ? rest : null };
+  if (best === 0) return null;
+
+  const fit = buildList(0, best);
+  const rest = buildList(best, items.length - best);
+  return {
+    fit,
+    rest: rest.children.length > 0 ? rest : null,
+  };
 }
 
 function splitTable(
@@ -354,43 +389,47 @@ function splitTable(
   );
   if (rows.length < 2) return null;
 
-  const makeWrapper = (): {
-    table: HTMLElement;
-    body: HTMLElement;
-  } => {
+  const buildTable = (start: number, count: number): HTMLElement => {
     const table = source.cloneNode(false) as HTMLElement;
     table.removeAttribute('id');
     const colgroup = source.querySelector(':scope > colgroup');
     if (colgroup) table.append(colgroup.cloneNode(true));
-    const caption = source.querySelector(':scope > caption');
-    if (caption) table.append(caption.cloneNode(true));
+    if (start === 0) {
+      const caption = source.querySelector(':scope > caption');
+      if (caption) table.append(caption.cloneNode(true));
+    }
     const head = source.querySelector(':scope > thead');
     if (head) table.append(head.cloneNode(true));
     const body = source.ownerDocument.createElement('tbody');
+    for (const row of rows.slice(start, start + count)) {
+      body.append(row.cloneNode(true));
+    }
     table.append(body);
-    return { table, body };
+    return table;
   };
 
-  const fit = makeWrapper();
-  content.append(fit.table);
-  let included = 0;
-  for (const row of rows) {
-    const clone = row.cloneNode(true) as HTMLElement;
-    fit.body.append(clone);
-    if (content.scrollHeight > content.clientHeight + 1) {
-      clone.remove();
-      break;
+  let low = 1;
+  let high = rows.length - 1;
+  let best = 0;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = buildTable(0, middle);
+    if (measureFits(content, candidate)) {
+      best = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
     }
-    included += 1;
   }
-  fit.table.remove();
-  if (included === 0) return null;
+  if (best === 0) return null;
 
-  const rest = makeWrapper();
-  for (const row of rows.slice(included)) {
-    rest.body.append(row.cloneNode(true));
-  }
-  return { fit: fit.table, rest: rest.body.children.length ? rest.table : null };
+  const fit = buildTable(0, best);
+  const rest = buildTable(best, rows.length - best);
+  const body = rest.lastElementChild;
+  return {
+    fit,
+    rest: body && body.children.length > 0 ? rest : null,
+  };
 }
 
 function splitBlock(
@@ -407,30 +446,42 @@ function splitBlock(
   return splitTextBlock(block, content);
 }
 
-function placeBlock(
+async function placeBlock(
   block: HTMLElement,
   context: PaginationContext,
-): void {
-  if (fits(context.current.content, block)) return;
+): Promise<void> {
+  let currentBlock: HTMLElement | null = block;
+  let iterations = 0;
 
-  if (hasContent(context.current.content)) {
-    nextPage(context);
-    placeBlock(block, context);
-    return;
-  }
-
-  const split = splitBlock(block, context.current.content);
-  if (split) {
-    context.current.content.append(split.fit);
-    if (split.rest) {
-      nextPage(context);
-      placeBlock(split.rest, context);
+  while (currentBlock) {
+    throwIfAborted(context.signal);
+    iterations += 1;
+    if (iterations > MAX_BLOCK_ITERATIONS) {
+      throw new Error(t('export.preview.notConverging'));
     }
-    return;
-  }
 
-  context.current.content.append(block);
-  context.overflow = true;
+    if (fits(context.current.content, currentBlock)) return;
+
+    if (hasContent(context.current.content)) {
+      nextPage(context);
+      continue;
+    }
+
+    const split = splitBlock(currentBlock, context.current.content);
+    if (!split) {
+      context.current.content.append(currentBlock);
+      context.overflow = true;
+      return;
+    }
+
+    context.current.content.append(split.fit);
+    if (!split.rest) return;
+    nextPage(context);
+    currentBlock = split.rest;
+    if (iterations % 4 === 0) {
+      await yieldToMain();
+    }
+  }
 }
 
 function normalizeTopLevelNode(
@@ -451,10 +502,11 @@ export interface PaginationResult {
   overflow: boolean;
 }
 
-export function paginatePreview(
+export async function paginatePreview(
   document: Document,
   format: PreviewFormat,
-): PaginationResult {
+  options: PaginationOptions = {},
+): Promise<PaginationResult> {
   const article = document.querySelector<HTMLElement>(
     'article.export-body',
   );
@@ -462,6 +514,7 @@ export function paginatePreview(
     throw new Error('Export content is missing.');
   }
 
+  throwIfAborted(options.signal);
   injectStyles(document, format);
   const staging = document.createElement('div');
   staging.className = 'export-paged-staging';
@@ -473,23 +526,38 @@ export function paginatePreview(
     pages: [],
     current: createPage(document, staging, format),
     format,
+    signal: options.signal,
     overflow: false,
   };
 
-  const nodes = Array.from(article.childNodes);
-  for (const node of nodes) {
-    const block = normalizeTopLevelNode(node, document);
-    if (!block) continue;
+  const blocks = Array.from(article.childNodes)
+    .map((node) => normalizeTopLevelNode(node, document))
+    .filter((block): block is HTMLElement => block !== null);
+  const total = blocks.length;
+  options.onProgress?.(0, total);
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    throwIfAborted(options.signal);
+    const block = blocks[index];
     if (block.matches('.page-break')) {
       if (hasContent(context.current.content)) nextPage(context);
-      continue;
+    } else {
+      await placeBlock(
+        block.cloneNode(true) as HTMLElement,
+        context,
+      );
     }
-    placeBlock(block.cloneNode(true) as HTMLElement, context);
+
+    if ((index + 1) % YIELD_EVERY === 0) {
+      options.onProgress?.(index + 1, total);
+      await yieldToMain();
+    }
   }
 
   if (hasContent(context.current.content) || context.pages.length === 0) {
     context.pages.push(context.current);
   }
+  options.onProgress?.(total, total);
 
   const pageCount = context.pages.length;
   for (let index = 0; index < pageCount; index += 1) {

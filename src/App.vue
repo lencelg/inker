@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openPath } from '@tauri-apps/plugin-opener';
@@ -26,6 +26,7 @@ import {
   saveDocxBase64,
   saveHtmlExport,
   type PreparedExport,
+  type SaveDocxOptions,
 } from './lib/exportContent';
 import { isImagePath } from './lib/fileKinds';
 import { localizeError, t } from './lib/i18n';
@@ -81,6 +82,8 @@ const exportPreview = ref<{
   title: string;
   html: string;
   warnings: string[];
+  docxPrepared?: PreparedExport;
+  docxOptions?: SaveDocxOptions;
   docxBase64?: string;
 } | null>(null);
 const htmlExport = ref<{
@@ -625,10 +628,6 @@ async function handleExport(
       embedImages: true,
       includeToc: false,
     });
-    const docxBase64 = await buildDocxBase64(prepared, {
-      codeTheme: preferencesValue.codeTheme,
-      includeToc: preferencesValue.exportIncludeToc,
-    });
     exportPreview.value = {
       format: 'docx',
       title: prepared.title,
@@ -638,7 +637,11 @@ async function handleExport(
         preferencesValue.codeTheme,
       ),
       warnings: prepared.warnings,
-      docxBase64,
+      docxPrepared: markRaw(prepared),
+      docxOptions: {
+        codeTheme: preferencesValue.codeTheme,
+        includeToc: preferencesValue.exportIncludeToc,
+      },
     };
   } catch (err) {
     setError(err);
@@ -652,7 +655,8 @@ async function savePreviewDocx(): Promise<void> {
   if (
     !current ||
     current.format !== 'docx' ||
-    !current.docxBase64 ||
+    !current.docxPrepared ||
+    !current.docxOptions ||
     exporting.value
   ) {
     return;
@@ -660,10 +664,18 @@ async function savePreviewDocx(): Promise<void> {
 
   exporting.value = true;
   try {
-    const path = await saveDocxBase64(
-      current.title,
-      current.docxBase64,
-    );
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+    const base64 =
+      current.docxBase64 ??
+      (await buildDocxBase64(
+        current.docxPrepared,
+        current.docxOptions,
+      ));
+    if (!base64) return;
+    current.docxBase64 = base64;
+    const path = await saveDocxBase64(current.title, base64);
     if (!path) return;
     exportPreview.value = null;
     if (preferences.value.exportOpenAfter) {

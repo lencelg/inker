@@ -103,6 +103,10 @@ const zh = {
   'export.preview.zoomOut': '缩小预览',
   'export.preview.zoomIn': '放大预览',
   'export.preview.failed': '分页预览失败：{message}',
+  'export.preview.tooManyPages': '文档分页失败：页数过多。',
+  'export.preview.notConverging': '文档分页失败：内容无法继续拆分。',
+  'export.preview.progress': '正在分页… {done}/{total}',
+  'export.preview.buildingDocx': '正在生成 Word…',
   'export.preview.overflow': '部分内容超过单页高度，可能被裁切。',
   'export.preview.docxHint': 'Word 可能根据本机字体微调分页。',
   'export.docx.save': '保存 Word',
@@ -369,6 +373,11 @@ const en: Record<TranslationKey, string> = {
   'export.preview.zoomOut': 'Zoom out preview',
   'export.preview.zoomIn': 'Zoom in preview',
   'export.preview.failed': 'Could not paginate preview: {message}',
+  'export.preview.tooManyPages': 'Pagination failed: too many pages.',
+  'export.preview.notConverging':
+    'Pagination failed: content could not be split further.',
+  'export.preview.progress': 'Paginating… {done}/{total}',
+  'export.preview.buildingDocx': 'Building Word file…',
   'export.preview.overflow':
     'Some content is taller than one page and may be clipped.',
   'export.preview.docxHint':

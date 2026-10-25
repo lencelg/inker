@@ -128,6 +128,12 @@ function bodyFontName(): string {
   return 'Noto Sans CJK SC';
 }
 
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, 0);
+  });
+}
+
 function bodyFont() {
   const name = bodyFontName();
   return {
@@ -750,6 +756,7 @@ async function convertList(
   const instance = context.listIndex;
   const definition = numberingDefinition(reference, ordered, start);
   const paragraphs: Paragraph[] = [];
+  let processed = 0;
 
   for (const item of Array.from(list.children)) {
     if (!(item instanceof HTMLElement) || item.tagName !== 'LI') {
@@ -777,6 +784,8 @@ async function convertList(
         ...(await convertList(nestedList, level + 1, context)),
       );
     }
+    processed += 1;
+    if (processed % 32 === 0) await yieldToMain();
   }
   return paragraphs;
 }
@@ -816,6 +825,7 @@ async function tableFrom(
   for (let rowIndex = 0; rowIndex < cellRows.length; rowIndex += 1) {
     const cells = cellRows[rowIndex];
     if (cells.length === 0) continue;
+    if (rowIndex > 0 && rowIndex % 24 === 0) await yieldToMain();
     const inThead =
       rowElements[rowIndex].parentElement?.tagName === 'THEAD';
     const header =
@@ -1061,11 +1071,14 @@ async function convertChildren(
   block: BlockContext = {},
 ): Promise<FileChild[]> {
   const children: FileChild[] = [];
+  let processed = 0;
   for (const child of Array.from(element.children)) {
     if (child instanceof HTMLElement) {
       children.push(
         ...(await convertBlock(child, context, block)),
       );
+      processed += 1;
+      if (processed % 16 === 0) await yieldToMain();
     }
   }
   if (children.length === 0) {
