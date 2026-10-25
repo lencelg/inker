@@ -1,4 +1,8 @@
 export const MINIMAP_MAX_COLUMN = 120;
+export const MINIMAP_SCALE = 2;
+export const MINIMAP_GLYPH_WIDTH = MINIMAP_SCALE;
+export const MINIMAP_GLYPH_HEIGHT = MINIMAP_SCALE * 2;
+export const MINIMAP_ROW_PITCH = MINIMAP_GLYPH_HEIGHT;
 
 export interface MinimapViewportMetrics {
   top: number;
@@ -15,7 +19,7 @@ export function minimapWidthPx(
   maxColumn = MINIMAP_MAX_COLUMN,
 ): number {
   const columns = Math.max(1, maxColumn);
-  return Math.round(Math.min(150, Math.max(56, columns * 0.62 + 12)));
+  return Math.round(Math.min(180, Math.max(72, columns * 0.9 + 12)));
 }
 
 export function minimapScrollTop(

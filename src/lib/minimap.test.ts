@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   MINIMAP_MAX_COLUMN,
+  MINIMAP_ROW_PITCH,
+  MINIMAP_SCALE,
   minimapScrollTop,
   minimapViewportMetrics,
   minimapWidthPx,
@@ -9,9 +11,12 @@ import {
 describe('minimap geometry', () => {
   it('derives the minimap width from maxColumn', () => {
     expect(MINIMAP_MAX_COLUMN).toBe(120);
-    expect(minimapWidthPx(40)).toBe(56);
-    expect(minimapWidthPx(120)).toBe(86);
-    expect(minimapWidthPx(400)).toBe(150);
+    expect(MINIMAP_SCALE).toBe(2);
+    expect(MINIMAP_ROW_PITCH).toBe(4);
+    expect(Math.floor(1000 / MINIMAP_ROW_PITCH)).toBe(250);
+    expect(minimapWidthPx(40)).toBe(72);
+    expect(minimapWidthPx(120)).toBe(120);
+    expect(minimapWidthPx(400)).toBe(180);
   });
 
   it('maps scroll percentages to editor scrollTop', () => {
