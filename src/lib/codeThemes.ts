@@ -1,3 +1,4 @@
+import { customCodeThemes } from './customThemes';
 import githubDarkCss from 'highlight.js/styles/github-dark.css?raw';
 import githubLightCss from 'highlight.js/styles/github.css?raw';
 import atomOneDarkCss from 'highlight.js/styles/atom-one-dark.css?raw';
@@ -58,21 +59,59 @@ export const CODE_THEMES = [
   },
 ] as const;
 
-export type CodeThemeId = (typeof CODE_THEMES)[number]['id'];
+export type BuiltInCodeThemeId = (typeof CODE_THEMES)[number]['id'];
+export type CodeThemeId =
+  | BuiltInCodeThemeId
+  | `custom-code-${string}`;
 
-export const DEFAULT_CODE_THEME: CodeThemeId = 'github-dark';
+export interface CodeThemeDefinition {
+  id: CodeThemeId;
+  label: string;
+  background: string;
+  foreground: string;
+  css: string;
+  custom?: boolean;
+}
+
+export const DEFAULT_CODE_THEME: BuiltInCodeThemeId = 'github-dark';
 const CODE_THEME_STYLE_ID = 'inker-code-theme';
 
-export function isCodeThemeId(value: unknown): value is CodeThemeId {
+export function isBuiltInCodeThemeId(
+  value: unknown,
+): value is BuiltInCodeThemeId {
   return (
     typeof value === 'string' &&
     CODE_THEMES.some((theme) => theme.id === value)
   );
 }
 
-export function codeThemeById(id: CodeThemeId) {
+export function isCodeThemeId(value: unknown): value is CodeThemeId {
   return (
-    CODE_THEMES.find((theme) => theme.id === id) ?? CODE_THEMES[0]
+    isBuiltInCodeThemeId(value) ||
+    (typeof value === 'string' &&
+      customCodeThemes.value.some((theme) => theme.id === value))
+  );
+}
+
+export function allCodeThemes(): CodeThemeDefinition[] {
+  return [
+    ...CODE_THEMES.map((theme) => ({
+      ...theme,
+      id: theme.id as CodeThemeId,
+    })),
+    ...customCodeThemes.value.map((theme) => ({
+      ...theme,
+      id: theme.id as CodeThemeId,
+      label: `${theme.name}（自定义）`,
+      custom: true,
+    })),
+  ];
+}
+
+export function codeThemeById(id: CodeThemeId): CodeThemeDefinition {
+  return (
+    allCodeThemes().find((theme) => theme.id === id) ??
+    CODE_THEMES[0]
   );
 }
 

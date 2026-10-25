@@ -13,6 +13,7 @@ import {
   DEFAULT_THEME,
   LEGACY_THEME_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  applyUiTheme,
   isThemeId,
   type ThemeId,
 } from './themes';
@@ -163,7 +164,7 @@ export function savePreferences(preferences: Preferences): void {
 }
 
 export function applyPreferences(preferences: Preferences): void {
-  document.documentElement.dataset.theme = preferences.theme;
+  applyUiTheme(preferences.theme);
   document.documentElement.dataset.font = preferences.fontFamily;
   document.documentElement.style.setProperty(
     '--content-font-size',

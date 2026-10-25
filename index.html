@@ -8,12 +8,33 @@
         const theme =
           localStorage.getItem('inker-theme') ??
           localStorage.getItem('markleaf-theme');
-        if (
-          ['paper', 'white', 'dark', 'vscode-light', 'vscode-dark', 'vscode-hc'].includes(
-            theme,
-          )
-        ) {
-          document.documentElement.dataset.theme = theme;
+        const builtInThemes = [
+          'paper',
+          'white',
+          'dark',
+          'vscode-light',
+          'vscode-dark',
+          'vscode-hc',
+        ];
+        let appliedTheme = theme;
+        if (theme && !builtInThemes.includes(theme)) {
+          try {
+            const customThemes = JSON.parse(
+              localStorage.getItem('inker-custom-ui-themes') ?? '[]',
+            );
+            const custom = Array.isArray(customThemes)
+              ? customThemes.find((item) => item?.id === theme)
+              : null;
+            if (custom && builtInThemes.includes(custom.base)) {
+              appliedTheme = custom.base;
+              document.documentElement.dataset.customTheme = theme;
+            }
+          } catch {
+            // Fall back to the default theme.
+          }
+        }
+        if (builtInThemes.includes(appliedTheme)) {
+          document.documentElement.dataset.theme = appliedTheme;
         }
         const font =
           localStorage.getItem('inker-font-family') ??

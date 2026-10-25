@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Check } from '@lucide/vue';
 import SettingsSelect from './SettingsSelect.vue';
+import ThemeImportControl from './ThemeImportControl.vue';
 import {
   isSettingModified,
   type SettingDefinition,
@@ -86,6 +87,14 @@ function onCheckboxChange(event: Event): void {
           <span class="checkbox-label">{{ checked ? '已启用' : '已停用' }}</span>
         </label>
       </div>
+
+      <ThemeImportControl
+        v-if="setting.controlType === 'select' && setting.themeImport"
+        :kind="setting.themeImport"
+        :model-value="String(setting.value)"
+        :default-value="String(setting.defaultValue)"
+        @select="emit('update', $event)"
+      />
 
       <p v-if="setting.hint" class="setting-hint">
         {{ setting.hint.text }}

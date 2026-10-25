@@ -218,6 +218,45 @@ tempfile                     测试临时目录
 - 字体大小可调，快捷键为 `Ctrl/Cmd + 鼠标滚轮`。
 - 设置面板会跟随当前应用主题。
 - 下拉框为自定义组件，弹层样式与主题一致。
+- 支持导入自定义界面主题 JSON 和 highlight.js CSS 代码主题。
+- 导入成功后自动保存、选中并立即应用。
+- 已导入主题显示在对应主题下拉框下方，可直接删除。
+
+自定义界面主题示例：
+
+```json
+{
+  "version": 1,
+  "name": "Ocean Dark",
+  "base": "dark",
+  "colors": {
+    "--bg": "#0b1220",
+    "--panel": "#152238",
+    "--ink": "#e6edf7",
+    "--accent": "#4ea1ff"
+  }
+}
+```
+
+自定义代码主题使用 highlight.js CSS：
+
+```css
+.hljs {
+  color: #d8dee9;
+  background: #2e3440;
+}
+
+.hljs-keyword {
+  color: #81a1c1;
+}
+```
+
+导入限制：
+
+- 界面主题仅允许受支持的语义颜色变量，必须以内置主题为 `base`。
+- 代码主题仅保留 `.hljs` 作用域内的样式，拒绝 `@import` 和外部 `url()`。
+- 单个文件最大 256 KB，每类最多保存 20 个自定义主题。
+- 主题保存在本机 localStorage，不会上传网络。
 
 ### 2.12 设置面板
 
@@ -305,6 +344,8 @@ tempfile                     测试临时目录
 | 沉浸式写作 | ✅ 已完成 |
 | 主题 / 字体 / 字号 | ✅ 已完成 |
 | 代码高亮主题切换 | ✅ 已完成 |
+| 自定义界面主题导入 | ✅ 已完成 |
+| 自定义代码主题导入 | ✅ 已完成 |
 | VS Code 风格设置面板 | ✅ 已完成 |
 | HTML / Word / PDF 导出 | ✅ 已完成 |
 | Debian `.deb` 打包 | ✅ 已完成 |
@@ -358,11 +399,14 @@ markdown-note-taking/
 │   │       ├── SettingsSidebar.vue
 │   │       ├── SettingsContent.vue
 │   │       ├── SettingItem.vue
+│   │       ├── ThemeImportControl.vue
 │   │       └── SettingsSelect.vue
 │   └── lib/
 │       ├── anchors.ts             # 标题 slug / 锚点查找 / 滚动
 │       ├── codeHighlight.ts       # highlight.js token 范围映射
 │       ├── codeThemes.ts          # 代码高亮主题与动态样式
+│       ├── customThemes.ts        # 自定义主题注册表与持久化
+│       ├── themeImport.ts         # 界面主题 / 代码主题解析与清洗
 │       ├── docxExport.ts          # DOCX 内容转换
 │       ├── exportContent.ts       # HTML / PDF / 导出准备
 │       ├── fileKinds.ts           # 图片扩展名识别
@@ -512,6 +556,8 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-code-highlight` | 预览代码高亮 |
 | `inker-code-theme` | 代码高亮主题 |
 | `inker-source-highlight` | 源码代码块语法高亮 |
+| `inker-custom-ui-themes` | 自定义界面主题 |
+| `inker-custom-code-themes` | 自定义代码主题 |
 | `inker-split-ratio` | 侧边预览分隔比例 |
 | `inker-sidebar-width` | 文件栏宽度 |
 
@@ -774,7 +820,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：16 个测试文件，60 个测试通过
+- 前端：19 个测试文件，71 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -854,7 +900,10 @@ cargo tauri icon assets/icons/inker.svg
 9. **未支持标签拖拽排序、分屏编辑器、多窗口**  
    当前每个窗口只有一个编辑工作区。
 
-10. **目前仅打包 `.deb`**  
+10. **只能导入受控格式的主题**
+    自定义界面主题仅支持语义颜色变量 JSON，不能改变布局；自定义代码主题仅支持 highlight.js `.css` 风格规则。导入主题存储于 localStorage，清理 WebView 数据后会丢失。
+
+11. **目前仅打包 `.deb`**
     其他平台安装包需要修改 Tauri bundle 配置。
 
 ---

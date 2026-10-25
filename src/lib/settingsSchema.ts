@@ -1,10 +1,13 @@
 import type { Preferences } from './preferences';
 import { FONTS } from './fonts';
 import {
-  CODE_THEMES,
   DEFAULT_CODE_THEME,
+  allCodeThemes,
 } from './codeThemes';
-import { THEMES } from './themes';
+import {
+  DEFAULT_THEME,
+  allThemes,
+} from './themes';
 
 export type SettingsCategoryId = 'common' | 'editor' | 'preview' | 'export';
 export type SettingsScope = 'user' | 'workspace';
@@ -38,6 +41,7 @@ export interface SettingDefinition {
   keywords?: string[];
   hint?: SettingsHint;
   preference?: keyof Preferences;
+  themeImport?: 'ui' | 'code';
 }
 
 export interface SettingsCategory {
@@ -83,22 +87,10 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   },
 ];
 
-const THEME_OPTIONS: SettingsOption[] = THEMES.map((theme) => ({
-  label: theme.label,
-  value: theme.id,
-}));
-
 const FONT_OPTIONS: SettingsOption[] = FONTS.map((font) => ({
   label: font.label,
   value: font.id,
 }));
-
-const CODE_THEME_OPTIONS: SettingsOption[] = CODE_THEMES.map(
-  (theme) => ({
-    label: theme.label,
-    value: theme.id,
-  }),
-);
 
 const EXPORT_OPTIONS: SettingsOption[] = [
   { label: 'PDF（打印）', value: 'pdf' },
@@ -113,10 +105,10 @@ const SETTING_TEMPLATES: readonly SettingTemplate[] = [
     title: 'Workbench: Color Theme',
     description: '指定界面、编辑器和预览区域使用的颜色主题。',
     controlType: 'select',
-    defaultValue: 'paper',
-    options: THEME_OPTIONS,
+    defaultValue: DEFAULT_THEME,
     keywords: ['主题', '颜色', '配色', '外观', 'theme', 'color'],
     preference: 'theme',
+    themeImport: 'ui',
     hint: {
       text: '主题切换会立即应用到整个工作台，并保存在本机。',
       linkLabel: '恢复默认主题',
@@ -217,7 +209,6 @@ const SETTING_TEMPLATES: readonly SettingTemplate[] = [
     description: '选择预览和实时预览中的代码语法配色主题。',
     controlType: 'select',
     defaultValue: DEFAULT_CODE_THEME,
-    options: CODE_THEME_OPTIONS,
     keywords: [
       '预览',
       '代码',
@@ -229,6 +220,7 @@ const SETTING_TEMPLATES: readonly SettingTemplate[] = [
       'highlight',
     ],
     preference: 'codeTheme',
+    themeImport: 'code',
     hint: {
       text: '切换后会立即应用到已经打开的预览内容。',
     },
@@ -276,15 +268,33 @@ export function createSettingsSchema(
   preferences: Preferences,
   localValues: Record<string, SettingsValue> = {},
 ): SettingDefinition[] {
+  const themeOptions: SettingsOption[] = allThemes().map((theme) => ({
+    label: theme.label,
+    value: theme.id,
+  }));
+  const codeThemeOptions: SettingsOption[] = allCodeThemes().map(
+    (theme) => ({
+      label: theme.label,
+      value: theme.id,
+    }),
+  );
+
   return SETTING_TEMPLATES.map((template) => {
     const value = template.preference
       ? (preferences[template.preference] as SettingsValue)
       : (localValues[template.id] ?? template.defaultValue);
+    const options =
+      template.id === 'workbench.colorTheme'
+        ? themeOptions
+        : template.id === 'preview.codeTheme'
+          ? codeThemeOptions
+          : template.options;
 
     return {
       ...template,
       value,
       defaultValue: template.defaultValue,
+      options,
     };
   });
 }
