@@ -129,6 +129,7 @@ tempfile                     测试临时目录
 - Vim 支持 Normal / Insert / Visual / V-Line / V-Block 等模式。
 - Vim 模式状态和 `:` 命令输入行均整合在应用底部状态栏，不再额外占用编辑器行。
 - 支持 `:w` 保存。
+- 可通过设置关闭源码模式语法高亮，默认开启。
 
 ### 2.6 实时预览编辑器
 
@@ -289,6 +290,7 @@ tempfile                     测试临时目录
 | 预览模式 | ✅ 已完成 |
 | 侧边预览与双向滚动同步 | ✅ 已完成 |
 | 多光标 | ✅ 已完成 |
+| 源码语法高亮开关 | ✅ 已完成 |
 | Vim 模式 | ✅ 已完成 |
 | Vim 模式 / 命令输入整合到底栏 | ✅ 已完成 |
 | KaTeX 数学公式 | ✅ 已完成 |
@@ -505,6 +507,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-immersive` | 沉浸式写作 |
 | `inker-code-highlight` | 预览代码高亮 |
 | `inker-code-theme` | 代码高亮主题 |
+| `inker-source-highlight` | 源码模式语法高亮 |
 | `inker-split-ratio` | 侧边预览分隔比例 |
 | `inker-sidebar-width` | 文件栏宽度 |
 
@@ -767,7 +770,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：15 个测试文件，55 个测试通过
+- 前端：15 个测试文件，56 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：

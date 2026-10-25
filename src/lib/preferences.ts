@@ -26,6 +26,7 @@ export const VIM_STORAGE_KEY = 'inker-vim';
 export const IMMERSIVE_STORAGE_KEY = 'inker-immersive';
 export const CODE_HIGHLIGHT_STORAGE_KEY = 'inker-code-highlight';
 export const CODE_THEME_STORAGE_KEY = 'inker-code-theme';
+export const SOURCE_HIGHLIGHT_STORAGE_KEY = 'inker-source-highlight';
 const LEGACY_FONT_SIZE_STORAGE_KEY = 'markleaf-font-size';
 const LEGACY_FONT_FAMILY_STORAGE_KEY = 'markleaf-font-family';
 const LEGACY_VIM_STORAGE_KEY = 'markleaf-vim';
@@ -40,6 +41,7 @@ export interface Preferences {
   immersive: boolean;
   codeHighlight: boolean;
   codeTheme: CodeThemeId;
+  sourceHighlight: boolean;
 }
 
 export function clampFontSize(value: number): number {
@@ -64,6 +66,7 @@ export function normalizePreferences(value: unknown): Preferences {
     codeTheme: isCodeThemeId(source.codeTheme)
       ? source.codeTheme
       : DEFAULT_CODE_THEME,
+    sourceHighlight: source.sourceHighlight !== false,
   };
 }
 
@@ -86,6 +89,9 @@ export function readPreferences(): Preferences {
       CODE_HIGHLIGHT_STORAGE_KEY,
       LEGACY_CODE_HIGHLIGHT_STORAGE_KEY,
     );
+    const rawSourceHighlight = window.localStorage.getItem(
+      SOURCE_HIGHLIGHT_STORAGE_KEY,
+    );
     const preferences = normalizePreferences({
       theme: read(THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY),
       fontSize: rawSize === null ? DEFAULT_FONT_SIZE : Number(rawSize),
@@ -101,6 +107,10 @@ export function readPreferences(): Preferences {
       codeHighlight:
         rawHighlight === null ? true : rawHighlight === 'true',
       codeTheme: window.localStorage.getItem(CODE_THEME_STORAGE_KEY),
+      sourceHighlight:
+        rawSourceHighlight === null
+          ? true
+          : rawSourceHighlight === 'true',
     });
 
     if (usedLegacyKeys) savePreferences(preferences);
@@ -136,6 +146,10 @@ export function savePreferences(preferences: Preferences): void {
     window.localStorage.setItem(
       CODE_THEME_STORAGE_KEY,
       preferences.codeTheme,
+    );
+    window.localStorage.setItem(
+      SOURCE_HIGHLIGHT_STORAGE_KEY,
+      String(preferences.sourceHighlight),
     );
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);

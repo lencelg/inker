@@ -31,6 +31,13 @@ describe('preferences', () => {
     ).toBe(false);
   });
 
+  it('enables source highlighting by default and keeps it disabled', () => {
+    expect(normalizePreferences({}).sourceHighlight).toBe(true);
+    expect(
+      normalizePreferences({ sourceHighlight: false }).sourceHighlight,
+    ).toBe(false);
+  });
+
   it('migrates legacy markleaf preference keys to inker keys', () => {
     window.localStorage.setItem('markleaf-theme', 'dark');
     window.localStorage.setItem('markleaf-font-size', '20');

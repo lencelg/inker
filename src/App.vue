@@ -1418,6 +1418,7 @@ function errorMessage(err: unknown): string {
               :read-only="switching || mutating"
               :layout-key="previewLayoutKey"
               :immersive="immersiveEnabled"
+              :source-highlight="preferences.sourceHighlight"
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"

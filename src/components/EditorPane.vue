@@ -34,6 +34,7 @@ const props = defineProps<{
   readOnly: boolean;
   layoutKey?: string;
   immersive: boolean;
+  sourceHighlight: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -48,6 +49,7 @@ const host = ref<HTMLDivElement | null>(null);
 const vimCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
 const immersiveCompartment = new Compartment();
+const highlightCompartment = new Compartment();
 const vimExtension = vim({ status: false });
 
 let view: EditorView | null = null;
@@ -175,6 +177,22 @@ const syntaxTheme = HighlightStyle.define([
   { tag: tags.strikethrough, textDecoration: 'line-through' },
   { tag: tags.invalid, color: 'var(--syntax-invalid)' },
 ]);
+
+const plainTextHighlightTheme = EditorView.theme({
+  '.cm-content .cm-line span': {
+    color: 'inherit !important',
+    fontStyle: 'inherit !important',
+    fontWeight: 'inherit !important',
+    textDecoration: 'none !important',
+    backgroundColor: 'transparent !important',
+  },
+});
+
+function sourceHighlightExtension(enabled: boolean) {
+  return enabled
+    ? syntaxHighlighting(syntaxTheme)
+    : plainTextHighlightTheme;
+}
 
 const theme = EditorView.theme({
   '&': {
@@ -453,12 +471,14 @@ onMounted(() => {
         immersiveCompartment.of(
           props.immersive ? immersiveDimPlugin : [],
         ),
+        highlightCompartment.of(
+          sourceHighlightExtension(props.sourceHighlight),
+        ),
         EditorState.allowMultipleSelections.of(true),
         multiCursorKeymap,
         multiCursorMouse,
         basicSetup,
         markdown({ codeLanguages: languages }),
-        syntaxHighlighting(syntaxTheme),
         indentUnit.of('    '),
         EditorState.tabSize.of(4),
         placeholder('从这里开始写…'),
@@ -502,6 +522,17 @@ watch(
     });
     scheduleVimStatus();
     view?.focus();
+  },
+);
+
+watch(
+  () => props.sourceHighlight,
+  (enabled) => {
+    view?.dispatch({
+      effects: highlightCompartment.reconfigure(
+        sourceHighlightExtension(enabled),
+      ),
+    });
   },
 );
 
