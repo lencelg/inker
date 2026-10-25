@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref } from 'vue';
-import { VIEW_MODES, type ViewMode } from '../lib/viewModes';
+import { t } from '../lib/i18n';
+import {
+  VIEW_MODES,
+  viewModeLabel,
+  type ViewMode,
+} from '../lib/viewModes';
 
 type ExportFormat = 'pdf' | 'html' | 'docx';
 
@@ -17,11 +22,17 @@ const emit = defineEmits<{
   openSettings: [];
 }>();
 
-const EXPORTS: { id: ExportFormat; label: string }[] = [
-  { id: 'pdf', label: 'PDF（打印）' },
-  { id: 'html', label: 'HTML' },
-  { id: 'docx', label: 'Word (.docx)' },
+const EXPORTS: { id: ExportFormat }[] = [
+  { id: 'pdf' },
+  { id: 'html' },
+  { id: 'docx' },
 ];
+
+function exportLabel(format: ExportFormat): string {
+  if (format === 'pdf') return t('export.pdf');
+  if (format === 'html') return t('export.html');
+  return t('export.docx');
+}
 
 const menuOpen = ref(false);
 const menuStyle = ref<Record<string, string>>({});
@@ -160,7 +171,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
     aria-haspopup="menu"
     :aria-expanded="menuOpen"
     aria-controls="app-menu"
-    title="更多"
+    :title="t('menu.more')"
     @click="toggleMenu"
     @keydown.down.prevent="openMenu"
   >
@@ -183,11 +194,11 @@ function onMenuKeyDown(event: KeyboardEvent): void {
       ref="menuElement"
       class="app-menu"
       role="menu"
-      aria-label="应用菜单"
+      :aria-label="t('menu.application')"
       :style="menuStyle"
       @keydown="onMenuKeyDown"
     >
-      <p class="app-menu-label">渲染模式</p>
+      <p class="app-menu-label">{{ t('menu.viewMode') }}</p>
       <button
         v-for="mode in VIEW_MODES"
         :key="mode.id"
@@ -209,11 +220,11 @@ function onMenuKeyDown(event: KeyboardEvent): void {
             />
           </svg>
         </span>
-        <span>{{ mode.label }}</span>
+        <span>{{ viewModeLabel(mode.id) }}</span>
       </button>
 
       <div class="app-menu-separator"></div>
-      <p class="app-menu-label">导出</p>
+      <p class="app-menu-label">{{ t('menu.export') }}</p>
       <button
         v-for="format in EXPORTS"
         :key="format.id"
@@ -224,7 +235,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         @click="chooseExport(format.id)"
       >
         <span class="app-menu-check" aria-hidden="true"></span>
-        <span>{{ format.label }}</span>
+        <span>{{ exportLabel(format.id) }}</span>
       </button>
 
       <div class="app-menu-separator"></div>
@@ -247,7 +258,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
             />
           </svg>
         </span>
-        <span>Vim 模式</span>
+        <span>{{ t('menu.vim') }}</span>
       </button>
       <button
         type="button"
@@ -256,7 +267,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         @click="openSettings"
       >
         <span class="app-menu-check" aria-hidden="true"></span>
-        <span>设置</span>
+        <span>{{ t('menu.settings') }}</span>
       </button>
     </div>
   </Teleport>

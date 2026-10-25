@@ -1,7 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import SettingsPanel from './SettingsPanel.vue';
+import { setLanguage } from '../lib/i18n';
 import { normalizePreferences } from '../lib/preferences';
 
 function mountPanel(overrides = {}) {
@@ -13,6 +14,10 @@ function mountPanel(overrides = {}) {
     },
   });
 }
+
+beforeEach(() => {
+  setLanguage('zh');
+});
 
 describe('SettingsPanel', () => {
   it('renders the VS Code-style settings structure', () => {
@@ -103,5 +108,39 @@ describe('SettingsPanel', () => {
     expect(
       wrapper.find('.search-input').attributes('disabled'),
     ).toBeDefined();
+  });
+
+  it('changes the display language from settings', async () => {
+    const wrapper = mountPanel();
+    await wrapper
+      .find('[data-setting-id="workbench.language"] .settings-select-trigger')
+      .trigger('click');
+    await nextTick();
+
+    const option = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('[role="option"]'),
+    ).find((element) => element.textContent?.includes('English'));
+    option?.click();
+    await nextTick();
+
+    expect(wrapper.emitted('update')?.at(-1)).toEqual([
+      { language: 'en' },
+    ]);
+    wrapper.unmount();
+  });
+
+  it('re-renders labels when the locale changes', async () => {
+    const wrapper = mountPanel();
+    expect(wrapper.text()).toContain('常用设置');
+
+    setLanguage('en');
+    await nextTick();
+
+    expect(wrapper.find('.scope-tab.active').text()).toBe('User');
+    expect(wrapper.text()).toContain('Common');
+    expect(wrapper.find('.search-input').attributes('placeholder')).toBe(
+      'Search settings',
+    );
+    wrapper.unmount();
   });
 });

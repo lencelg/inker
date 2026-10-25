@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { t } from '../lib/i18n';
 
 defineProps<{
   title: string;
@@ -22,7 +23,9 @@ onMounted(() => {
       <h2>{{ title }}</h2>
       <p>{{ message }}</p>
       <div class="actions">
-        <button class="btn ghost" type="button" @click="emit('cancel')">取消</button>
+        <button class="btn ghost" type="button" @click="emit('cancel')">
+          {{ t('action.cancel') }}
+        </button>
         <button class="btn" :class="danger ? 'danger' : 'primary'" type="button" @click="emit('confirm')">
           {{ confirmLabel }}
         </button>

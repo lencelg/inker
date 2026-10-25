@@ -1,4 +1,5 @@
 import { isBuiltInThemeId, type BuiltInThemeId } from './themes';
+import { t } from './i18n';
 
 export const MAX_THEME_FILE_BYTES = 256 * 1024;
 
@@ -99,7 +100,7 @@ export interface ParsedCodeTheme {
 
 function checkFileSize(text: string): void {
   if (new TextEncoder().encode(text).length > MAX_THEME_FILE_BYTES) {
-    throw new Error('主题文件过大（最大 256 KB）');
+    throw new Error(t('themeImport.error.tooLarge'));
   }
 }
 
@@ -120,8 +121,10 @@ function isCssColor(value: string): boolean {
 
 function themeName(value: string, fallback: string): string {
   const name = value.trim() || fallback;
-  if (!name) throw new Error('主题名称不能为空');
-  if (name.length > 60) throw new Error('主题名称不能超过 60 个字符');
+  if (!name) throw new Error(t('themeImport.error.nameEmpty'));
+  if (name.length > 60) {
+    throw new Error(t('themeImport.error.nameTooLong'));
+  }
   return name;
 }
 
@@ -132,10 +135,10 @@ export function parseUiThemeFile(text: string): ParsedUiTheme {
   try {
     raw = JSON.parse(text);
   } catch {
-    throw new Error('界面主题必须是有效的 JSON 文件');
+    throw new Error(t('themeImport.error.invalidJson'));
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error('界面主题 JSON 格式无效');
+    throw new Error(t('themeImport.error.invalidFormat'));
   }
 
   const source = raw as {
@@ -148,34 +151,38 @@ export function parseUiThemeFile(text: string): ParsedUiTheme {
     source.version !== undefined &&
     source.version !== 1
   ) {
-    throw new Error('不支持的界面主题版本');
+    throw new Error(t('themeImport.error.unsupportedVersion'));
   }
   if (typeof source.name !== 'string') {
-    throw new Error('界面主题缺少 name 字段');
+    throw new Error(t('themeImport.error.missingName'));
   }
   if (!isBuiltInThemeId(source.base)) {
-    throw new Error('界面主题的 base 必须是内置主题 ID');
+    throw new Error(t('themeImport.error.invalidBase'));
   }
   if (
     !source.colors ||
     typeof source.colors !== 'object' ||
     Array.isArray(source.colors)
   ) {
-    throw new Error('界面主题缺少 colors 对象');
+    throw new Error(t('themeImport.error.missingColors'));
   }
 
   const colors: Record<string, string> = {};
   for (const [key, value] of Object.entries(source.colors)) {
     if (!UI_THEME_TOKEN_SET.has(key)) {
-      throw new Error(`不支持的界面主题变量：${key}`);
+      throw new Error(
+        t('themeImport.error.unsupportedVariable', { key }),
+      );
     }
     if (typeof value !== 'string' || !isCssColor(value)) {
-      throw new Error(`变量 ${key} 的颜色值无效`);
+      throw new Error(
+        t('themeImport.error.invalidColor', { key }),
+      );
     }
     colors[key] = value.trim();
   }
   if (Object.keys(colors).length === 0) {
-    throw new Error('界面主题至少需要提供一个颜色变量');
+    throw new Error(t('themeImport.error.noColors'));
   }
 
   return {
@@ -191,7 +198,7 @@ export function parseCodeThemeFile(
 ): ParsedCodeTheme {
   checkFileSize(text);
   if (UNSAFE_CSS_VALUE.test(text)) {
-    throw new Error('代码主题不能包含 @import、url() 或其他外部资源');
+    throw new Error(t('themeImport.error.externalResource'));
   }
 
   const style = document.createElement('style');
@@ -200,7 +207,7 @@ export function parseCodeThemeFile(
 
   try {
     const sheet = style.sheet;
-    if (!sheet) throw new Error('无法解析代码主题 CSS');
+    if (!sheet) throw new Error(t('themeImport.error.parseCss'));
 
     const cssParts: string[] = [];
     let background = '';
@@ -249,12 +256,10 @@ export function parseCodeThemeFile(
     }
 
     if (!background || !foreground) {
-      throw new Error(
-        '代码主题的 .hljs 规则必须定义 background 和 color',
-      );
+      throw new Error(t('themeImport.error.missingBaseColors'));
     }
     if (cssParts.length === 0) {
-      throw new Error('没有找到可用的 highlight.js 样式规则');
+      throw new Error(t('themeImport.error.noRules'));
     }
 
     const fallback = fileName

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { t } from '../lib/i18n';
 
 const props = defineProps<{
   title: string;
@@ -35,12 +36,12 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div class="print-overlay" role="dialog" aria-modal="true" :aria-label="`打印预览：${title}`">
+    <div class="print-overlay" role="dialog" aria-modal="true" :aria-label="t('print.aria', { title })">
       <div class="print-panel">
         <header class="print-toolbar">
           <div class="print-heading">
             <strong>{{ title }}</strong>
-            <span>在打印对话框中选择“打印到文件”即可保存为 PDF。</span>
+            <span>{{ t('print.hint') }}</span>
           </div>
           <div class="print-actions">
             <button
@@ -49,17 +50,17 @@ onBeforeUnmount(() => {
               :disabled="!ready"
               @click="printDocument"
             >
-              打印 / 另存为 PDF
+              {{ t('print.action') }}
             </button>
             <button type="button" class="print-button" @click="emit('close')">
-              关闭
+              {{ t('action.close') }}
             </button>
           </div>
         </header>
         <iframe
           ref="frame"
           class="print-frame"
-          :title="`${title} 打印预览`"
+          :title="t('print.iframeTitle', { title })"
           :srcdoc="html"
           @load="ready = true"
         ></iframe>

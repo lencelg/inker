@@ -37,6 +37,7 @@ import {
   scrollToAnchor,
 } from '../lib/anchors';
 import { codeHighlightRanges } from '../lib/codeHighlight';
+import { localizeError, language, t } from '../lib/i18n';
 import {
   applyLineEnding,
   normalizeLineEndings,
@@ -58,6 +59,7 @@ const emit = defineEmits<{ change: [content: string] }>();
 
 const host = ref<HTMLDivElement | null>(null);
 const error = ref('');
+const mermaidTextUpdaters = new Set<() => void>();
 const imageCache = new Map<string, string>();
 const keepsCrlf = usesCrlf(props.initialContent);
 const initialMarkdown = normalizeLineEndings(props.initialContent);
@@ -218,7 +220,9 @@ const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const 
 
   const applyMode = (): void => {
     wrapper.classList.toggle('show-source', showSource);
-    toggle.textContent = showSource ? '图表' : '源码';
+    toggle.textContent = showSource
+      ? t('wysiwyg.showChart')
+      : t('wysiwyg.showSource');
   };
 
   toggle.addEventListener('click', (event) => {
@@ -226,6 +230,7 @@ const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const 
     showSource = !showSource;
     applyMode();
   });
+  mermaidTextUpdaters.add(applyMode);
 
   const render = (node: typeof initialNode): void => {
     const language = String(node.attrs.language ?? '');
@@ -247,7 +252,7 @@ const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const 
     source = content;
     const attempt = ++run;
     preview.classList.remove('mermaid-error');
-    preview.textContent = '正在渲染图表…';
+    preview.textContent = t('wysiwyg.rendering');
 
     void renderMermaid(content)
       .then((svg) => {
@@ -257,9 +262,10 @@ const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const 
       .catch((error) => {
         if (attempt !== run) return;
         preview.classList.add('mermaid-error');
-        preview.textContent = `图表渲染失败：${
-          error instanceof Error ? error.message : String(error)
-        }`;
+        preview.textContent = t('wysiwyg.renderFailed', {
+          message:
+            error instanceof Error ? error.message : String(error),
+        });
       });
   };
 
@@ -277,6 +283,7 @@ const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const 
     ignoreMutation: (mutation) => !code.contains(mutation.target as Node),
     destroy: () => {
       run += 1;
+      mermaidTextUpdaters.delete(applyMode);
     },
   };
 });
@@ -443,7 +450,7 @@ function insertImage(
       imageType,
     )
   ) {
-    showError('当前位置无法插入图片');
+    showError(t('wysiwyg.insertImageFailed'));
     return;
   }
   const node = imageType.create({
@@ -477,12 +484,16 @@ async function uploadImages(
       insertImage(
         view,
         source,
-        file.name || '图片',
+        file.name || t('wysiwyg.imageAlt'),
         first ? position : undefined,
       );
       first = false;
     } catch (err) {
-      showError(err instanceof Error ? err.message : String(err));
+      showError(
+        localizeError(
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
     }
   }
 }
@@ -591,7 +602,7 @@ async function createEditor(): Promise<void> {
     ctx.set(editorViewOptionsCtx, {
       attributes: {
         class: 'wysiwyg-content',
-        'aria-label': 'Markdown 内容',
+        'aria-label': t('editor.markdownContent'),
       },
       editable: () => !props.readOnly,
     });
@@ -631,7 +642,9 @@ async function createEditor(): Promise<void> {
       scheduleCenter(view);
     });
   } catch (err) {
-    showError(err instanceof Error ? err.message : String(err));
+    showError(
+      localizeError(err instanceof Error ? err.message : String(err)),
+    );
   }
 }
 
@@ -666,6 +679,15 @@ watch(
     });
   },
 );
+
+watch(language, () => {
+  for (const update of mermaidTextUpdaters) update();
+  editor?.action((ctx) => {
+    ctx
+      .get(editorViewCtx)
+      .dom.setAttribute('aria-label', t('editor.markdownContent'));
+  });
+});
 
 onMounted(() => {
   void createEditor();

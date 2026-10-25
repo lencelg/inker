@@ -1,5 +1,5 @@
 import type { Preferences } from './preferences';
-import { FONTS } from './fonts';
+import { FONTS, fontLabel } from './fonts';
 import {
   DEFAULT_CODE_THEME,
   allCodeThemes,
@@ -8,6 +8,11 @@ import {
   DEFAULT_THEME,
   allThemes,
 } from './themes';
+import {
+  LANGUAGE_OPTIONS,
+  t,
+  type TranslationKey,
+} from './i18n';
 
 export type SettingsCategoryId = 'common' | 'editor' | 'preview' | 'export';
 export type SettingsScope = 'user' | 'workspace';
@@ -60,209 +65,264 @@ interface SettingTemplate
   defaultValue: SettingsValue;
 }
 
-export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
-  {
-    id: 'common',
-    label: '常用设置',
-    description: '经常调整的设置项会集中显示在这里。',
-    icon: 'settings',
-  },
-  {
-    id: 'editor',
-    label: '文本编辑器',
-    description: '控制源代码编辑器的字体、键位和写作体验。',
-    icon: 'editor',
-  },
-  {
-    id: 'preview',
-    label: '预览',
-    description: '控制 Markdown 实时预览的渲染方式。',
-    icon: 'preview',
-  },
-  {
-    id: 'export',
-    label: '导出',
-    description: '配置分享笔记时使用的默认导出选项。',
-    icon: 'export',
-  },
-];
+export function settingsCategories(): SettingsCategory[] {
+  return [
+    {
+      id: 'common',
+      label: t('settings.category.common.label'),
+      description: t('settings.category.common.description'),
+      icon: 'settings',
+    },
+    {
+      id: 'editor',
+      label: t('settings.category.editor.label'),
+      description: t('settings.category.editor.description'),
+      icon: 'editor',
+    },
+    {
+      id: 'preview',
+      label: t('settings.category.preview.label'),
+      description: t('settings.category.preview.description'),
+      icon: 'preview',
+    },
+    {
+      id: 'export',
+      label: t('settings.category.export.label'),
+      description: t('settings.category.export.description'),
+      icon: 'export',
+    },
+  ];
+}
 
-const FONT_OPTIONS: SettingsOption[] = FONTS.map((font) => ({
-  label: font.label,
-  value: font.id,
-}));
+function exportOptions(): SettingsOption[] {
+  return [
+    { label: t('export.pdf'), value: 'pdf' },
+    { label: t('export.html'), value: 'html' },
+    { label: t('export.docx'), value: 'docx' },
+  ];
+}
 
-const EXPORT_OPTIONS: SettingsOption[] = [
-  { label: 'PDF（打印）', value: 'pdf' },
-  { label: 'HTML 网页', value: 'html' },
-  { label: 'Word (.docx)', value: 'docx' },
-];
+function fontOptions(): SettingsOption[] {
+  return FONTS.map((font) => ({
+    label: fontLabel(font),
+    value: font.id,
+  }));
+}
 
-const SETTING_TEMPLATES: readonly SettingTemplate[] = [
-  {
-    id: 'workbench.colorTheme',
-    category: 'common',
-    title: 'Workbench: Color Theme',
-    description: '指定界面、编辑器和预览区域使用的颜色主题。',
-    controlType: 'select',
-    defaultValue: DEFAULT_THEME,
-    keywords: ['主题', '颜色', '配色', '外观', 'theme', 'color'],
-    preference: 'theme',
-    themeImport: 'ui',
-    hint: {
-      text: '主题切换会立即应用到整个工作台，并保存在本机。',
-      linkLabel: '恢复默认主题',
-      action: 'reset',
+function settingTemplates(): SettingTemplate[] {
+  return [
+    {
+      id: 'workbench.language',
+      category: 'common',
+      title: 'Workbench: Display Language',
+      description: t('settings.language.description'),
+      controlType: 'select',
+      defaultValue: 'system',
+      keywords: [
+        '语言',
+        '显示语言',
+        '中文',
+        '英文',
+        'language',
+        'locale',
+        'english',
+        'chinese',
+      ],
+      preference: 'language',
+      hint: {
+        text: t('settings.language.hint'),
+      },
     },
-  },
-  {
-    id: 'editor.fontSize',
-    category: 'common',
-    title: 'Editor: Font Size',
-    description: '控制编辑器字体大小（像素）。',
-    controlType: 'input',
-    defaultValue: 15,
-    min: 11,
-    max: 28,
-    step: 1,
-    suffix: 'px',
-    keywords: ['字体', '字号', '大小', '缩放', 'font', 'size'],
-    preference: 'fontSize',
-    hint: {
-      text: '也可以按住 Ctrl 并滚动鼠标滚轮快速调整。',
-      linkLabel: '重置为默认值',
-      action: 'reset',
+    {
+      id: 'workbench.colorTheme',
+      category: 'common',
+      title: 'Workbench: Color Theme',
+      description: t('settings.colorTheme.description'),
+      controlType: 'select',
+      defaultValue: DEFAULT_THEME,
+      keywords: ['主题', '颜色', '配色', '外观', 'theme', 'color'],
+      preference: 'theme',
+      themeImport: 'ui',
+      hint: {
+        text: t('settings.colorTheme.hint'),
+        linkLabel: t('settings.colorTheme.reset'),
+        action: 'reset',
+      },
     },
-  },
-  {
-    id: 'editor.immersive',
-    category: 'common',
-    title: 'Editor: Immersive Writing',
-    description: '保持当前行居中并淡化其他内容，减少视觉干扰。',
-    controlType: 'checkbox',
-    defaultValue: false,
-    keywords: ['沉浸', '写作', '打字机', '居中', '专注', 'immersive'],
-    preference: 'immersive',
-    hint: {
-      text: '该选项会同时作用于源代码和实时预览两种编辑模式。',
+    {
+      id: 'editor.fontSize',
+      category: 'common',
+      title: 'Editor: Font Size',
+      description: t('settings.fontSize.description'),
+      controlType: 'input',
+      defaultValue: 15,
+      min: 11,
+      max: 28,
+      step: 1,
+      suffix: 'px',
+      keywords: ['字体', '字号', '大小', '缩放', 'font', 'size'],
+      preference: 'fontSize',
+      hint: {
+        text: t('settings.fontSize.hint'),
+        linkLabel: t('settings.fontSize.reset'),
+        action: 'reset',
+      },
     },
-  },
-  {
-    id: 'editor.fontFamily',
-    category: 'editor',
-    title: 'Editor: Font Family',
-    description: '控制编辑器、标签页和文件树使用的等宽字体。',
-    controlType: 'select',
-    defaultValue: 'jetbrains-mono',
-    options: FONT_OPTIONS,
-    keywords: ['字体', 'font', 'family', '等宽', 'jetbrains', 'fira'],
-    preference: 'fontFamily',
-    hint: {
-      text: '字体列表来自本机已安装并随应用打包的字体。',
-      linkLabel: '恢复默认字体',
-      action: 'reset',
+    {
+      id: 'editor.immersive',
+      category: 'common',
+      title: 'Editor: Immersive Writing',
+      description: t('settings.immersive.description'),
+      controlType: 'checkbox',
+      defaultValue: false,
+      keywords: [
+        '沉浸',
+        '写作',
+        '打字机',
+        '居中',
+        '专注',
+        'immersive',
+        'focus',
+      ],
+      preference: 'immersive',
+      hint: {
+        text: t('settings.immersive.hint'),
+      },
     },
-  },
-  {
-    id: 'editor.vimMode',
-    category: 'editor',
-    title: 'Editor: Vim Mode',
-    description: '启用 Vim 键位，支持 Normal、Insert、搜索、替换和宏。',
-    controlType: 'checkbox',
-    defaultValue: false,
-    keywords: ['vim', '键位', '键盘', '模式', 'normal', 'insert'],
-    preference: 'vimEnabled',
-    hint: {
-      text: 'Vim 模式仅影响源代码编辑器，实时预览保持标准输入。',
+    {
+      id: 'editor.fontFamily',
+      category: 'editor',
+      title: 'Editor: Font Family',
+      description: t('settings.fontFamily.description'),
+      controlType: 'select',
+      defaultValue: 'jetbrains-mono',
+      options: fontOptions(),
+      keywords: ['字体', 'font', 'family', '等宽', 'jetbrains', 'fira'],
+      preference: 'fontFamily',
+      hint: {
+        text: t('settings.fontFamily.hint'),
+        linkLabel: t('settings.fontFamily.reset'),
+        action: 'reset',
+      },
     },
-  },
-  {
-    id: 'editor.sourceHighlight',
-    category: 'editor',
-    title: 'Editor: Code Block Highlight',
-    description: '控制源码模式中围栏代码块的语法高亮。',
-    controlType: 'checkbox',
-    defaultValue: true,
-    keywords: ['源码', '代码块', '语法', '高亮', 'source', 'code', 'syntax'],
-    preference: 'sourceHighlight',
-    hint: {
-      text: '关闭后仅代码块显示为单色，Markdown 语法高亮不受影响。',
+    {
+      id: 'editor.vimMode',
+      category: 'editor',
+      title: 'Editor: Vim Mode',
+      description: t('settings.vim.description'),
+      controlType: 'checkbox',
+      defaultValue: false,
+      keywords: ['vim', '键位', '键盘', '模式', 'normal', 'insert'],
+      preference: 'vimEnabled',
+      hint: {
+        text: t('settings.vim.hint'),
+      },
     },
-  },
-  {
-    id: 'preview.codeHighlight',
-    category: 'preview',
-    title: 'Preview: Code Highlight',
-    description: '为预览和实时预览中的代码块启用语法高亮。',
-    controlType: 'checkbox',
-    defaultValue: true,
-    keywords: ['预览', '代码', '高亮', '语言', 'highlight', 'code'],
-    preference: 'codeHighlight',
-    hint: {
-      text: '关闭后代码块会使用纯文本样式，预览中的语言标识也会隐藏。',
+    {
+      id: 'editor.sourceHighlight',
+      category: 'editor',
+      title: 'Editor: Code Block Highlight',
+      description: t('settings.sourceHighlight.description'),
+      controlType: 'checkbox',
+      defaultValue: true,
+      keywords: [
+        '源码',
+        '代码块',
+        '语法',
+        '高亮',
+        'source',
+        'code',
+        'syntax',
+        'highlight',
+      ],
+      preference: 'sourceHighlight',
+      hint: {
+        text: t('settings.sourceHighlight.hint'),
+      },
     },
-  },
-  {
-    id: 'preview.codeTheme',
-    category: 'preview',
-    title: 'Preview: Code Highlight Theme',
-    description: '选择预览和实时预览中的代码语法配色主题。',
-    controlType: 'select',
-    defaultValue: DEFAULT_CODE_THEME,
-    keywords: [
-      '预览',
-      '代码',
-      '主题',
-      '高亮',
-      '配色',
-      'theme',
-      'syntax',
-      'highlight',
-    ],
-    preference: 'codeTheme',
-    themeImport: 'code',
-    hint: {
-      text: '切换后会立即应用到已经打开的预览内容。',
+    {
+      id: 'preview.codeHighlight',
+      category: 'preview',
+      title: 'Preview: Code Highlight',
+      description: t('settings.codeHighlight.description'),
+      controlType: 'checkbox',
+      defaultValue: true,
+      keywords: [
+        '预览',
+        '代码',
+        '高亮',
+        '语言',
+        'highlight',
+        'code',
+        'preview',
+      ],
+      preference: 'codeHighlight',
+      hint: {
+        text: t('settings.codeHighlight.hint'),
+      },
     },
-  },
-  {
-    id: 'export.defaultFormat',
-    category: 'export',
-    title: 'Export: Default Format',
-    description: '选择分享笔记时默认使用的导出格式。',
-    controlType: 'select',
-    defaultValue: 'pdf',
-    options: EXPORT_OPTIONS,
-    keywords: ['导出', '格式', 'pdf', 'html', 'word', 'docx'],
-    hint: {
-      text: '顶部导出菜单仍可临时选择其他格式。',
+    {
+      id: 'preview.codeTheme',
+      category: 'preview',
+      title: 'Preview: Code Highlight Theme',
+      description: t('settings.codeTheme.description'),
+      controlType: 'select',
+      defaultValue: DEFAULT_CODE_THEME,
+      keywords: [
+        '预览',
+        '代码',
+        '主题',
+        '高亮',
+        '配色',
+        'theme',
+        'syntax',
+        'highlight',
+      ],
+      preference: 'codeTheme',
+      themeImport: 'code',
+      hint: {
+        text: t('settings.codeTheme.hint'),
+      },
     },
-  },
-  {
-    id: 'export.includeImages',
-    category: 'export',
-    title: 'Export: Include Local Images',
-    description: '将笔记中引用的本地图片嵌入导出文件，便于单独分享。',
-    controlType: 'checkbox',
-    defaultValue: true,
-    keywords: ['导出', '图片', '附件', 'image', 'assets', '嵌入'],
-    hint: {
-      text: '图片会转换为内嵌资源，避免移动文件后无法显示。',
+    {
+      id: 'export.defaultFormat',
+      category: 'export',
+      title: 'Export: Default Format',
+      description: t('settings.exportFormat.description'),
+      controlType: 'select',
+      defaultValue: 'pdf',
+      options: exportOptions(),
+      keywords: ['导出', '格式', 'pdf', 'html', 'word', 'docx'],
+      hint: {
+        text: t('settings.exportFormat.hint'),
+      },
     },
-  },
-  {
-    id: 'export.openAfterExport',
-    category: 'export',
-    title: 'Export: Open After Save',
-    description: '导出完成后使用系统默认应用打开生成的文件。',
-    controlType: 'checkbox',
-    defaultValue: false,
-    keywords: ['导出', '打开', '文件', 'open', 'save'],
-    hint: {
-      text: '文件仍会先通过系统保存对话框写入你选择的位置。',
+    {
+      id: 'export.includeImages',
+      category: 'export',
+      title: 'Export: Include Local Images',
+      description: t('settings.includeImages.description'),
+      controlType: 'checkbox',
+      defaultValue: true,
+      keywords: ['导出', '图片', '附件', 'image', 'assets', '嵌入'],
+      hint: {
+        text: t('settings.includeImages.hint'),
+      },
     },
-  },
-];
+    {
+      id: 'export.openAfterExport',
+      category: 'export',
+      title: 'Export: Open After Save',
+      description: t('settings.openAfterExport.description'),
+      controlType: 'checkbox',
+      defaultValue: false,
+      keywords: ['导出', '打开', '文件', 'open', 'save'],
+      hint: {
+        text: t('settings.openAfterExport.hint'),
+      },
+    },
+  ];
+}
 
 export function createSettingsSchema(
   preferences: Preferences,
@@ -278,8 +338,14 @@ export function createSettingsSchema(
       value: theme.id,
     }),
   );
+  const languageOptions: SettingsOption[] = LANGUAGE_OPTIONS.map(
+    (option) => ({
+      label: t(option.label as TranslationKey),
+      value: option.id,
+    }),
+  );
 
-  return SETTING_TEMPLATES.map((template) => {
+  return settingTemplates().map((template) => {
     const value = template.preference
       ? (preferences[template.preference] as SettingsValue)
       : (localValues[template.id] ?? template.defaultValue);
@@ -288,7 +354,9 @@ export function createSettingsSchema(
         ? themeOptions
         : template.id === 'preview.codeTheme'
           ? codeThemeOptions
-          : template.options;
+          : template.id === 'workbench.language'
+            ? languageOptions
+            : template.options;
 
     return {
       ...template,

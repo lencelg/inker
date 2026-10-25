@@ -7,6 +7,7 @@ import {
   isSettingModified,
   type SettingDefinition,
 } from '../../lib/settingsSchema';
+import { t } from '../../lib/i18n';
 
 const props = defineProps<{
   setting: SettingDefinition;
@@ -44,7 +45,9 @@ function onCheckboxChange(event: Event): void {
     <div class="setting-copy">
       <div class="setting-title-row">
         <h3 :id="`${setting.id}-title`">{{ setting.title }}</h3>
-        <span v-if="modified" class="modified-badge">已修改</span>
+        <span v-if="modified" class="modified-badge">{{
+          t('setting.modified')
+        }}</span>
       </div>
       <p class="setting-description">{{ setting.description }}</p>
 
@@ -84,7 +87,9 @@ function onCheckboxChange(event: Event): void {
           <span class="checkbox-box" aria-hidden="true">
             <Check v-if="checked" :size="11" :stroke-width="3" />
           </span>
-          <span class="checkbox-label">{{ checked ? '已启用' : '已停用' }}</span>
+          <span class="checkbox-label">{{
+            checked ? t('setting.enabled') : t('setting.disabled')
+          }}</span>
         </label>
       </div>
 

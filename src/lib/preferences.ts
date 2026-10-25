@@ -10,6 +10,12 @@ import {
   type FontId,
 } from './fonts';
 import {
+  isLanguagePreference,
+  resolveLanguage,
+  setLanguage,
+  type LanguagePreference,
+} from './i18n';
+import {
   DEFAULT_THEME,
   LEGACY_THEME_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -28,6 +34,7 @@ export const IMMERSIVE_STORAGE_KEY = 'inker-immersive';
 export const CODE_HIGHLIGHT_STORAGE_KEY = 'inker-code-highlight';
 export const CODE_THEME_STORAGE_KEY = 'inker-code-theme';
 export const SOURCE_HIGHLIGHT_STORAGE_KEY = 'inker-source-highlight';
+export const LANGUAGE_STORAGE_KEY = 'inker-language';
 const LEGACY_FONT_SIZE_STORAGE_KEY = 'markleaf-font-size';
 const LEGACY_FONT_FAMILY_STORAGE_KEY = 'markleaf-font-family';
 const LEGACY_VIM_STORAGE_KEY = 'markleaf-vim';
@@ -43,6 +50,7 @@ export interface Preferences {
   codeHighlight: boolean;
   codeTheme: CodeThemeId;
   sourceHighlight: boolean;
+  language: LanguagePreference;
 }
 
 export function clampFontSize(value: number): number {
@@ -68,6 +76,9 @@ export function normalizePreferences(value: unknown): Preferences {
       ? source.codeTheme
       : DEFAULT_CODE_THEME,
     sourceHighlight: source.sourceHighlight !== false,
+    language: isLanguagePreference(source.language)
+      ? source.language
+      : 'system',
   };
 }
 
@@ -112,6 +123,9 @@ export function readPreferences(): Preferences {
         rawSourceHighlight === null
           ? true
           : rawSourceHighlight === 'true',
+      language: window.localStorage.getItem(
+        LANGUAGE_STORAGE_KEY,
+      ) ?? undefined,
     });
 
     if (usedLegacyKeys) savePreferences(preferences);
@@ -152,6 +166,10 @@ export function savePreferences(preferences: Preferences): void {
       SOURCE_HIGHLIGHT_STORAGE_KEY,
       String(preferences.sourceHighlight),
     );
+    window.localStorage.setItem(
+      LANGUAGE_STORAGE_KEY,
+      preferences.language,
+    );
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_FAMILY_STORAGE_KEY);
@@ -164,6 +182,7 @@ export function savePreferences(preferences: Preferences): void {
 }
 
 export function applyPreferences(preferences: Preferences): void {
+  setLanguage(resolveLanguage(preferences.language));
   applyUiTheme(preferences.theme);
   document.documentElement.dataset.font = preferences.fontFamily;
   document.documentElement.style.setProperty(

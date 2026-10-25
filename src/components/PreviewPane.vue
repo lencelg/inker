@@ -16,6 +16,7 @@ import {
   scrollToAnchor,
 } from '../lib/anchors';
 import { isLocalImageSource } from '../lib/markdown';
+import { localizeError, t } from '../lib/i18n';
 import { renderMermaid } from '../lib/mermaid';
 import {
   previewScrollTop,
@@ -95,8 +96,12 @@ function errorMessage(error: unknown): string {
 function markMissing(image: HTMLImageElement, message: string): void {
   const placeholder = document.createElement('span');
   placeholder.className = 'md-image-missing';
-  placeholder.textContent = `${image.alt || '图片'}（无法加载）`;
-  placeholder.title = `图片加载失败：${message}`;
+  placeholder.textContent = t('preview.imageMissing', {
+    alt: image.alt || t('preview.imageFallback'),
+  });
+  placeholder.title = t('preview.imageLoadFailed', {
+    message: localizeError(message),
+  });
   image.replaceWith(placeholder);
 }
 
@@ -213,7 +218,9 @@ async function renderDiagrams(run: number): Promise<void> {
       } catch (error) {
         if (run !== resolveRun || !block.isConnected) return;
         block.classList.add('mermaid-error');
-        block.title = `Mermaid 渲染失败：${errorMessage(error)}`;
+        block.title = t('preview.mermaidFailed', {
+          message: errorMessage(error),
+        });
       }
     }),
   );
@@ -456,7 +463,7 @@ watch(
     ></div>
     <div v-else class="preview-empty">
       <span class="preview-icon">&lt;/&gt;</span>
-      <p>开始输入 Markdown，预览会实时更新。</p>
+      <p>{{ t('preview.empty') }}</p>
     </div>
   </section>
 </template>

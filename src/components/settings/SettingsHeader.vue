@@ -9,6 +9,7 @@ import {
   Square,
   X,
 } from '@lucide/vue';
+import { t } from '../../lib/i18n';
 
 const props = defineProps<{
   query: string;
@@ -54,7 +55,7 @@ function clearSearch(): void {
   <header class="settings-header">
     <div class="settings-heading">
       <Settings :size="18" aria-hidden="true" />
-      <span>设置</span>
+      <span>{{ t('settings.title') }}</span>
     </div>
 
     <div class="settings-search" :class="{ disabled: searchDisabled }">
@@ -65,16 +66,16 @@ function clearSearch(): void {
         class="search-input"
         :value="query"
         :disabled="searchDisabled"
-        placeholder="搜索设置(历史记录 1)"
-        aria-label="搜索设置"
+        :placeholder="t('settings.searchPlaceholder')"
+        :aria-label="t('settings.search')"
         spellcheck="false"
         @input="onSearchInput"
       />
       <button
         type="button"
         class="search-action"
-        title="清除搜索"
-        aria-label="清除搜索"
+        :title="t('settings.clearSearch')"
+        :aria-label="t('settings.clearSearch')"
         :disabled="!query || searchDisabled"
         @click="clearSearch"
       >
@@ -85,8 +86,8 @@ function clearSearch(): void {
         type="button"
         class="search-action"
         :class="{ active: filterActive }"
-        title="仅显示已修改的设置"
-        aria-label="仅显示已修改的设置"
+        :title="t('settings.filterModified')"
+        :aria-label="t('settings.filterModified')"
         :aria-pressed="filterActive"
         :disabled="searchDisabled"
         @click="emit('toggleFilter')"
@@ -99,8 +100,8 @@ function clearSearch(): void {
       <button
         type="button"
         class="window-control"
-        title="最小化"
-        aria-label="最小化窗口"
+        :title="t('settings.minimize')"
+        :aria-label="t('settings.minimizeWindow')"
         @click="emit('minimize')"
       >
         <Minus :size="15" aria-hidden="true" />
@@ -108,8 +109,12 @@ function clearSearch(): void {
       <button
         type="button"
         class="window-control"
-        :title="maximized ? '还原' : '最大化'"
-        :aria-label="maximized ? '还原窗口' : '最大化窗口'"
+        :title="maximized ? t('settings.restore') : t('settings.maximize')"
+        :aria-label="
+          maximized
+            ? t('settings.restoreWindow')
+            : t('settings.maximizeWindow')
+        "
         @click="emit('maximize')"
       >
         <Copy v-if="maximized" :size="13" aria-hidden="true" />
@@ -118,8 +123,8 @@ function clearSearch(): void {
       <button
         type="button"
         class="window-control close"
-        title="关闭设置"
-        aria-label="关闭设置"
+        :title="t('settings.close')"
+        :aria-label="t('settings.close')"
         @click="emit('close')"
       >
         <X :size="16" aria-hidden="true" />

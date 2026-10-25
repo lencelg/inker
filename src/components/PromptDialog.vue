@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue';
+import { t } from '../lib/i18n';
 
 const props = defineProps<{
   title: string;
@@ -51,9 +52,11 @@ function cancel(): void {
       </label>
       <p v-if="error" class="error">{{ error }}</p>
       <div class="actions">
-        <button class="btn ghost" type="button" :disabled="busy" @click="cancel">取消</button>
+        <button class="btn ghost" type="button" :disabled="busy" @click="cancel">
+          {{ t('action.cancel') }}
+        </button>
         <button class="btn primary" type="submit" :disabled="busy || !value.trim()">
-          {{ busy ? '处理中…' : confirmLabel }}
+          {{ busy ? t('action.processing') : confirmLabel }}
         </button>
       </div>
     </form>

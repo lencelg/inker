@@ -15,6 +15,7 @@ import {
   type FileChild,
   type ParagraphChild,
 } from 'docx';
+import { t } from './i18n';
 
 const MAX_IMAGE_WIDTH = 600;
 const CJK_FONT = {
@@ -171,7 +172,7 @@ async function imageParagraph(
           data: data.data,
           transformation: { width: data.width, height: data.height },
           altText: {
-            name: image.alt || '图片',
+            name: image.alt || t('preview.imageFallback'),
             description: image.alt || '',
             title: image.title || image.alt || '',
           },
@@ -313,8 +314,8 @@ async function mermaidParagraphs(
               data: png.data,
               transformation: { width: png.width, height: png.height },
               altText: {
-                name: 'Mermaid 图表',
-                description: 'Mermaid 图表',
+                name: t('docx.mermaid.title'),
+                description: t('docx.mermaid.title'),
               },
             }),
           ],
@@ -328,7 +329,7 @@ async function mermaidParagraphs(
         new Paragraph({
           children: [
             new TextRun({
-              text: '（Mermaid 图表）',
+              text: t('docx.mermaid.source'),
               italics: true,
               color: '6E7781',
             }),

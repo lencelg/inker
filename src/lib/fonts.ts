@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 export const FONTS = [
   {
     id: 'jetbrains-mono',
@@ -19,15 +21,21 @@ export const FONTS = [
   },
   {
     id: 'system-mono',
-    label: '系统等宽',
+    label: 'System Monospace',
+    labelKey: 'font.systemMono',
     stack:
       "ui-monospace, SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace",
   },
 ] as const;
 
 export type FontId = (typeof FONTS)[number]['id'];
+type FontDefinition = (typeof FONTS)[number];
 
 export const DEFAULT_FONT: FontId = 'jetbrains-mono';
+
+export function fontLabel(font: FontDefinition): string {
+  return 'labelKey' in font ? t(font.labelKey) : font.label;
+}
 
 export function isFontId(value: unknown): value is FontId {
   return (

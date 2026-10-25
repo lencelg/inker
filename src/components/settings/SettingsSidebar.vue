@@ -9,6 +9,7 @@ import {
   FolderCog,
   Settings2,
 } from '@lucide/vue';
+import { t } from '../../lib/i18n';
 import type {
   SettingDefinition,
   SettingsCategory,
@@ -68,8 +69,8 @@ function isSettingMatch(setting: SettingDefinition): boolean {
 </script>
 
 <template>
-  <aside class="settings-sidebar" aria-label="设置导航">
-    <div class="scope-tabs" role="tablist" aria-label="设置范围">
+  <aside class="settings-sidebar" :aria-label="t('settings.nav')">
+    <div class="scope-tabs" role="tablist" :aria-label="t('settings.scope')">
       <button
         type="button"
         class="scope-tab"
@@ -78,7 +79,7 @@ function isSettingMatch(setting: SettingDefinition): boolean {
         :aria-selected="scope === 'user'"
         @click="emit('changeScope', 'user')"
       >
-        用户
+        {{ t('settings.user') }}
       </button>
       <button
         type="button"
@@ -88,11 +89,11 @@ function isSettingMatch(setting: SettingDefinition): boolean {
         :aria-selected="scope === 'workspace'"
         @click="emit('changeScope', 'workspace')"
       >
-        工作区
+        {{ t('settings.workspace') }}
       </button>
     </div>
 
-    <nav v-if="scope === 'user'" class="settings-tree" aria-label="设置分类">
+    <nav v-if="scope === 'user'" class="settings-tree" :aria-label="t('settings.categories')">
       <div
         v-for="category in userCategories"
         :key="category.id"
@@ -109,7 +110,11 @@ function isSettingMatch(setting: SettingDefinition): boolean {
           <button
             type="button"
             class="tree-chevron"
-            :aria-label="isExpanded(category.id) ? '折叠分类' : '展开分类'"
+            :aria-label="
+              isExpanded(category.id)
+                ? t('settings.collapseCategory')
+                : t('settings.expandCategory')
+            "
             :aria-expanded="isExpanded(category.id)"
             :disabled="filtering"
             @click="emit('toggleCategory', category.id)"
@@ -160,10 +165,10 @@ function isSettingMatch(setting: SettingDefinition): boolean {
 
     <div v-else class="scope-empty">
       <span class="scope-empty-icon"><FolderCog :size="24" aria-hidden="true" /></span>
-      <strong>工作区设置</strong>
-      <p>当前工作区还没有可用的设置覆盖，用户设置会继续生效。</p>
+      <strong>{{ t('settings.workspaceTitle') }}</strong>
+      <p>{{ t('settings.workspaceEmpty') }}</p>
       <button type="button" @click="emit('changeScope', 'user')">
-        打开用户设置
+        {{ t('settings.openUser') }}
       </button>
     </div>
   </aside>

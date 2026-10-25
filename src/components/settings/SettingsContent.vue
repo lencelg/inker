@@ -7,6 +7,7 @@ import {
 } from 'vue';
 import { FolderCog, SearchX, SlidersHorizontal } from '@lucide/vue';
 import SettingItem from './SettingItem.vue';
+import { t } from '../../lib/i18n';
 import type {
   SettingDefinition,
   SettingsCategoryId,
@@ -46,20 +47,48 @@ const activeSection = computed(() => {
 });
 
 const headingLabel = computed(() => {
-  if (props.scope === 'workspace') return '工作区设置';
-  return activeSection.value?.label ?? '常用设置';
+  if (props.scope === 'workspace') return t('settings.workspaceTitle');
+  return (
+    activeSection.value?.label ?? t('settings.category.common.label')
+  );
 });
 
 const scopeLabel = computed(() =>
-  props.scope === 'workspace' ? '工作区范围' : '用户设置',
+  props.scope === 'workspace'
+    ? t('settings.workspaceScope')
+    : t('settings.userScope'),
 );
 
 const visibleItemCount = computed(() =>
   props.sections.reduce((total, section) => total + section.items.length, 0),
 );
 
+const matchLabel = computed(() =>
+  t(
+    visibleItemCount.value === 1
+      ? 'settings.matchOne'
+      : 'settings.matchMany',
+    { count: visibleItemCount.value },
+  ),
+);
+
+const settingLabel = computed(() =>
+  t(
+    props.totalCount === 1
+      ? 'settings.settingOne'
+      : 'settings.settingMany',
+    { count: props.totalCount },
+  ),
+);
+
+const modifiedLabel = computed(() =>
+  t('settings.modifiedCount', { count: props.modifiedCount }),
+);
+
 const emptyTitle = computed(() =>
-  props.query.trim() ? '没有找到匹配的设置' : '没有已修改的设置',
+  props.query.trim()
+    ? t('settings.noMatches')
+    : t('settings.noModified'),
 );
 
 function setSectionElement(
@@ -141,7 +170,7 @@ defineExpose({
 </script>
 
 <template>
-  <section class="settings-content" aria-label="设置内容">
+  <section class="settings-content" :aria-label="t('settings.content')">
     <header class="content-header">
       <div class="content-heading">
         <span class="content-eyebrow">{{ scopeLabel }}</span>
@@ -149,12 +178,12 @@ defineExpose({
       </div>
       <div class="content-meta">
         <span v-if="filtering" class="meta-pill">
-          {{ visibleItemCount }} 项匹配
+          {{ matchLabel }}
         </span>
-        <span v-else class="meta-count">{{ totalCount }} 项设置</span>
+        <span v-else class="meta-count">{{ settingLabel }}</span>
         <span v-if="modifiedCount" class="meta-pill modified">
           <SlidersHorizontal :size="11" aria-hidden="true" />
-          已修改 {{ modifiedCount }}
+          {{ modifiedLabel }}
         </span>
       </div>
     </header>
@@ -167,13 +196,12 @@ defineExpose({
     >
       <div v-if="scope === 'workspace'" class="content-empty workspace">
         <span class="empty-icon"><FolderCog :size="25" aria-hidden="true" /></span>
-        <h3>当前工作区没有设置覆盖</h3>
+        <h3>{{ t('settings.workspaceEmptyHeading') }}</h3>
         <p>
-          工作区设置目前为空，所有选项都会继续使用用户设置。后续可以在这里为
-          单个笔记文件夹保存独立配置。
+          {{ t('settings.workspaceEmptyBody') }}
         </p>
         <button type="button" class="empty-action" @click="emit('openUser')">
-          返回用户设置
+          {{ t('settings.backToUser') }}
         </button>
       </div>
 
@@ -181,11 +209,11 @@ defineExpose({
         <span class="empty-icon"><SearchX :size="25" aria-hidden="true" /></span>
         <h3>{{ emptyTitle }}</h3>
         <p v-if="query.trim()">
-          没有与“{{ query.trim() }}”匹配的设置，请尝试其他关键词。
+          {{ t('settings.noMatchBody', { query: query.trim() }) }}
         </p>
-        <p v-else>调整任意设置后，它会显示在这里。</p>
+        <p v-else>{{ t('settings.adjustHint') }}</p>
         <button type="button" class="empty-action" @click="emit('clearFilters')">
-          清除筛选
+          {{ t('settings.clearFilters') }}
         </button>
       </div>
 
@@ -220,7 +248,7 @@ defineExpose({
         </section>
 
         <p class="settings-footnote">
-          主题、字体和编辑偏好会立即保存，并应用到当前窗口。
+          {{ t('settings.footnote') }}
         </p>
       </div>
     </div>

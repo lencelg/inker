@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { isImagePath } from '../lib/fileKinds';
+import { getLanguage, t } from '../lib/i18n';
 import { dirname } from '../lib/paths';
 import type { FileEntry } from '../types';
 
@@ -103,10 +104,14 @@ onBeforeUnmount(closeMenu);
 function sortNodes(nodes: TreeNode[]): void {
   nodes.sort((a, b) => {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-    return a.name.localeCompare(b.name, 'zh-CN', {
-      sensitivity: 'base',
-      numeric: true,
-    });
+    return a.name.localeCompare(
+      b.name,
+      getLanguage() === 'zh' ? 'zh-CN' : 'en',
+      {
+        sensitivity: 'base',
+        numeric: true,
+      },
+    );
   });
   for (const node of nodes) {
     sortNodes(node.children);
@@ -295,7 +300,11 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
       </div>
 
       <p v-if="rows.length === 0" class="empty">
-        {{ notesDir ? '右键此处新建文件或文件夹。' : '先选择一个文件夹来保存笔记。' }}
+        {{
+          notesDir
+            ? t('explorer.emptyRoot')
+            : t('explorer.emptyNoFolder')
+        }}
       </p>
     </div>
 
@@ -303,7 +312,7 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
       <button
         class="folder-button"
         type="button"
-        :title="notesDir ?? '选择笔记文件夹'"
+        :title="notesDir ?? t('explorer.chooseFolder')"
         @click="emit('chooseFolder')"
       >
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -315,7 +324,9 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
             stroke-linejoin="round"
           />
         </svg>
-        <span class="folder-name">{{ notesDir ? folderName : '选择笔记文件夹' }}</span>
+        <span class="folder-name">{{
+          notesDir ? folderName : t('explorer.chooseFolder')
+        }}</span>
       </button>
     </footer>
 
@@ -331,19 +342,19 @@ function runAction(action: 'create-file' | 'create-folder' | 'rename' | 'delete'
       >
         <template v-if="!menu.target || menu.target.isDir">
           <button class="menu-item" type="button" role="menuitem" @click="runAction('create-file')">
-            新建文件
+            {{ t('explorer.newFile') }}
           </button>
           <button class="menu-item" type="button" role="menuitem" @click="runAction('create-folder')">
-            新建文件夹
+            {{ t('explorer.newFolder') }}
           </button>
         </template>
         <div v-if="menu.target" class="menu-separator"></div>
         <template v-if="menu.target">
           <button class="menu-item" type="button" role="menuitem" @click="runAction('rename')">
-            重命名
+            {{ t('explorer.rename') }}
           </button>
           <button class="menu-item danger" type="button" role="menuitem" @click="runAction('delete')">
-            删除（移到回收站）
+            {{ t('explorer.delete') }}
           </button>
         </template>
       </div>

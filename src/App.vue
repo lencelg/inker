@@ -23,6 +23,7 @@ import {
   saveHtmlExport,
 } from './lib/exportContent';
 import { isImagePath } from './lib/fileKinds';
+import { localizeError, t } from './lib/i18n';
 import { renderMarkdown } from './lib/markdown';
 import {
   ancestorDirs,
@@ -998,14 +999,14 @@ function toggleFolder(path: string): void {
 
 function requestCreateFile(parent: string): void {
   openPrompt({
-    title: '新建文件',
-    label: '文件名',
-    initialValue: '未命名.md',
-    confirmLabel: '创建',
-    placeholder: '例如：笔记.md',
+    title: t('prompt.newFile.title'),
+    label: t('prompt.fileName'),
+    initialValue: t('prompt.newFile.initial'),
+    confirmLabel: t('action.create'),
+    placeholder: t('prompt.newFile.placeholder'),
     submit: async (name) => {
       if (mutating.value || switching.value) {
-        throw new Error('请稍后再试。');
+        throw new Error(t('app.retryLater'));
       }
       mutating.value = true;
       try {
@@ -1022,14 +1023,14 @@ function requestCreateFile(parent: string): void {
 
 function requestCreateFolder(parent: string): void {
   openPrompt({
-    title: '新建文件夹',
-    label: '文件夹名称',
+    title: t('prompt.newFolder.title'),
+    label: t('prompt.folderName'),
     initialValue: '',
-    confirmLabel: '创建',
-    placeholder: '例如：日记',
+    confirmLabel: t('action.create'),
+    placeholder: t('prompt.newFolder.placeholder'),
     submit: async (name) => {
       if (mutating.value || switching.value) {
-        throw new Error('请稍后再试。');
+        throw new Error(t('app.retryLater'));
       }
       mutating.value = true;
       try {
@@ -1047,21 +1048,21 @@ function requestRename(entry: FileEntry): void {
   const image = !entry.isDir && isImagePath(entry.path);
   openPrompt({
     title: entry.isDir
-      ? '重命名文件夹'
+      ? t('prompt.renameFolder.title')
       : image
-        ? '重命名图片'
-        : '重命名文件',
-    label: '新名称',
+        ? t('prompt.renameImage.title')
+        : t('prompt.renameFile.title'),
+    label: t('prompt.newName'),
     initialValue: entry.name,
-    confirmLabel: '重命名',
+    confirmLabel: t('action.rename'),
     placeholder: entry.isDir
-      ? '文件夹名称'
+      ? t('prompt.renameFolder.placeholder')
       : image
-        ? '例如：cover.png'
-        : '例如：笔记.md',
+        ? t('prompt.renameImage.placeholder')
+        : t('prompt.renameFile.placeholder'),
     submit: async (name) => {
       if (mutating.value || switching.value || anySaving.value) {
-        throw new Error('请稍后再试。');
+        throw new Error(t('app.retryLater'));
       }
       mutating.value = true;
       try {
@@ -1100,15 +1101,21 @@ async function requestDelete(entry: FileEntry): Promise<void> {
   const hasDirtyTab = affectedTabs.some(
     (tab) => tab.content !== tab.savedContent,
   );
-  const warning = hasDirtyTab
-    ? '其中有未保存的修改，删除后将无法恢复。'
-    : '';
+  const warning = hasDirtyTab ? t('delete.warning') : '';
   const confirmed = await askConfirmation({
-    title: entry.isDir ? '删除这个文件夹？' : '删除这个文件？',
-    message: entry.isDir
-      ? `文件夹“${entry.name}”及其内容会移到系统回收站。${warning}`
-      : `文件“${entry.name}”会移到系统回收站。${warning}`,
-    confirmLabel: '移到回收站',
+    title: entry.isDir ? t('delete.folderTitle') : t('delete.fileTitle'),
+    message: (
+      entry.isDir
+        ? t('delete.folderMessage', {
+            name: entry.name,
+            warning,
+          })
+        : t('delete.fileMessage', {
+            name: entry.name,
+            warning,
+          })
+    ).trim(),
+    confirmLabel: t('delete.confirm'),
   });
   if (!confirmed || busy.value || anySaving.value) return;
 
@@ -1142,9 +1149,11 @@ async function requestCloseTab(path: string): Promise<void> {
 
   if (tab.content !== tab.savedContent) {
     const confirmed = await askConfirmation({
-      title: '关闭未保存的标签页？',
-      message: `“${basename(tab.path)}”有未保存的修改，关闭后将丢失。`,
-      confirmLabel: '不保存并关闭',
+      title: t('close.unsavedTitle'),
+      message: t('close.unsavedMessage', {
+        name: basename(tab.path),
+      }),
+      confirmLabel: t('close.discard'),
     });
     if (!confirmed) return;
   }
@@ -1224,7 +1233,8 @@ function setError(err: unknown): void {
 }
 
 function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  const message = err instanceof Error ? err.message : String(err);
+  return localizeError(message);
 }
 </script>
 
@@ -1244,7 +1254,7 @@ function errorMessage(err: unknown): string {
     >
       <div class="titlebar-left">
         <span v-if="sidebarVisible" class="titlebar-title">
-          {{ activeView === 'search' ? '搜索' : '资源管理器' }}
+          {{ activeView === 'search' ? t('nav.search') : t('nav.explorer') }}
         </span>
       </div>
 
@@ -1272,8 +1282,8 @@ function errorMessage(err: unknown): string {
           <button
             type="button"
             class="window-control"
-            title="最小化"
-            aria-label="最小化"
+            :title="t('window.minimize')"
+            :aria-label="t('window.minimize')"
             @click="minimizeWindow"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1283,8 +1293,10 @@ function errorMessage(err: unknown): string {
           <button
             type="button"
             class="window-control"
-            :title="isMaximized ? '还原' : '最大化'"
-            :aria-label="isMaximized ? '还原' : '最大化'"
+            :title="isMaximized ? t('window.restore') : t('window.maximize')"
+            :aria-label="
+              isMaximized ? t('window.restore') : t('window.maximize')
+            "
             @click="toggleMaximizeWindow"
           >
             <svg v-if="isMaximized" viewBox="0 0 24 24" aria-hidden="true">
@@ -1298,8 +1310,8 @@ function errorMessage(err: unknown): string {
           <button
             type="button"
             class="window-control close"
-            title="关闭"
-            aria-label="关闭"
+            :title="t('window.close')"
+            :aria-label="t('window.close')"
             @click="closeWindow"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1350,9 +1362,11 @@ function errorMessage(err: unknown): string {
       :aria-valuenow="sidebarWidth"
       :aria-valuemin="MIN_SIDEBAR_WIDTH"
       :aria-valuemax="MAX_SIDEBAR_WIDTH"
-      :aria-label="`调整侧边栏宽度，当前 ${sidebarWidth} 像素`"
+      :aria-label="
+        t('app.sidebar.resizeAria', { width: sidebarWidth })
+      "
       tabindex="0"
-      title="拖动调整侧边栏宽度，双击恢复默认"
+      :title="t('app.sidebar.resizeTitle')"
       @pointerdown="startSidebarResize"
       @keydown="onSidebarResizerKeydown"
       @dblclick="resetSidebarWidth"
@@ -1362,9 +1376,9 @@ function errorMessage(err: unknown): string {
       <div class="welcome-card">
         <span class="welcome-icon"><InkerMark /></span>
         <h1>Inker</h1>
-        <p>选择一个文件夹，笔记会以 .md 文件保存在其中。</p>
+        <p>{{ t('app.welcome.description') }}</p>
         <button class="btn primary" type="button" @click="chooseFolder">
-          选择笔记文件夹
+          {{ t('app.welcome.chooseFolder') }}
         </button>
         <p v-if="error" class="welcome-error">{{ error }}</p>
       </div>
@@ -1373,7 +1387,13 @@ function errorMessage(err: unknown): string {
     <main v-else class="workspace">
       <div v-if="error" class="banner" role="alert">
         <span>{{ error }}</span>
-        <button type="button" aria-label="关闭错误提示" @click="error = ''">×</button>
+        <button
+          type="button"
+          :aria-label="t('app.error.dismiss')"
+          @click="error = ''"
+        >
+          ×
+        </button>
       </div>
 
       <template v-if="activeTab">
@@ -1436,7 +1456,7 @@ function errorMessage(err: unknown): string {
             aria-valuemin="20"
             aria-valuemax="80"
             tabindex="0"
-            title="拖动调整编辑区和预览区宽度，双击恢复默认"
+            :title="t('app.splitter.title')"
             @pointerdown="startResize"
             @keydown="onResizerKeydown"
             @dblclick="resetSplit"
@@ -1457,8 +1477,8 @@ function errorMessage(err: unknown): string {
 
       <div v-else class="workspace-empty">
         <span class="workspace-empty-icon"><InkerMark /></span>
-        <h1>还没有打开笔记</h1>
-        <p>在左侧文件树中打开或新建一个 Markdown 文件。</p>
+        <h1>{{ t('app.empty.title') }}</h1>
+        <p>{{ t('app.empty.description') }}</p>
       </div>
     </main>
 
@@ -1488,7 +1508,7 @@ function errorMessage(err: unknown): string {
         vimEnabled && !activeImagePath && viewMode !== 'wysiwyg'
       "
       :vim-mode="vimMode"
-      :line-ending="activeImagePath ? '图片' : lineEnding"
+      :line-ending="activeImagePath ? t('app.status.image') : lineEnding"
       :immersive="immersiveEnabled"
       @mode-change="setViewMode"
       @immersive-toggle="toggleImmersive"

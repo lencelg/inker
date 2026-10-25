@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '../lib/i18n';
+
 defineProps<{
   activeView: 'explorer' | 'search';
   sidebarVisible: boolean;
@@ -12,13 +14,13 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <nav class="activity-rail" aria-label="主导航">
+  <nav class="activity-rail" :aria-label="t('nav.main')">
     <button
       class="activity-item"
       :class="{ active: sidebarVisible && activeView === 'explorer' }"
       type="button"
-      title="文件"
-      aria-label="文件"
+      :title="t('nav.files')"
+      :aria-label="t('nav.files')"
       :aria-pressed="sidebarVisible && activeView === 'explorer'"
       @click="emit('selectExplorer')"
     >
@@ -44,8 +46,8 @@ const emit = defineEmits<{
       class="activity-item"
       :class="{ active: sidebarVisible && activeView === 'search' }"
       type="button"
-      title="搜索"
-      aria-label="搜索"
+      :title="t('nav.search')"
+      :aria-label="t('nav.search')"
       :aria-pressed="sidebarVisible && activeView === 'search'"
       @click="emit('selectSearch')"
     >
@@ -73,8 +75,8 @@ const emit = defineEmits<{
     <button
       class="activity-item"
       type="button"
-      title="设置"
-      aria-label="设置"
+      :title="t('nav.settings')"
+      :aria-label="t('nav.settings')"
       @click="emit('openSettings')"
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -2,17 +2,20 @@ import {
   customUiThemes,
   findCustomUiTheme,
 } from './customThemes';
+import { t, type TranslationKey } from './i18n';
 
 export const THEMES = [
-  { id: 'paper', label: '暖白' },
-  { id: 'white', label: '白色' },
-  { id: 'dark', label: '深色' },
+  { id: 'paper', labelKey: 'theme.paper' },
+  { id: 'white', labelKey: 'theme.white' },
+  { id: 'dark', labelKey: 'theme.dark' },
   { id: 'vscode-light', label: 'VS Code Light+' },
   { id: 'vscode-dark', label: 'VS Code Dark+' },
-  { id: 'vscode-hc', label: 'VS Code 高对比' },
+  { id: 'vscode-hc', labelKey: 'theme.vscodeHc' },
 ] as const;
 
-export type BuiltInThemeId = (typeof THEMES)[number]['id'];
+type BuiltInTheme = (typeof THEMES)[number];
+
+export type BuiltInThemeId = BuiltInTheme['id'];
 export type ThemeId = BuiltInThemeId | `custom-ui-${string}`;
 
 export interface ThemeOption {
@@ -24,6 +27,12 @@ export const DEFAULT_THEME: BuiltInThemeId = 'paper';
 export const THEME_STORAGE_KEY = 'inker-theme';
 export const LEGACY_THEME_STORAGE_KEY = 'markleaf-theme';
 const CUSTOM_THEME_STYLE_ID = 'inker-custom-ui-themes';
+
+export function builtInThemeLabel(theme: BuiltInTheme): string {
+  return 'labelKey' in theme
+    ? t(theme.labelKey as TranslationKey)
+    : theme.label;
+}
 
 export function isBuiltInThemeId(
   value: unknown,
@@ -46,11 +55,11 @@ export function allThemes(): ThemeOption[] {
   return [
     ...THEMES.map((theme) => ({
       id: theme.id,
-      label: theme.label,
+      label: builtInThemeLabel(theme),
     })),
     ...customUiThemes.value.map((theme) => ({
       id: theme.id as ThemeId,
-      label: `${theme.name}（自定义）`,
+      label: t('theme.custom', { name: theme.name }),
     })),
   ];
 }

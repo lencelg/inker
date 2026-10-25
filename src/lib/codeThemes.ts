@@ -1,4 +1,5 @@
 import { customCodeThemes } from './customThemes';
+import { t } from './i18n';
 import githubDarkCss from 'highlight.js/styles/github-dark.css?raw';
 import githubLightCss from 'highlight.js/styles/github.css?raw';
 import atomOneDarkCss from 'highlight.js/styles/atom-one-dark.css?raw';
@@ -102,7 +103,7 @@ export function allCodeThemes(): CodeThemeDefinition[] {
     ...customCodeThemes.value.map((theme) => ({
       ...theme,
       id: theme.id as CodeThemeId,
-      label: `${theme.name}（自定义）`,
+      label: t('theme.custom', { name: theme.name }),
       custom: true,
     })),
   ];

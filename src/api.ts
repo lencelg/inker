@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { t } from './lib/i18n';
 import type {
   NoteAsset,
   NoteDetail,
@@ -15,7 +16,7 @@ export const api: NotesApi = {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: '选择笔记文件夹',
+      title: t('explorer.chooseFolder'),
     });
     return typeof selected === 'string' ? selected : null;
   },

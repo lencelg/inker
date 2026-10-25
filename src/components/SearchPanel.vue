@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
+import { localizeError, t } from '../lib/i18n';
 import { dirname } from '../lib/paths';
 import type { SearchMatch } from '../types';
 
@@ -32,8 +33,9 @@ const input = ref<HTMLInputElement | null>(null);
 let searchTimer = 0;
 let requestId = 0;
 
-const groups = computed<SearchGroup[]>(() => {
-  const grouped = new Map<string, SearchGroup>();
+const errorText = computed(() => localizeError(error.value));
+
+const groups = computed<SearchGroup[]>(() => {  const grouped = new Map<string, SearchGroup>();
   for (const match of results.value) {
     let group = grouped.get(match.path);
     if (!group) {
@@ -143,8 +145,8 @@ async function runSearch(): Promise<void> {
 <template>
   <aside class="search-panel">
     <header class="panel-heading">
-      <h2>搜索</h2>
-      <span v-if="loading" class="status">搜索中…</span>
+      <h2>{{ t('search.title') }}</h2>
+      <span v-if="loading" class="status">{{ t('search.searching') }}</span>
     </header>
 
     <form class="search-form" role="search" @submit.prevent="runSearch">
@@ -169,16 +171,16 @@ async function runSearch(): Promise<void> {
         ref="input"
         v-model="query"
         type="text"
-        placeholder="搜索笔记"
+        :placeholder="t('search.placeholder')"
         autocomplete="off"
         spellcheck="false"
-        aria-label="搜索笔记"
+        :aria-label="t('search.placeholder')"
       />
       <button
         v-if="query"
         class="clear-button"
         type="button"
-        aria-label="清除搜索"
+        :aria-label="t('search.clear')"
         @click="clearQuery"
       >
         ×
@@ -187,14 +189,14 @@ async function runSearch(): Promise<void> {
 
     <div class="search-results">
       <p v-if="!notesDir" class="hint">
-        请先在文件视图中选择笔记文件夹。
+        {{ t('search.chooseFolder') }}
       </p>
       <p v-else-if="!query.trim()" class="hint">
-        搜索所有 Markdown 笔记的内容。
+        {{ t('search.hint') }}
       </p>
-      <p v-else-if="error" class="error">{{ error }}</p>
+      <p v-else-if="error" class="error">{{ errorText }}</p>
       <p v-else-if="!loading && groups.length === 0" class="hint">
-        没有找到匹配项。
+        {{ t('search.noResults') }}
       </p>
       <template v-else>
         <section
@@ -242,7 +244,7 @@ async function runSearch(): Promise<void> {
           </button>
         </section>
         <p v-if="truncated" class="hint">
-          结果过多，仅显示前 500 条。
+          {{ t('search.truncated') }}
         </p>
       </template>
     </div>

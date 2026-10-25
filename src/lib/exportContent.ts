@@ -3,6 +3,7 @@ import renderMathInElement from 'katex/contrib/auto-render';
 import { save } from '@tauri-apps/plugin-dialog';
 import githubCss from 'highlight.js/styles/github.css?raw';
 import { api } from '../api';
+import { t } from './i18n';
 import { isLocalImageSource, renderMarkdown } from './markdown';
 import { renderMermaid } from './mermaid';
 import { basename } from './paths';
@@ -165,7 +166,9 @@ async function resolveExportImages(
           image.src = `data:${asset.mime};base64,${asset.data}`;
         } catch {
           const placeholder = document.createElement('span');
-          placeholder.textContent = `${image.alt || '图片'}（无法加载）`;
+          placeholder.textContent = t('preview.imageMissing', {
+            alt: image.alt || t('preview.imageFallback'),
+          });
           image.replaceWith(placeholder);
           return;
         }
@@ -195,9 +198,10 @@ async function renderExportDiagrams(container: HTMLElement): Promise<void> {
         block.classList.add('mermaid-rendered');
       } catch (error) {
         block.classList.add('mermaid-error');
-        block.textContent = `Mermaid 渲染失败：${
-          error instanceof Error ? error.message : String(error)
-        }`;
+        block.textContent = t('preview.mermaidFailed', {
+          message:
+            error instanceof Error ? error.message : String(error),
+        });
       }
     }),
   );

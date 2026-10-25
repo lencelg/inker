@@ -5,10 +5,10 @@ import SettingsHeader from './settings/SettingsHeader.vue';
 import SettingsSidebar from './settings/SettingsSidebar.vue';
 import type { Preferences } from '../lib/preferences';
 import {
-  SETTINGS_CATEGORIES,
   createSettingsSchema,
   isSettingModified,
   matchesSetting,
+  settingsCategories,
   type SettingDefinition,
   type SettingsCategoryId,
   type SettingsScope,
@@ -33,7 +33,7 @@ const query = ref('');
 const modifiedOnly = ref(false);
 const activeCategory = ref<SettingsCategoryId>('common');
 const expandedCategories = ref<SettingsCategoryId[]>(
-  SETTINGS_CATEGORIES.map((category) => category.id),
+  settingsCategories().map((category) => category.id),
 );
 const localValues = ref<Record<string, SettingsValue>>({});
 const contentRef = ref<{
@@ -41,6 +41,8 @@ const contentRef = ref<{
   scrollToSetting: (setting: SettingDefinition) => Promise<void>;
   scrollToTop: () => void;
 } | null>(null);
+
+const categories = computed(() => settingsCategories());
 
 const settings = computed(() =>
   createSettingsSchema(props.preferences, localValues.value),
@@ -64,7 +66,7 @@ const matchedIds = computed(() =>
 const matchCounts = computed(
   () =>
     Object.fromEntries(
-      SETTINGS_CATEGORIES.map((category) => [
+      categories.value.map((category) => [
         category.id,
         filteredSettings.value.filter(
           (setting) => setting.category === category.id,
@@ -74,7 +76,7 @@ const matchCounts = computed(
 );
 
 const sections = computed<SettingsSection[]>(() =>
-  SETTINGS_CATEGORIES.map((category) => ({
+  categories.value.map((category) => ({
     ...category,
     items: filteredSettings.value.filter(
       (setting) => setting.category === category.id,
@@ -83,7 +85,7 @@ const sections = computed<SettingsSection[]>(() =>
 );
 
 const allSections = computed<SettingsSection[]>(() =>
-  SETTINGS_CATEGORIES.map((category) => ({
+  categories.value.map((category) => ({
     ...category,
     items: settings.value.filter(
       (setting) => setting.category === category.id,
@@ -100,7 +102,7 @@ watch([normalizedQuery, modifiedOnly], async () => {
   if (scope.value !== 'user') return;
   await nextTick();
   const first = sections.value[0];
-  activeCategory.value = first?.id ?? SETTINGS_CATEGORIES[0].id;
+  activeCategory.value = first?.id ?? categories.value[0].id;
   contentRef.value?.scrollToTop();
 });
 
@@ -111,7 +113,7 @@ function changeScope(next: SettingsScope): void {
   modifiedOnly.value = false;
 
   if (next === 'user') {
-    activeCategory.value = SETTINGS_CATEGORIES[0].id;
+    activeCategory.value = categories.value[0].id;
     void nextTick(() => contentRef.value?.scrollToTop());
   }
 }
@@ -191,7 +193,7 @@ function onActiveChange(category: SettingsCategoryId): void {
     <div class="settings-body">
       <SettingsSidebar
         :scope="scope"
-        :categories="SETTINGS_CATEGORIES"
+        :categories="categories"
         :sections="allSections"
         :active-category="activeCategory"
         :expanded-categories="expandedCategories"

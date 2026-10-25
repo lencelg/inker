@@ -3,9 +3,11 @@ import {
   CODE_HIGHLIGHT_STORAGE_KEY,
   FONT_SIZE_STORAGE_KEY,
   IMMERSIVE_STORAGE_KEY,
+  LANGUAGE_STORAGE_KEY,
   VIM_STORAGE_KEY,
   normalizePreferences,
   readPreferences,
+  savePreferences,
 } from './preferences';
 
 afterEach(() => {
@@ -61,5 +63,21 @@ describe('preferences', () => {
       'false',
     );
     expect(window.localStorage.getItem('markleaf-theme')).toBeNull();
+  });
+
+  it('defaults the display language to the system setting', () => {
+    expect(normalizePreferences({}).language).toBe('system');
+  });
+
+  it('keeps explicit language preferences and persists them', () => {
+    expect(normalizePreferences({ language: 'zh' }).language).toBe('zh');
+    expect(normalizePreferences({ language: 'en' }).language).toBe('en');
+    expect(normalizePreferences({ language: 'fr' }).language).toBe(
+      'system',
+    );
+
+    savePreferences(normalizePreferences({ language: 'en' }));
+    expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en');
+    expect(readPreferences().language).toBe('en');
   });
 });

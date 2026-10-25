@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { t } from './i18n';
 
 export type CustomUiThemeId = `custom-ui-${string}`;
 export type CustomCodeThemeId = `custom-code-${string}`;
@@ -125,7 +126,9 @@ export function addCustomUiTheme(
   theme: Omit<CustomUiTheme, 'id'>,
 ): CustomUiTheme {
   if (customUiThemes.value.length >= MAX_CUSTOM_THEMES) {
-    throw new Error(`最多只能保存 ${MAX_CUSTOM_THEMES} 个自定义界面主题`);
+    throw new Error(
+      t('themeImport.error.limitUi', { count: MAX_CUSTOM_THEMES }),
+    );
   }
   const next: CustomUiTheme = {
     ...theme,
@@ -140,7 +143,9 @@ export function addCustomCodeTheme(
   theme: Omit<CustomCodeTheme, 'id'>,
 ): CustomCodeTheme {
   if (customCodeThemes.value.length >= MAX_CUSTOM_THEMES) {
-    throw new Error(`最多只能保存 ${MAX_CUSTOM_THEMES} 个自定义代码主题`);
+    throw new Error(
+      t('themeImport.error.limitCode', { count: MAX_CUSTOM_THEMES }),
+    );
   }
   const next: CustomCodeTheme = {
     ...theme,

@@ -6,7 +6,7 @@ Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` �
 
 - 当前版本：`0.1.0`
 - 应用标识：`com.lencelg.markdownnotes`（为兼容已有配置保持不变）
-- 界面语言：中文
+- 界面语言：简体中文 / English（默认跟随系统）
 - 主要开发环境：Linux / Wayland / niri
 - 发布包：Debian `.deb`（编译产物约 8 MiB）
 
@@ -280,6 +280,7 @@ tempfile                     测试临时目录
   - 恢复默认链接
 - 支持实时搜索过滤并高亮匹配分类。
 - 支持“仅显示已修改的设置”。
+- 支持简体中文与 English 界面，默认跟随系统语言，切换后立即生效并保存在本机。
 - 点击分类平滑滚动到对应区域。
 - 滚动内容时自动同步左侧选中分类。
 - 设置变更立即应用到工作台。
@@ -410,6 +411,7 @@ markdown-note-taking/
 │       ├── docxExport.ts          # DOCX 内容转换
 │       ├── exportContent.ts       # HTML / PDF / 导出准备
 │       ├── fileKinds.ts           # 图片扩展名识别
+│       ├── i18n.ts                # 中英文文案与系统语言检测
 │       ├── imageView.ts           # 图片缩放与平移计算
 │       ├── fonts.ts               # 字体列表
 │       ├── lineEndings.ts         # LF / CRLF 处理
@@ -556,6 +558,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-code-highlight` | 预览代码高亮 |
 | `inker-code-theme` | 代码高亮主题 |
 | `inker-source-highlight` | 源码代码块语法高亮 |
+| `inker-language` | 界面语言（`system` / `zh` / `en`） |
 | `inker-custom-ui-themes` | 自定义界面主题 |
 | `inker-custom-code-themes` | 自定义代码主题 |
 | `inker-split-ratio` | 侧边预览分隔比例 |
@@ -676,6 +679,8 @@ Markdown 图片路径
 - `keywords`
 - `hint`
 - `preference`：映射到 `Preferences`
+
+设置文案通过 `src/lib/i18n.ts` 的 `t()` 获取；切换语言时 Schema 会重新计算，因此分类、描述、提示和下拉选项会同步更新。`i18n.ts` 同时负责系统语言检测（中文系统使用简体中文，其他系统使用 English）以及后端错误的英文映射。
 
 ### 5.6 导出
 
@@ -820,7 +825,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：19 个测试文件，71 个测试通过
+- 前端：20 个测试文件，79 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -832,6 +837,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - LF / CRLF
 - ProseMirror 多光标
 - 偏好设置
+- 中英文界面、系统语言检测与切换
 - 图片文件识别
 - 设置 Schema / 搜索
 - 设置面板交互

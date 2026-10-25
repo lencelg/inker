@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
-import { VIEW_MODES, type ViewMode } from '../lib/viewModes';
+import { t } from '../lib/i18n';
+import {
+  VIEW_MODES,
+  viewModeLabel,
+  type ViewMode,
+} from '../lib/viewModes';
 
 const props = defineProps<{
   line: number | null;
@@ -17,9 +22,7 @@ const emit = defineEmits<{
   immersiveToggle: [];
 }>();
 
-const modeLabel = computed(
-  () => VIEW_MODES.find((item) => item.id === props.mode)?.label ?? '源码模式',
-);
+const modeLabel = computed(() => viewModeLabel(props.mode));
 const vimModeLabel = computed(() => props.vimMode || 'NORMAL');
 
 const osName = detectOs();
@@ -181,7 +184,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
       <span
         v-if="vimEnabled"
         class="status-vim"
-        :aria-label="`Vim 模式：${vimModeLabel}`"
+        :aria-label="t('status.vimAria', { mode: vimModeLabel })"
       >
         {{ vimModeLabel }}
       </span>
@@ -190,15 +193,15 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         class="status-focus"
         :class="{ active: immersive }"
         :aria-pressed="immersive"
-        title="沉浸式写作（Ctrl+Shift+M）"
+        :title="t('status.immersive')"
         @click="emit('immersiveToggle')"
       >
-        专注
+        {{ t('status.focus') }}
       </button>
       <div
         v-if="vimEnabled"
         class="status-vim-command"
-        aria-label="Vim 命令输入"
+        :aria-label="t('status.vimCommand')"
       ></div>
     </div>
 
@@ -208,7 +211,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         type="button"
         class="status-mode"
         :class="{ open: menuOpen }"
-        aria-label="切换编辑模式"
+        :aria-label="t('status.switchMode')"
         aria-haspopup="menu"
         :aria-expanded="menuOpen"
         aria-controls="status-mode-menu"
@@ -229,9 +232,9 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         </svg>
       </button>
       <span class="status-item">
-        行 {{ line ?? '-' }}, 列 {{ column ?? '-' }}
+        {{ t('status.lineColumn', { line: line ?? '-', column: column ?? '-' }) }}
       </span>
-      <span class="status-item">空格: 4</span>
+      <span class="status-item">{{ t('status.spaces') }}</span>
       <span class="status-item">UTF-8</span>
       <span class="status-item">{{ lineEnding }}</span>
       <span class="status-item">{{ osName }}</span>
@@ -246,7 +249,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         ref="menuElement"
         class="mode-menu"
         role="menu"
-        aria-label="编辑模式"
+        :aria-label="t('status.editorMode')"
         :style="menuStyle"
         @keydown="onMenuKeyDown"
       >
@@ -259,7 +262,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
           :aria-checked="item.id === mode"
           :title="
             item.id === 'wysiwyg'
-              ? '编辑时会规范化 Markdown 格式'
+              ? t('status.wysiwygHint')
               : undefined
           "
           @click="selectMode(item.id)"
@@ -276,7 +279,7 @@ function onMenuKeyDown(event: KeyboardEvent): void {
               />
             </svg>
           </span>
-          <span>{{ item.label }}</span>
+          <span>{{ viewModeLabel(item.id) }}</span>
         </button>
       </div>
     </Transition>

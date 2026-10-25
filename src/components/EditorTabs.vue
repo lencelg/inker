@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
+import { t } from '../lib/i18n';
 
 interface TabItem {
   path: string;
@@ -59,7 +60,7 @@ watch(
 </script>
 
 <template>
-  <div class="tabline" role="tablist" aria-label="打开的文件">
+  <div class="tabline" role="tablist" :aria-label="t('tabs.openFiles')">
     <div
       v-for="tab in tabs"
       :key="tab.path"
@@ -75,7 +76,7 @@ watch(
       :tabindex="tab.path === activePath ? 0 : -1"
       :title="
         tab.path === previewPath
-          ? `${tab.path}（预览标签，双击固定）`
+          ? t('tabs.previewTitle', { path: tab.path })
           : tab.path
       "
       @click="emit('select', tab.path)"
@@ -112,12 +113,12 @@ watch(
       </svg>
       <span class="tab-name">{{ tab.name }}</span>
       <span class="tab-action">
-        <span class="tab-dirty" aria-label="未保存"></span>
+        <span class="tab-dirty" :aria-label="t('tabs.unsaved')"></span>
         <button
           class="tab-close"
           type="button"
-          :aria-label="`关闭 ${tab.name}`"
-          title="关闭"
+          :aria-label="t('tabs.closeAria', { name: tab.name })"
+          :title="t('tabs.close')"
           @click="closeTab($event, tab.path)"
         >
           ×

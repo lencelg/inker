@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { setLanguage } from './i18n';
 import {
   MAX_THEME_FILE_BYTES,
   parseCodeThemeFile,
@@ -29,6 +30,10 @@ body {
   color: red;
 }
 `;
+
+beforeEach(() => {
+  setLanguage('zh');
+});
 
 describe('theme import', () => {
   it('parses a valid UI theme JSON file', () => {

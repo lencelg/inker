@@ -27,6 +27,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { tags } from '@lezer/highlight';
 import { Vim, getCM, vim } from '@replit/codemirror-vim';
+import { language, t } from '../lib/i18n';
 import { formatVimMode } from '../lib/vimMode';
 
 const props = defineProps<{
@@ -51,6 +52,8 @@ const vimCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
 const immersiveCompartment = new Compartment();
 const highlightCompartment = new Compartment();
+const placeholderCompartment = new Compartment();
+const attributesCompartment = new Compartment();
 const vimExtension = vim({ status: false });
 
 let view: EditorView | null = null;
@@ -545,9 +548,13 @@ onMounted(() => {
         syntaxHighlighting(syntaxTheme),
         indentUnit.of('    '),
         EditorState.tabSize.of(4),
-        placeholder('从这里开始写…'),
+        placeholderCompartment.of(placeholder(t('editor.placeholder'))),
         EditorView.lineWrapping,
-        EditorView.contentAttributes.of({ 'aria-label': 'Markdown 内容' }),
+        attributesCompartment.of(
+          EditorView.contentAttributes.of({
+            'aria-label': t('editor.markdownContent'),
+          }),
+        ),
         theme,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -632,6 +639,21 @@ watch(
     if (enabled) centerSelection();
   },
 );
+
+watch(language, () => {
+  view?.dispatch({
+    effects: [
+      placeholderCompartment.reconfigure(
+        placeholder(t('editor.placeholder')),
+      ),
+      attributesCompartment.reconfigure(
+        EditorView.contentAttributes.of({
+          'aria-label': t('editor.markdownContent'),
+        }),
+      ),
+    ],
+  });
+});
 
 onBeforeUnmount(() => {
   if (scrollFrame) {

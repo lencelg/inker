@@ -16,6 +16,7 @@ import {
   type ImageViewState,
 } from '../lib/imageView';
 import { basename } from '../lib/paths';
+import { localizeError, t } from '../lib/i18n';
 
 const props = defineProps<{
   path: string;
@@ -40,6 +41,7 @@ let dragState: {
 let loadRun = 0;
 
 const zoomPercent = computed(() => Math.round(view.value.scale * 100));
+const errorText = computed(() => localizeError(error.value));
 const canZoomIn = computed(() => view.value.scale < MAX_IMAGE_ZOOM);
 const canZoomOut = computed(() => view.value.scale > MIN_IMAGE_ZOOM);
 const imageTransform = computed(
@@ -188,7 +190,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="image-viewer" :aria-label="`图片 ${name}`">
+  <section class="image-viewer" :aria-label="t('image.aria', { name })">
     <div
       ref="stage"
       class="image-stage"
@@ -200,10 +202,10 @@ onBeforeUnmount(() => {
       @pointercancel="endDrag"
       @dblclick="resetView"
     >
-      <div v-if="loading" class="image-state">正在加载图片…</div>
+      <div v-if="loading" class="image-state">{{ t('image.loading') }}</div>
       <div v-else-if="error" class="image-state error">
-        <strong>无法打开图片</strong>
-        <span>{{ error }}</span>
+        <strong>{{ t('image.errorTitle') }}</strong>
+        <span>{{ errorText }}</span>
       </div>
       <img
         v-else
@@ -221,7 +223,7 @@ onBeforeUnmount(() => {
 
     <footer class="image-footer">
       <span class="image-name">{{ name }}</span>
-      <span class="image-hint">滚轮缩放 · 拖动平移 · 双击复位</span>
+      <span class="image-hint">{{ t('image.hint') }}</span>
       <div class="image-meta">
         <span v-if="dimensions" class="image-dimensions">
           {{ dimensions.width }} × {{ dimensions.height }}
@@ -230,8 +232,8 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="image-zoom-button"
-            title="缩小"
-            aria-label="缩小图片"
+            :title="t('image.zoomOut')"
+            :aria-label="t('image.zoomOutAria')"
             :disabled="!canZoomOut"
             @click="zoomBy(0.8)"
           >
@@ -241,8 +243,8 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="image-zoom-button"
-            title="放大"
-            aria-label="放大图片"
+            :title="t('image.zoomIn')"
+            :aria-label="t('image.zoomInAria')"
             :disabled="!canZoomIn"
             @click="zoomBy(1.25)"
           >
@@ -251,10 +253,10 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="image-reset"
-            title="重置缩放和位置"
+            :title="t('image.resetTitle')"
             @click="resetView"
           >
-            重置
+            {{ t('image.reset') }}
           </button>
         </template>
       </div>

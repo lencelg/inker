@@ -56,6 +56,19 @@
             `${fontSize}px`,
           );
         }
+        const languagePreference =
+          localStorage.getItem('inker-language') || 'system';
+        const systemLanguage =
+          navigator.languages?.[0] || navigator.language || 'en';
+        const language =
+          languagePreference === 'system'
+            ? systemLanguage
+            : languagePreference;
+        document.documentElement.lang = language
+          .toLowerCase()
+          .startsWith('zh')
+          ? 'zh-CN'
+          : 'en';
       } catch {
         // Ignore storage errors and use the defaults.
       }

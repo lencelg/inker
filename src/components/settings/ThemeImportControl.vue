@@ -14,6 +14,7 @@ import {
   removeCustomCodeTheme,
   removeCustomUiTheme,
 } from '../../lib/customThemes';
+import { t } from '../../lib/i18n';
 
 const props = defineProps<{
   kind: 'ui' | 'code';
@@ -35,7 +36,9 @@ const accept = computed(() =>
   isUi.value ? '.json,application/json' : '.css,text/css',
 );
 const formatLabel = computed(() =>
-  isUi.value ? '.json 界面主题' : '.css 代码高亮主题',
+  isUi.value
+    ? t('themeImport.uiFormat')
+    : t('themeImport.codeFormat'),
 );
 const themes = computed(() =>
   isUi.value ? customUiThemes.value : customCodeThemes.value,
@@ -59,18 +62,18 @@ async function onFileChange(event: Event): Promise<void> {
   notice.value = '';
   try {
     if (file.size > MAX_THEME_FILE_BYTES) {
-      throw new Error('主题文件过大（最大 256 KB）');
+      throw new Error(t('themeImport.error.tooLarge'));
     }
     const text = await file.text();
     if (isUi.value) {
       const theme = addCustomUiTheme(parseUiThemeFile(text));
-      notice.value = `已导入“${theme.name}”`;
+      notice.value = t('themeImport.imported', { name: theme.name });
       emit('select', theme.id);
     } else {
       const theme = addCustomCodeTheme(
         parseCodeThemeFile(text, file.name),
       );
-      notice.value = `已导入“${theme.name}”`;
+      notice.value = t('themeImport.imported', { name: theme.name });
       emit('select', theme.id);
     }
   } catch (err) {
@@ -86,7 +89,7 @@ function removeTheme(id: string, name: string): void {
   if (props.modelValue === id) {
     emit('select', props.defaultValue);
   }
-  notice.value = `已删除“${name}”`;
+  notice.value = t('themeImport.deleted', { name });
   error.value = '';
 }
 </script>
@@ -101,9 +104,11 @@ function removeTheme(id: string, name: string): void {
         @click="openPicker"
       >
         <Upload :size="13" aria-hidden="true" />
-        {{ isUi ? '导入界面主题' : '导入代码主题' }}
+        {{ isUi ? t('themeImport.importUi') : t('themeImport.importCode') }}
       </button>
-      <span class="theme-import-format">支持 {{ formatLabel }}</span>
+      <span class="theme-import-format">{{
+        t('themeImport.supports', { format: formatLabel })
+      }}</span>
       <input
         ref="input"
         class="theme-file-input"
@@ -130,8 +135,8 @@ function removeTheme(id: string, name: string): void {
         <button
           type="button"
           class="custom-theme-delete"
-          :title="`删除自定义主题 ${theme.name}`"
-          :aria-label="`删除自定义主题 ${theme.name}`"
+          :title="t('themeImport.delete', { name: theme.name })"
+          :aria-label="t('themeImport.delete', { name: theme.name })"
           @click="removeTheme(theme.id, theme.name)"
         >
           <X :size="12" aria-hidden="true" />
