@@ -2,12 +2,14 @@
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
 import ActivityRail from './components/ActivityRail.vue';
 import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
+import HtmlExportDialog from './components/HtmlExportDialog.vue';
 import ImagePane from './components/ImagePane.vue';
 import InkerMark from './components/InkerMark.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
@@ -21,6 +23,7 @@ import {
   prepareExport,
   saveDocxExport,
   saveHtmlExport,
+  type PreparedExport,
 } from './lib/exportContent';
 import { isImagePath } from './lib/fileKinds';
 import { localizeError, t } from './lib/i18n';
@@ -70,12 +73,25 @@ const switching = ref(false);
 const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
 const exporting = ref(false);
-const printPreview = ref<{ title: string; html: string } | null>(null);
+const printPreview = ref<{
+  title: string;
+  html: string;
+  warnings: string[];
+} | null>(null);
+const htmlExport = ref<{
+  title: string;
+  embedded: PreparedExport;
+  linked: PreparedExport;
+  embeddedBytes: number;
+  linkedBytes: number;
+  warnings: string[];
+} | null>(null);
 const settingsOpen = ref(false);
 const isMaximized = ref(false);
 const appWindow = getCurrentWindow();
 let unlistenWindow: UnlistenFn | null = null;
 const error = ref('');
+const warning = ref('');
 const preferences = ref<Preferences>(readPreferences());
 const vimMode = ref<string | null>('NORMAL');
 const activeView = ref<'explorer' | 'search'>('explorer');
@@ -543,25 +559,104 @@ async function handleExport(
   exporting.value = true;
   clearFeedback();
   try {
-    const prepared = await prepareExport(tab.path, tab.content, {
-      codeHighlight: preferences.value.codeHighlight,
-    });
+    const preferencesValue = preferences.value;
+    const commonOptions = {
+      codeHighlight: preferencesValue.codeHighlight,
+      codeTheme: preferencesValue.codeTheme,
+    };
     if (format === 'pdf') {
+      const prepared = await prepareExport(tab.path, tab.content, {
+        ...commonOptions,
+        embedImages: true,
+        includeToc: preferencesValue.exportIncludeToc,
+      });
       printPreview.value = {
         title: prepared.title,
         html: prepared.documentHtml,
+        warnings: prepared.warnings,
       };
       return;
     }
     if (format === 'html') {
-      await saveHtmlExport(prepared);
-    } else {
-      await saveDocxExport(prepared);
+      const [embedded, linked] = await Promise.all([
+        prepareExport(tab.path, tab.content, {
+          ...commonOptions,
+          embedImages: true,
+          includeToc: preferencesValue.exportIncludeToc,
+        }),
+        prepareExport(tab.path, tab.content, {
+          ...commonOptions,
+          embedImages: false,
+          includeToc: preferencesValue.exportIncludeToc,
+        }),
+      ]);
+      htmlExport.value = {
+        title: embedded.title,
+        embedded,
+        linked,
+        embeddedBytes: new TextEncoder().encode(
+          embedded.documentHtml,
+        ).length,
+        linkedBytes: new TextEncoder().encode(
+          linked.documentHtml,
+        ).length,
+        warnings: [...new Set(embedded.warnings)],
+      };
+      return;
+    }
+
+    const prepared = await prepareExport(tab.path, tab.content, {
+      ...commonOptions,
+      embedImages: true,
+      includeToc: false,
+    });
+    const path = await saveDocxExport(prepared, {
+      codeTheme: preferencesValue.codeTheme,
+      includeToc: preferencesValue.exportIncludeToc,
+    });
+    if (prepared.warnings.length > 0) {
+      warning.value = prepared.warnings.join(' ');
+    }
+    if (path && preferencesValue.exportOpenAfter) {
+      await openExportedFile(path);
     }
   } catch (err) {
     setError(err);
   } finally {
     exporting.value = false;
+  }
+}
+
+async function saveHtml(
+  embedded: boolean,
+): Promise<void> {
+  const current = htmlExport.value;
+  if (!current || exporting.value) return;
+
+  exporting.value = true;
+  try {
+    const prepared = embedded ? current.embedded : current.linked;
+    const path = await saveHtmlExport(prepared, {
+      defaultDirectory:
+        embedded ? undefined : notesDir.value ?? undefined,
+    });
+    if (!path) return;
+    htmlExport.value = null;
+    if (preferences.value.exportOpenAfter) {
+      await openExportedFile(path);
+    }
+  } catch (err) {
+    setError(err);
+  } finally {
+    exporting.value = false;
+  }
+}
+
+async function openExportedFile(path: string): Promise<void> {
+  try {
+    await openPath(path);
+  } catch (err) {
+    setError(err);
   }
 }
 
@@ -1226,6 +1321,7 @@ function resolveConfirmation(confirmed: boolean): void {
 
 function clearFeedback(): void {
   error.value = '';
+  warning.value = '';
 }
 
 function setError(err: unknown): void {
@@ -1273,6 +1369,7 @@ function errorMessage(err: unknown): string {
           :view-mode="viewMode"
           :vim-enabled="vimEnabled"
           :exporting="exporting"
+          :default-format="preferences.exportFormat"
           @mode-change="setViewMode"
           @export="handleExport"
           @toggle-vim="toggleVim"
@@ -1391,6 +1488,16 @@ function errorMessage(err: unknown): string {
           type="button"
           :aria-label="t('app.error.dismiss')"
           @click="error = ''"
+        >
+          ×
+        </button>
+      </div>
+      <div v-if="warning" class="banner warning" role="status">
+        <span>{{ warning }}</span>
+        <button
+          type="button"
+          :aria-label="t('app.error.dismiss')"
+          @click="warning = ''"
         >
           ×
         </button>
@@ -1541,7 +1648,21 @@ function errorMessage(err: unknown): string {
       v-if="printPreview"
       :title="printPreview.title"
       :html="printPreview.html"
+      :warnings="printPreview.warnings"
       @close="printPreview = null"
+    />
+
+    <HtmlExportDialog
+      v-if="htmlExport"
+      :title="htmlExport.title"
+      :embedded-html="htmlExport.embedded.documentHtml"
+      :initial-embedded="preferences.exportEmbedImages"
+      :embedded-bytes="htmlExport.embeddedBytes"
+      :linked-bytes="htmlExport.linkedBytes"
+      :warnings="htmlExport.warnings"
+      :busy="exporting"
+      @save="saveHtml"
+      @close="htmlExport = null"
     />
   </div>
 </template>

@@ -693,6 +693,12 @@ button:disabled {
   line-height: 1;
 }
 
+.banner.warning {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
 .panes {
   flex: 1;
   min-height: 0;

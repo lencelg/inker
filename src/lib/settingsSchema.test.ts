@@ -36,18 +36,28 @@ describe('settings schema', () => {
     ).toBe(false);
   });
 
-  it('keeps local values for settings without a preference mapping', () => {
-    const schema = createSettingsSchema(normalizePreferences({}), {
-      'export.defaultFormat': 'html',
-      'export.openAfterExport': true,
-    });
+  it('maps export preferences into the rendered setting values', () => {
+    const schema = createSettingsSchema(
+      normalizePreferences({
+        exportFormat: 'html',
+        exportEmbedImages: false,
+        exportOpenAfter: true,
+        exportIncludeToc: false,
+      }),
+    );
 
     expect(
       schema.find((setting) => setting.id === 'export.defaultFormat')?.value,
     ).toBe('html');
     expect(
+      schema.find((setting) => setting.id === 'export.includeImages')?.value,
+    ).toBe(false);
+    expect(
       schema.find((setting) => setting.id === 'export.openAfterExport')?.value,
     ).toBe(true);
+    expect(
+      schema.find((setting) => setting.id === 'export.includeToc')?.value,
+    ).toBe(false);
   });
 
   it('searches titles, descriptions and keywords', () => {

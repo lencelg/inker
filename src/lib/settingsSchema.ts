@@ -293,6 +293,7 @@ function settingTemplates(): SettingTemplate[] {
       defaultValue: 'pdf',
       options: exportOptions(),
       keywords: ['导出', '格式', 'pdf', 'html', 'word', 'docx'],
+      preference: 'exportFormat',
       hint: {
         text: t('settings.exportFormat.hint'),
       },
@@ -300,13 +301,27 @@ function settingTemplates(): SettingTemplate[] {
     {
       id: 'export.includeImages',
       category: 'export',
-      title: 'Export: Include Local Images',
+      title: 'Export: Embed Local Images',
       description: t('settings.includeImages.description'),
       controlType: 'checkbox',
       defaultValue: true,
       keywords: ['导出', '图片', '附件', 'image', 'assets', '嵌入'],
+      preference: 'exportEmbedImages',
       hint: {
         text: t('settings.includeImages.hint'),
+      },
+    },
+    {
+      id: 'export.includeToc',
+      category: 'export',
+      title: 'Export: Table of Contents',
+      description: t('settings.includeToc.description'),
+      controlType: 'checkbox',
+      defaultValue: true,
+      keywords: ['导出', '目录', 'toc', 'contents', 'heading'],
+      preference: 'exportIncludeToc',
+      hint: {
+        text: t('settings.includeToc.hint'),
       },
     },
     {
@@ -317,6 +332,7 @@ function settingTemplates(): SettingTemplate[] {
       controlType: 'checkbox',
       defaultValue: false,
       keywords: ['导出', '打开', '文件', 'open', 'save'],
+      preference: 'exportOpenAfter',
       hint: {
         text: t('settings.openAfterExport.hint'),
       },

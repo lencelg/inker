@@ -291,11 +291,19 @@ tempfile                     测试临时目录
 
 | 格式 | 实现 |
 | --- | --- |
-| HTML | 生成独立 HTML 文件，包含样式、高亮代码、内嵌图片与图表 |
-| Word `.docx` | 使用 `docx` 生成文档，支持标题、列表、表格、代码、图片等 |
-| PDF | 打开打印预览，通过系统打印对话框保存为 PDF |
+| HTML | 导出对话框提供“内嵌图片 / 链接图片”两种模式，并显示预览、文件体积和警告；可选目录，使用当前代码高亮主题和文档元数据 |
+| Word `.docx` | 使用 `docx` 生成文档：原生多级列表、表格边框/列宽/重复表头、连续代码块与语法颜色、Word 原生公式、JPEG/PNG/SVG 图片、Mermaid 2x 栅格化、目录、页码、文档属性和内部链接 |
+| PDF | 打印预览后调用系统浏览器打印；包含分页控制、目录、代码主题和打印专用样式 |
 
-导出会复用当前 Markdown 渲染结果与代码高亮设置。
+导出行为：
+
+- 复用当前 Markdown 渲染、代码高亮开关和代码主题。
+- 本地图片在 PDF/Word 中始终内嵌；HTML 可切换内嵌或保留原始路径。
+- 尝试下载并内嵌远程图片；失败时保留链接并显示警告。
+- 支持 `\pagebreak` 或 `\newpage` 段落作为强制分页标记。
+- 导出设置包括默认格式、HTML 图片模式、目录和导出后打开。
+- 顶部菜单提供“快速导出”，使用设置中的默认格式。
+- Word 目录页码会在 Word 打开后由字段更新；HTML/PDF 目录使用内部锚点。
 
 ### 2.14 桌面窗口
 
@@ -394,6 +402,7 @@ markdown-note-taking/
 │   │   ├── ConfirmDialog.vue
 │   │   ├── PromptDialog.vue
 │   │   ├── PrintPreview.vue
+│   │   ├── HtmlExportDialog.vue   # HTML 导出预览与图片模式
 │   │   ├── InkerMark.vue
 │   │   └── settings/
 │   │       ├── SettingsHeader.vue
@@ -559,6 +568,10 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-code-theme` | 代码高亮主题 |
 | `inker-source-highlight` | 源码代码块语法高亮 |
 | `inker-language` | 界面语言（`system` / `zh` / `en`） |
+| `inker-export-format` | 快速导出默认格式（`pdf` / `html` / `docx`） |
+| `inker-export-embed-images` | HTML 默认是否内嵌图片 |
+| `inker-export-open-after` | 导出后是否打开文件 |
+| `inker-export-toc` | 导出时是否生成目录 |
 | `inker-custom-ui-themes` | 自定义界面主题 |
 | `inker-custom-code-themes` | 自定义代码主题 |
 | `inker-split-ratio` | 侧边预览分隔比例 |
@@ -825,7 +838,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：20 个测试文件，79 个测试通过
+- 前端：24 个测试文件，91 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -838,6 +851,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - ProseMirror 多光标
 - 偏好设置
 - 中英文界面、系统语言检测与切换
+- HTML 导出模式、目录和图片策略
+- DOCX 原生列表、表格、公式、目录与页码
 - 图片文件识别
 - 设置 Schema / 搜索
 - 设置面板交互
@@ -888,8 +903,8 @@ cargo tauri icon assets/icons/inker.svg
 3. **“工作区”设置仍未实现**  
    设置面板中的“工作区”标签目前显示占位说明，还没有独立覆盖配置。
 
-4. **导出分类中的设置尚未接入导出流程**  
-   当前可交互，但默认格式、是否嵌入图片、导出后打开等选项还没有驱动实际导出行为。代码高亮主题目前也只应用于预览和实时预览，导出文件使用固定代码样式。
+4. **导出仍有平台边界**
+   PDF 仍通过系统打印对话框生成，不直接写 PDF 文件；HTML 链接图片模式需要图片与 HTML 一起移动；远程图片内嵌受网络与 CORS 限制，失败时会保留原链接并提示。
 
 5. **Vim 仅用于源码编辑器**  
    实时预览（ProseMirror）使用标准输入和自身多光标。

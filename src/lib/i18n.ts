@@ -82,6 +82,24 @@ const zh = {
   'export.pdf': 'PDF（打印）',
   'export.html': 'HTML 网页',
   'export.docx': 'Word (.docx)',
+  'export.contents': '目录',
+  'export.quick': '快速导出：{format}',
+  'export.html.title': '导出 HTML',
+  'export.html.embedded': '内嵌图片',
+  'export.html.linked': '链接图片',
+  'export.html.embeddedHint':
+    '图片会转换为 Data URL，生成可单独分享的单个文件。',
+  'export.html.linkedHint':
+    '保留原始图片路径，文件更小，但移动 HTML 时需要同时移动图片。',
+  'export.html.previewNote':
+    '预览使用内嵌图片的版本；保存时按所选方式处理图片。',
+  'export.html.save': '保存 HTML',
+  'export.html.preview': '预览',
+  'export.html.size': '约 {size}',
+  'export.warning.image': '无法读取图片“{source}”，已替换为占位文本。',
+  'export.warning.remoteImage':
+    '无法下载远程图片“{url}”，已保留原链接。',
+  'export.warning.mermaid': 'Mermaid 图表渲染失败：{message}',
   'viewMode.source': '源码模式',
   'viewMode.wysiwyg': '实时预览',
   'viewMode.preview': '预览模式',
@@ -290,16 +308,21 @@ const zh = {
     '选择预览和实时预览中的代码语法配色主题。',
   'settings.codeTheme.hint': '切换后会立即应用到已经打开的预览内容。',
   'settings.exportFormat.description':
-    '选择分享笔记时默认使用的导出格式。',
-  'settings.exportFormat.hint': '顶部导出菜单仍可临时选择其他格式。',
+    '选择顶部菜单快速导出时默认使用的格式。',
+  'settings.exportFormat.hint':
+    '导出菜单仍可为单次导出选择 PDF、HTML 或 Word。',
   'settings.includeImages.description':
-    '将笔记中引用的本地图片嵌入导出文件，便于单独分享。',
+    'HTML 导出时默认内嵌本地图片。',
   'settings.includeImages.hint':
-    '图片会转换为内嵌资源，避免移动文件后无法显示。',
+    '内嵌模式生成单文件；链接模式保留原始图片路径。PDF 和 Word 始终内嵌图片。',
   'settings.openAfterExport.description':
     '导出完成后使用系统默认应用打开生成的文件。',
   'settings.openAfterExport.hint':
     '文件仍会先通过系统保存对话框写入你选择的位置。',
+  'settings.includeToc.description':
+    '为 HTML、PDF 和 Word 导出生成目录。',
+  'settings.includeToc.hint':
+    '目录会列出文档中的一到四级标题；Word 打开后可更新页码。',
   'docx.mermaid.title': 'Mermaid 图表',
   'docx.mermaid.source': '（Mermaid 图表）',
 } as const;
@@ -344,6 +367,25 @@ const en: Record<TranslationKey, string> = {
   'export.pdf': 'PDF (Print)',
   'export.html': 'HTML',
   'export.docx': 'Word (.docx)',
+  'export.contents': 'Contents',
+  'export.quick': 'Quick Export: {format}',
+  'export.html.title': 'Export HTML',
+  'export.html.embedded': 'Embed Images',
+  'export.html.linked': 'Link Images',
+  'export.html.embeddedHint':
+    'Images are converted to data URLs, producing a single file that can be shared on its own.',
+  'export.html.linkedHint':
+    'Original image paths are kept. The file is smaller, but images must move with the HTML.',
+  'export.html.previewNote':
+    'The preview uses the embedded-image version. Images are handled according to the selected mode when saving.',
+  'export.html.save': 'Save HTML',
+  'export.html.preview': 'Preview',
+  'export.html.size': 'About {size}',
+  'export.warning.image':
+    'Could not read image “{source}”; replaced with placeholder text.',
+  'export.warning.remoteImage':
+    'Could not download remote image “{url}”; kept the original link.',
+  'export.warning.mermaid': 'Mermaid render failed: {message}',
   'viewMode.source': 'Source Mode',
   'viewMode.wysiwyg': 'Live Preview',
   'viewMode.preview': 'Preview Mode',
@@ -575,17 +617,21 @@ const en: Record<TranslationKey, string> = {
   'settings.codeTheme.hint':
     'Changes apply immediately to previews that are already open.',
   'settings.exportFormat.description':
-    'Choose the default format used when exporting notes for sharing.',
+    'Choose the format used by Quick Export in the top menu.',
   'settings.exportFormat.hint':
-    'The top export menu still lets you choose another format temporarily.',
+    'The export menu still lets you choose PDF, HTML, or Word for a single export.',
   'settings.includeImages.description':
-    'Embed local images referenced by the note into the exported file for standalone sharing.',
+    'Embed local images by default when exporting HTML.',
   'settings.includeImages.hint':
-    'Images are converted into embedded assets so they still display after the file is moved.',
+    'Embed mode creates a single file; linked mode keeps original image paths. PDF and Word always embed images.',
   'settings.openAfterExport.description':
     'Open the generated file with the system default application after export.',
   'settings.openAfterExport.hint':
     'The file is still saved through the system save dialog at the location you choose.',
+  'settings.includeToc.description':
+    'Generate a table of contents for HTML, PDF, and Word exports.',
+  'settings.includeToc.hint':
+    'The table of contents lists headings from levels 1 to 4. Page numbers can be updated after Word opens the file.',
   'docx.mermaid.title': 'Mermaid Diagram',
   'docx.mermaid.source': '(Mermaid Diagram)',
 };

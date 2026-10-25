@@ -5,6 +5,7 @@ import { t } from '../lib/i18n';
 const props = defineProps<{
   title: string;
   html: string;
+  warnings?: string[];
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -57,6 +58,11 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </header>
+        <ul v-if="warnings?.length" class="print-warnings">
+          <li v-for="warning in warnings" :key="warning">
+            {{ warning }}
+          </li>
+        </ul>
         <iframe
           ref="frame"
           class="print-frame"
@@ -118,6 +124,18 @@ onBeforeUnmount(() => {
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.print-warnings {
+  max-height: 92px;
+  margin: 0;
+  padding: 8px 16px 8px 32px;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 11.5px;
+  line-height: 1.6;
 }
 
 .print-heading span {
