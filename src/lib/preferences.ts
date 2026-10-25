@@ -1,4 +1,10 @@
 import {
+  DEFAULT_CODE_THEME,
+  applyCodeTheme,
+  isCodeThemeId,
+  type CodeThemeId,
+} from './codeThemes';
+import {
   DEFAULT_FONT,
   isFontId,
   type FontId,
@@ -19,6 +25,7 @@ export const FONT_FAMILY_STORAGE_KEY = 'inker-font-family';
 export const VIM_STORAGE_KEY = 'inker-vim';
 export const IMMERSIVE_STORAGE_KEY = 'inker-immersive';
 export const CODE_HIGHLIGHT_STORAGE_KEY = 'inker-code-highlight';
+export const CODE_THEME_STORAGE_KEY = 'inker-code-theme';
 const LEGACY_FONT_SIZE_STORAGE_KEY = 'markleaf-font-size';
 const LEGACY_FONT_FAMILY_STORAGE_KEY = 'markleaf-font-family';
 const LEGACY_VIM_STORAGE_KEY = 'markleaf-vim';
@@ -32,6 +39,7 @@ export interface Preferences {
   vimEnabled: boolean;
   immersive: boolean;
   codeHighlight: boolean;
+  codeTheme: CodeThemeId;
 }
 
 export function clampFontSize(value: number): number {
@@ -53,6 +61,9 @@ export function normalizePreferences(value: unknown): Preferences {
     vimEnabled: source.vimEnabled === true,
     immersive: source.immersive === true,
     codeHighlight: source.codeHighlight !== false,
+    codeTheme: isCodeThemeId(source.codeTheme)
+      ? source.codeTheme
+      : DEFAULT_CODE_THEME,
   };
 }
 
@@ -89,6 +100,7 @@ export function readPreferences(): Preferences {
         'true',
       codeHighlight:
         rawHighlight === null ? true : rawHighlight === 'true',
+      codeTheme: window.localStorage.getItem(CODE_THEME_STORAGE_KEY),
     });
 
     if (usedLegacyKeys) savePreferences(preferences);
@@ -121,6 +133,10 @@ export function savePreferences(preferences: Preferences): void {
       CODE_HIGHLIGHT_STORAGE_KEY,
       String(preferences.codeHighlight),
     );
+    window.localStorage.setItem(
+      CODE_THEME_STORAGE_KEY,
+      preferences.codeTheme,
+    );
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_FAMILY_STORAGE_KEY);
@@ -139,4 +155,5 @@ export function applyPreferences(preferences: Preferences): void {
     '--content-font-size',
     `${preferences.fontSize}px`,
   );
+  applyCodeTheme(preferences.codeTheme);
 }

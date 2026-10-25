@@ -1,5 +1,4 @@
 import hljs from 'highlight.js/lib/common';
-import 'highlight.js/styles/github-dark.css';
 import MarkdownIt from 'markdown-it';
 import type { StateCore, Token } from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';

@@ -22,6 +22,7 @@ import { history } from '@milkdown/kit/plugin/history';
 import { indent } from '@milkdown/kit/plugin/indent';
 import { math } from '@milkdown/plugin-math';
 import { trailing } from '@milkdown/kit/plugin/trailing';
+import type { Node as ProseNode } from '@milkdown/kit/prose/model';
 import { Plugin, TextSelection } from '@milkdown/kit/prose/state';
 import {
   Decoration,
@@ -35,6 +36,7 @@ import {
   fragmentFromHref,
   scrollToAnchor,
 } from '../lib/anchors';
+import { codeHighlightRanges } from '../lib/codeHighlight';
 import {
   applyLineEnding,
   normalizeLineEndings,
@@ -49,6 +51,7 @@ const props = defineProps<{
   notePath: string;
   readOnly: boolean;
   immersive: boolean;
+  codeHighlight: boolean;
 }>();
 
 const emit = defineEmits<{ change: [content: string] }>();
@@ -202,10 +205,12 @@ const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const 
 
   const preview = document.createElement('div');
   preview.className = 'mermaid-preview';
+  const languageBadge = document.createElement('span');
+  languageBadge.className = 'code-language-badge';
   const pre = document.createElement('pre');
   const code = document.createElement('code');
   pre.appendChild(code);
-  wrapper.append(toolbar, preview, pre);
+  wrapper.append(toolbar, preview, languageBadge, pre);
 
   let source = '';
   let run = 0;
@@ -227,6 +232,8 @@ const mermaidView = $view(codeBlockSchema.node, () => (initialNode) => {  const 
     pre.dataset.language = language;
     const isMermaid = language === 'mermaid';
     wrapper.classList.toggle('is-mermaid', isMermaid);
+    languageBadge.textContent = language || 'text';
+    languageBadge.style.display = isMermaid ? 'none' : '';
 
     if (!isMermaid) {
       run += 1;
@@ -512,6 +519,54 @@ const multiCursorPlugin = $prose(() =>
   createProseMultiCursorPlugin(),
 );
 
+const codeHighlightPlugin = $prose(() => {
+  const buildDecorations = (doc: ProseNode): DecorationSet => {
+    if (!props.codeHighlight) return DecorationSet.empty;
+    const decorations: Decoration[] = [];
+
+    doc.descendants((node, position) => {
+      if (node.type.name !== 'code_block') return;
+      const language = String(node.attrs.language ?? '').trim();
+      if (language.toLowerCase() === 'mermaid') return;
+      const text = node.textContent;
+      if (!text) return;
+
+      for (const range of codeHighlightRanges(text, language)) {
+        decorations.push(
+          Decoration.inline(
+            position + 1 + range.from,
+            position + 1 + range.to,
+            { class: range.className },
+          ),
+        );
+      }
+    });
+
+    return DecorationSet.create(doc, decorations);
+  };
+
+  const plugin: Plugin = new Plugin({
+    state: {
+      init: (_config, state) => buildDecorations(state.doc),
+      apply: (tr, value, _oldState, newState) => {
+        if (
+          !tr.docChanged &&
+          !tr.getMeta('inker-code-highlight')
+        ) {
+          return value;
+        }
+        return buildDecorations(newState.doc);
+      },
+    },
+    props: {
+      decorations(state): DecorationSet | null {
+        return plugin.getState(state) ?? null;
+      },
+    },
+  });
+  return plugin;
+});
+
 const syncPlugin = $prose((ctx) => {
   return new Plugin({
     view: () => ({
@@ -558,7 +613,8 @@ async function createEditor(): Promise<void> {
     .use(immersiveDecorations)
     .use(immersiveCursor)
     .use(uploadPlugin)
-    .use(multiCursorPlugin);
+    .use(multiCursorPlugin)
+    .use(codeHighlightPlugin);
 
   try {
     await editor.create();
@@ -586,6 +642,18 @@ watch(
       const view = ctx.get(editorViewCtx);
       view.dispatch(view.state.tr.setMeta('immersive', enabled));
       if (enabled) scheduleCenter(view);
+    });
+  },
+);
+
+watch(
+  () => props.codeHighlight,
+  () => {
+    editor?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(
+        view.state.tr.setMeta('inker-code-highlight', true),
+      );
     });
   },
 );
@@ -698,8 +766,8 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   overflow-x: auto;
   border-radius: 8px;
-  background: #0f141a;
-  color: #e7edf4;
+  background: var(--code-bg, #0d1117);
+  color: var(--code-fg, #c9d1d9);
   font-family: var(--mono-font);
   font-size: 0.86em;
   line-height: 1.6;
@@ -774,7 +842,26 @@ onBeforeUnmount(() => {
 }
 
 .wysiwyg-host :deep(.code-block-node) {
+  position: relative;
   margin: 1em 0;
+}
+
+.wysiwyg-host :deep(.code-language-badge) {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 1;
+  padding: 2px 6px;
+  border: 1px solid rgba(139, 148, 158, 0.25);
+  border-radius: 4px;
+  background: rgba(13, 17, 23, 0.78);
+  color: #8b949e;
+  font-family: var(--mono-font);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 
 .wysiwyg-host :deep(.code-block-node pre) {

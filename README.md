@@ -137,6 +137,9 @@ tempfile                     测试临时目录
 - GFM 基础语法。
 - 数学公式。
 - Mermaid 图表。
+- 代码块语法高亮（可跟随“预览代码高亮”设置），右上角显示当前语言。
+- 代码高亮主题可切换，内置 GitHub Dark、GitHub Light、Atom One Dark、Monokai、Nord、Tokyo Night 和 VS Dark，默认 GitHub Dark。
+- 代码主题同时作用于预览和实时预览，切换后立即生效。
 - 原始 HTML 渲染（经 DOMPurify 清洗）。
 - 本地图片解析。
 - 粘贴、拖拽图片时保存到当前笔记所在目录的 `assets/` 文件夹。
@@ -296,6 +299,7 @@ tempfile                     测试临时目录
 | 目录锚点跳转 | ✅ 已完成 |
 | 沉浸式写作 | ✅ 已完成 |
 | 主题 / 字体 / 字号 | ✅ 已完成 |
+| 代码高亮主题切换 | ✅ 已完成 |
 | VS Code 风格设置面板 | ✅ 已完成 |
 | HTML / Word / PDF 导出 | ✅ 已完成 |
 | Debian `.deb` 打包 | ✅ 已完成 |
@@ -352,6 +356,8 @@ markdown-note-taking/
 │   │       └── SettingsSelect.vue
 │   └── lib/
 │       ├── anchors.ts             # 标题 slug / 锚点查找 / 滚动
+│       ├── codeHighlight.ts       # highlight.js token 范围映射
+│       ├── codeThemes.ts          # 代码高亮主题与动态样式
 │       ├── docxExport.ts          # DOCX 内容转换
 │       ├── exportContent.ts       # HTML / PDF / 导出准备
 │       ├── fileKinds.ts           # 图片扩展名识别
@@ -498,6 +504,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-vim` | Vim 模式 |
 | `inker-immersive` | 沉浸式写作 |
 | `inker-code-highlight` | 预览代码高亮 |
+| `inker-code-theme` | 代码高亮主题 |
 | `inker-split-ratio` | 侧边预览分隔比例 |
 | `inker-sidebar-width` | 文件栏宽度 |
 
@@ -760,7 +767,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：13 个测试文件，49 个测试通过
+- 前端：15 个测试文件，55 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -823,7 +830,7 @@ cargo tauri icon assets/icons/inker.svg
    设置面板中的“工作区”标签目前显示占位说明，还没有独立覆盖配置。
 
 4. **导出分类中的设置尚未接入导出流程**  
-   当前可交互，但默认格式、是否嵌入图片、导出后打开等选项还没有驱动实际导出行为。
+   当前可交互，但默认格式、是否嵌入图片、导出后打开等选项还没有驱动实际导出行为。代码高亮主题目前也只应用于预览和实时预览，导出文件使用固定代码样式。
 
 5. **Vim 仅用于源码编辑器**  
    实时预览（ProseMirror）使用标准输入和自身多光标。

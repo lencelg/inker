@@ -1,5 +1,9 @@
 import type { Preferences } from './preferences';
 import { FONTS } from './fonts';
+import {
+  CODE_THEMES,
+  DEFAULT_CODE_THEME,
+} from './codeThemes';
 import { THEMES } from './themes';
 
 export type SettingsCategoryId = 'common' | 'editor' | 'preview' | 'export';
@@ -89,6 +93,13 @@ const FONT_OPTIONS: SettingsOption[] = FONTS.map((font) => ({
   value: font.id,
 }));
 
+const CODE_THEME_OPTIONS: SettingsOption[] = CODE_THEMES.map(
+  (theme) => ({
+    label: theme.label,
+    value: theme.id,
+  }),
+);
+
 const EXPORT_OPTIONS: SettingsOption[] = [
   { label: 'PDF（打印）', value: 'pdf' },
   { label: 'HTML 网页', value: 'html' },
@@ -177,13 +188,36 @@ const SETTING_TEMPLATES: readonly SettingTemplate[] = [
     id: 'preview.codeHighlight',
     category: 'preview',
     title: 'Preview: Code Highlight',
-    description: '为预览中的代码块启用语法高亮，并显示代码语言。',
+    description: '为预览和实时预览中的代码块启用语法高亮。',
     controlType: 'checkbox',
     defaultValue: true,
     keywords: ['预览', '代码', '高亮', '语言', 'highlight', 'code'],
     preference: 'codeHighlight',
     hint: {
-      text: '关闭后代码块会使用纯文本样式，语言标识也会一并隐藏。',
+      text: '关闭后代码块会使用纯文本样式，预览中的语言标识也会隐藏。',
+    },
+  },
+  {
+    id: 'preview.codeTheme',
+    category: 'preview',
+    title: 'Preview: Code Highlight Theme',
+    description: '选择预览和实时预览中的代码语法配色主题。',
+    controlType: 'select',
+    defaultValue: DEFAULT_CODE_THEME,
+    options: CODE_THEME_OPTIONS,
+    keywords: [
+      '预览',
+      '代码',
+      '主题',
+      '高亮',
+      '配色',
+      'theme',
+      'syntax',
+      'highlight',
+    ],
+    preference: 'codeTheme',
+    hint: {
+      text: '切换后会立即应用到已经打开的预览内容。',
     },
   },
   {

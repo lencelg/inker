@@ -1390,6 +1390,7 @@ function errorMessage(err: unknown): string {
           :note-path="activeTab.path"
           :read-only="switching || mutating"
           :immersive="immersiveEnabled"
+          :code-highlight="preferences.codeHighlight"
           @change="handleContentChange"
         />
 
