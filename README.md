@@ -116,7 +116,7 @@ tempfile                     测试临时目录
 - 顶部应用菜单
 - 底部状态栏右侧模式菜单
 
-主编辑区和预览区的垂直滚轮步长按原生速度的 70% 计算，图片查看器的滚轮缩放不受影响。
+主编辑区和预览区的垂直滚轮步长按原生速度的 49% 计算，图片查看器的滚轮缩放不受影响。
 
 ### 2.5 源码编辑器
 
@@ -124,6 +124,7 @@ tempfile                     测试临时目录
 - 自动换行。
 - 行号、当前行、搜索等 CodeMirror 基础能力。
 - 编辑器顶部显示光标所在标题层级路径，随光标移动实时更新；围栏代码块中的 `#` 不会计入路径。
+- 右侧提供类似 VS Code 的文档缩略图，按 Markdown 语法着色，可点击或拖动快速跳转，并支持滚轮与键盘滚动。
 - 多光标：
   - `Mod+D` 选择下一个相同文本
   - `Alt+点击` 添加光标
@@ -355,6 +356,7 @@ tempfile                     测试临时目录
 | 图片粘贴/拖拽到 `assets/` | ✅ 已完成 |
 | 目录锚点跳转 | ✅ 已完成 |
 | 标题面包屑导航 | ✅ 已完成 |
+| 源码编辑器缩略图 | ✅ 已完成 |
 | Zen 模式 | ✅ 已完成 |
 | 主题 / 字体 / 字号 | ✅ 已完成 |
 | 代码高亮主题切换 | ✅ 已完成 |
@@ -396,7 +398,7 @@ markdown-note-taking/
 │   │   ├── NoteSidebar.vue        # 文件树与右键菜单
 │   │   ├── SearchPanel.vue        # 全文搜索
 │   │   ├── EditorTabs.vue         # 标签页
-│   │   ├── EditorPane.vue         # CodeMirror / Vim
+│   │   ├── EditorPane.vue         # CodeMirror / Vim / 缩略图
 │   │   ├── Breadcrumbs.vue        # 光标所在标题路径
 │   │   ├── WysiwygPane.vue        # Milkdown 实时预览
 │   │   ├── PreviewPane.vue        # Markdown 只读预览
@@ -432,6 +434,7 @@ markdown-note-taking/
 │       ├── headings.ts            # 标题提取与当前路径计算
 │       ├── lineEndings.ts         # LF / CRLF 处理
 │       ├── markdown.ts            # markdown-it 渲染配置
+│       ├── minimap.ts             # 缩略图坐标与视口计算
 │       ├── mermaid.ts             # Mermaid 延迟加载
 │       ├── paths.ts               # 路径工具
 │       ├── preferences.ts         # 本地偏好读写
@@ -844,7 +847,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：28 个测试文件，100 个测试通过
+- 前端：29 个测试文件，104 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -862,6 +865,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - DOCX 原生列表、表格、公式、目录与页码
 - 图片文件识别
 - 主区域滚轮减速
+- 源码缩略图几何映射
 - 设置 Schema / 搜索
 - 设置面板交互
 - 自定义下拉框

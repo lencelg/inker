@@ -1,4 +1,4 @@
-export const SCROLL_WHEEL_FACTOR = 0.7;
+export const SCROLL_WHEEL_FACTOR = 0.49;
 
 export function wheelDeltaPixels(
   event: WheelEvent,

@@ -52,10 +52,10 @@ function dispatchWheel(target: HTMLElement): {
 
 describe('wheel scrolling', () => {
   it('scales pixel, line, and page deltas by the configured factor', () => {
-    expect(SCROLL_WHEEL_FACTOR).toBe(0.7);
-    expect(wheelDeltaPixels(wheelEvent(100), 400)).toBe(70);
-    expect(wheelDeltaPixels(wheelEvent(10, 1), 400)).toBe(112);
-    expect(wheelDeltaPixels(wheelEvent(1, 2), 400)).toBe(280);
+    expect(SCROLL_WHEEL_FACTOR).toBe(0.49);
+    expect(wheelDeltaPixels(wheelEvent(100), 400)).toBe(49);
+    expect(wheelDeltaPixels(wheelEvent(10, 1), 400)).toBeCloseTo(78.4);
+    expect(wheelDeltaPixels(wheelEvent(1, 2), 400)).toBeCloseTo(196);
   });
 
   it('slows scrolling only inside the main workspace', () => {
@@ -67,7 +67,7 @@ describe('wheel scrolling', () => {
 
     const inside = dispatchWheel(content);
     expect(inside.handled).toBe(true);
-    expect(content.scrollTop).toBe(170);
+    expect(content.scrollTop).toBe(149);
     expect(inside.event.defaultPrevented).toBe(true);
 
     const outside = scrollable();
