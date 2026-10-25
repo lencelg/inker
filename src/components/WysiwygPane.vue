@@ -728,6 +728,10 @@ onBeforeUnmount(() => {
   overflow: auto;
 }
 
+.wysiwyg-host :deep(.ProseMirror) {
+  caret-color: var(--editor-caret, var(--ink));
+}
+
 .wysiwyg-host :deep(.wysiwyg-content) {
   min-height: 100%;
   padding: 32px max(40px, calc((100% - 760px) / 2)) 25vh;

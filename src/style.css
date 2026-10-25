@@ -67,12 +67,12 @@
   --activity-icon-active: #1f2933;
   --activity-active-bg: rgba(37, 99, 235, 0.1);
   --activity-hover: rgba(31, 41, 51, 0.06);
-  --statusbar-bg: #26303a;
-  --statusbar-ink: #f5f7fa;
-  --statusbar-muted: #c3ccd6;
-  --statusbar-hover: rgba(255, 255, 255, 0.12);
-  --statusbar-border: transparent;
-  --statusbar-border-soft: rgba(255, 255, 255, 0.2);
+  --statusbar-bg: #ebe5da;
+  --statusbar-ink: #3e4a55;
+  --statusbar-muted: #6b7280;
+  --statusbar-hover: rgba(31, 41, 51, 0.08);
+  --statusbar-border: #ddd6ca;
+  --statusbar-border-soft: #c9c1b4;
   font-family: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system,
     sans-serif;
   font-synthesis: none;
@@ -100,12 +100,12 @@
   --activity-icon-active: #1f2328;
   --activity-active-bg: #e3e8ed;
   --activity-hover: rgba(0, 0, 0, 0.05);
-  --statusbar-bg: #26303a;
-  --statusbar-ink: #f5f7fa;
-  --statusbar-muted: #c3ccd6;
-  --statusbar-hover: rgba(255, 255, 255, 0.12);
-  --statusbar-border: transparent;
-  --statusbar-border-soft: rgba(255, 255, 255, 0.2);
+  --statusbar-bg: #eef0f3;
+  --statusbar-ink: #39424c;
+  --statusbar-muted: #5f6b76;
+  --statusbar-hover: rgba(31, 41, 51, 0.07);
+  --statusbar-border: #dfe3e8;
+  --statusbar-border-soft: #c9d0d7;
 }
 
 :root[data-theme='dark'] {
@@ -171,12 +171,12 @@
   --activity-icon-active: #e6edf3;
   --activity-active-bg: #1a2530;
   --activity-hover: rgba(255, 255, 255, 0.06);
-  --statusbar-bg: #0b1015;
-  --statusbar-ink: #dbe4ee;
-  --statusbar-muted: #8b98a6;
-  --statusbar-hover: rgba(255, 255, 255, 0.08);
+  --statusbar-bg: #0c1116;
+  --statusbar-ink: #e6edf3;
+  --statusbar-muted: #9aa7b4;
+  --statusbar-hover: rgba(255, 255, 255, 0.09);
   --statusbar-border: #2a333d;
-  --statusbar-border-soft: rgba(255, 255, 255, 0.16);
+  --statusbar-border-soft: rgba(255, 255, 255, 0.18);
 }
 
 :root[data-theme='vscode-light'] {
@@ -240,12 +240,12 @@
   --activity-icon-active: #ffffff;
   --activity-active-bg: #37373d;
   --activity-hover: rgba(255, 255, 255, 0.08);
-  --statusbar-bg: #007acc;
-  --statusbar-ink: #ffffff;
-  --statusbar-muted: rgba(255, 255, 255, 0.78);
-  --statusbar-hover: rgba(255, 255, 255, 0.18);
-  --statusbar-border: transparent;
-  --statusbar-border-soft: rgba(255, 255, 255, 0.28);
+  --statusbar-bg: #f3f3f3;
+  --statusbar-ink: #3b3b3b;
+  --statusbar-muted: #6f6f6f;
+  --statusbar-hover: rgba(0, 0, 0, 0.07);
+  --statusbar-border: #e5e5e5;
+  --statusbar-border-soft: rgba(0, 0, 0, 0.16);
 }
 
 :root[data-theme='vscode-dark'] {
@@ -311,12 +311,12 @@
   --activity-icon-active: #ffffff;
   --activity-active-bg: #37373d;
   --activity-hover: rgba(255, 255, 255, 0.1);
-  --statusbar-bg: #007acc;
-  --statusbar-ink: #ffffff;
-  --statusbar-muted: rgba(255, 255, 255, 0.78);
-  --statusbar-hover: rgba(255, 255, 255, 0.18);
-  --statusbar-border: transparent;
-  --statusbar-border-soft: rgba(255, 255, 255, 0.28);
+  --statusbar-bg: #181818;
+  --statusbar-ink: #d4d4d4;
+  --statusbar-muted: #9d9d9d;
+  --statusbar-hover: rgba(255, 255, 255, 0.08);
+  --statusbar-border: #3c3c3c;
+  --statusbar-border-soft: rgba(255, 255, 255, 0.18);
 }
 
 :root[data-theme='vscode-hc'] {

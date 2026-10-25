@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+} from 'vue';
 import SettingsPanel from './SettingsPanel.vue';
 import { t } from '../lib/i18n';
 import type { Preferences } from '../lib/preferences';
@@ -16,10 +21,118 @@ const emit = defineEmits<{
 }>();
 
 const panelRef = ref<HTMLElement | null>(null);
+const offset = ref({ x: 0, y: 0 });
+const dragging = ref(false);
 const previousFocus =
   document.activeElement instanceof HTMLElement
     ? document.activeElement
     : null;
+
+let dragState: {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startOffsetX: number;
+  startOffsetY: number;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+} | null = null;
+
+const panelStyle = computed(() =>
+  offset.value.x === 0 && offset.value.y === 0
+    ? undefined
+    : {
+        transform: `translate3d(${offset.value.x}px, ${offset.value.y}px, 0)`,
+      },
+);
+
+function isInteractive(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    target.closest(
+      'button, input, select, textarea, a, .settings-search, [data-no-drag]',
+    ) !== null
+  );
+}
+
+function startDrag(event: PointerEvent): void {
+  if (event.button !== 0 || dragging.value) return;
+  const target = event.target;
+  if (
+    !(target instanceof Element) ||
+    !target.closest('.settings-header') ||
+    isInteractive(target)
+  ) {
+    return;
+  }
+  const panel = panelRef.value;
+  if (!panel) return;
+
+  const rect = panel.getBoundingClientRect();
+  const margin = 8;
+  dragState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startOffsetX: offset.value.x,
+    startOffsetY: offset.value.y,
+    minX: offset.value.x + (margin - rect.left),
+    maxX: offset.value.x + (window.innerWidth - margin - rect.right),
+    minY: offset.value.y + (margin - rect.top),
+    maxY: offset.value.y + (window.innerHeight - margin - rect.bottom),
+  };
+  dragging.value = true;
+  panel.setPointerCapture(event.pointerId);
+  event.preventDefault();
+}
+
+function onDragMove(event: PointerEvent): void {
+  const state = dragState;
+  if (!state || event.pointerId !== state.pointerId) return;
+  const clamp = (value: number, min: number, max: number): number =>
+    Math.min(Math.max(value, min), Math.max(min, max));
+  offset.value = {
+    x: clamp(
+      state.startOffsetX + event.clientX - state.startX,
+      state.minX,
+      state.maxX,
+    ),
+    y: clamp(
+      state.startOffsetY + event.clientY - state.startY,
+      state.minY,
+      state.maxY,
+    ),
+  };
+}
+
+function endDrag(event?: PointerEvent): void {
+  if (!dragging.value) return;
+  dragging.value = false;
+  const state = dragState;
+  dragState = null;
+  const panel = panelRef.value;
+  if (panel && state && panel.hasPointerCapture(state.pointerId)) {
+    panel.releasePointerCapture(state.pointerId);
+  }
+  if (event) event.preventDefault();
+}
+
+function resetPosition(event: MouseEvent): void {
+  if (
+    !(event.target instanceof Element) ||
+    !event.target.closest('.settings-header') ||
+    isInteractive(event.target)
+  ) {
+    return;
+  }
+  offset.value = { x: 0, y: 0 };
+}
+
+function onWindowResize(): void {
+  offset.value = { x: 0, y: 0 };
+}
 
 function focusableElements(): HTMLElement[] {
   const panel = panelRef.value;
@@ -63,10 +176,12 @@ function onKeyDown(event: KeyboardEvent): void {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('resize', onWindowResize);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown, true);
+  window.removeEventListener('resize', onWindowResize);
   previousFocus?.focus();
 });
 </script>
@@ -76,10 +191,17 @@ onBeforeUnmount(() => {
     <section
       ref="panelRef"
       class="settings-panel"
+      :class="{ dragging }"
+      :style="panelStyle"
       role="dialog"
       aria-modal="true"
       :aria-label="t('settings.title')"
       tabindex="-1"
+      @pointerdown="startDrag"
+      @pointermove="onDragMove"
+      @pointerup="endDrag"
+      @pointercancel="endDrag"
+      @dblclick="resetPosition"
     >
       <SettingsPanel
         :preferences="preferences"
@@ -121,6 +243,28 @@ onBeforeUnmount(() => {
   color: var(--ink);
   box-shadow: var(--shadow-strong);
   animation: settings-enter 0.16s ease-out;
+}
+
+.settings-panel.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.settings-panel.dragging :deep(.settings-header) {
+  cursor: grabbing;
+}
+
+.settings-panel :deep(.settings-header) {
+  cursor: grab;
+  touch-action: none;
+}
+
+.settings-panel :deep(.settings-header button) {
+  cursor: pointer;
+}
+
+.settings-panel :deep(.settings-header input) {
+  cursor: text;
 }
 
 @keyframes settings-enter {

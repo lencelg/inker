@@ -1369,7 +1369,6 @@ function errorMessage(err: unknown): string {
           :view-mode="viewMode"
           :vim-enabled="vimEnabled"
           :exporting="exporting"
-          :default-format="preferences.exportFormat"
           @mode-change="setViewMode"
           @export="handleExport"
           @toggle-vim="toggleVim"

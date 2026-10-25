@@ -83,14 +83,12 @@ describe('preferences', () => {
 
   it('defaults and persists export preferences', () => {
     const defaults = normalizePreferences({});
-    expect(defaults.exportFormat).toBe('pdf');
     expect(defaults.exportEmbedImages).toBe(true);
     expect(defaults.exportOpenAfter).toBe(false);
     expect(defaults.exportIncludeToc).toBe(true);
 
     savePreferences(
       normalizePreferences({
-        exportFormat: 'html',
         exportEmbedImages: false,
         exportOpenAfter: true,
         exportIncludeToc: false,
@@ -98,7 +96,6 @@ describe('preferences', () => {
     );
 
     const stored = readPreferences();
-    expect(stored.exportFormat).toBe('html');
     expect(stored.exportEmbedImages).toBe(false);
     expect(stored.exportOpenAfter).toBe(true);
     expect(stored.exportIncludeToc).toBe(false);

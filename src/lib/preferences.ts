@@ -35,7 +35,6 @@ export const CODE_HIGHLIGHT_STORAGE_KEY = 'inker-code-highlight';
 export const CODE_THEME_STORAGE_KEY = 'inker-code-theme';
 export const SOURCE_HIGHLIGHT_STORAGE_KEY = 'inker-source-highlight';
 export const LANGUAGE_STORAGE_KEY = 'inker-language';
-export const EXPORT_FORMAT_STORAGE_KEY = 'inker-export-format';
 export const EXPORT_EMBED_IMAGES_STORAGE_KEY =
   'inker-export-embed-images';
 export const EXPORT_OPEN_AFTER_STORAGE_KEY =
@@ -57,16 +56,9 @@ export interface Preferences {
   codeTheme: CodeThemeId;
   sourceHighlight: boolean;
   language: LanguagePreference;
-  exportFormat: ExportFormat;
   exportEmbedImages: boolean;
   exportOpenAfter: boolean;
   exportIncludeToc: boolean;
-}
-
-export type ExportFormat = 'pdf' | 'html' | 'docx';
-
-export function isExportFormat(value: unknown): value is ExportFormat {
-  return value === 'pdf' || value === 'html' || value === 'docx';
 }
 
 export function clampFontSize(value: number): number {
@@ -95,9 +87,6 @@ export function normalizePreferences(value: unknown): Preferences {
     language: isLanguagePreference(source.language)
       ? source.language
       : 'system',
-    exportFormat: isExportFormat(source.exportFormat)
-      ? source.exportFormat
-      : 'pdf',
     exportEmbedImages: source.exportEmbedImages !== false,
     exportOpenAfter: source.exportOpenAfter === true,
     exportIncludeToc: source.exportIncludeToc !== false,
@@ -148,9 +137,6 @@ export function readPreferences(): Preferences {
       language: window.localStorage.getItem(
         LANGUAGE_STORAGE_KEY,
       ) ?? undefined,
-      exportFormat:
-        window.localStorage.getItem(EXPORT_FORMAT_STORAGE_KEY) ??
-        undefined,
       exportEmbedImages:
         window.localStorage.getItem(EXPORT_EMBED_IMAGES_STORAGE_KEY) ===
         null
@@ -211,10 +197,6 @@ export function savePreferences(preferences: Preferences): void {
     window.localStorage.setItem(
       LANGUAGE_STORAGE_KEY,
       preferences.language,
-    );
-    window.localStorage.setItem(
-      EXPORT_FORMAT_STORAGE_KEY,
-      preferences.exportFormat,
     );
     window.localStorage.setItem(
       EXPORT_EMBED_IMAGES_STORAGE_KEY,

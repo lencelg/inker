@@ -264,6 +264,7 @@ tempfile                     测试临时目录
 
 - 半透明遮罩与背景模糊。
 - 面板宽高约为窗口的 80%。
+- 可通过标题栏拖动面板，双击标题栏恢复居中。
 - 顶部搜索、清除、过滤和窗口按钮。
 - 左侧“用户 / 工作区”标签页。
 - 可折叠分类树。
@@ -301,8 +302,7 @@ tempfile                     测试临时目录
 - 本地图片在 PDF/Word 中始终内嵌；HTML 可切换内嵌或保留原始路径。
 - 尝试下载并内嵌远程图片；失败时保留链接并显示警告。
 - 支持 `\pagebreak` 或 `\newpage` 段落作为强制分页标记。
-- 导出设置包括默认格式、HTML 图片模式、目录和导出后打开。
-- 顶部菜单提供“快速导出”，使用设置中的默认格式。
+- 导出设置包括 HTML 图片模式、目录和导出后打开。
 - Word 目录页码会在 Word 打开后由字段更新；HTML/PDF 目录使用内部锚点。
 
 ### 2.14 桌面窗口
@@ -568,7 +568,6 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-code-theme` | 代码高亮主题 |
 | `inker-source-highlight` | 源码代码块语法高亮 |
 | `inker-language` | 界面语言（`system` / `zh` / `en`） |
-| `inker-export-format` | 快速导出默认格式（`pdf` / `html` / `docx`） |
 | `inker-export-embed-images` | HTML 默认是否内嵌图片 |
 | `inker-export-open-after` | 导出后是否打开文件 |
 | `inker-export-toc` | 导出时是否生成目录 |
@@ -838,7 +837,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：24 个测试文件，91 个测试通过
+- 前端：25 个测试文件，92 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：

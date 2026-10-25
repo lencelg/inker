@@ -13,7 +13,6 @@ const props = defineProps<{
   viewMode: ViewMode;
   vimEnabled: boolean;
   exporting: boolean;
-  defaultFormat: ExportFormat;
 }>();
 
 const emit = defineEmits<{
@@ -226,18 +225,6 @@ function onMenuKeyDown(event: KeyboardEvent): void {
 
       <div class="app-menu-separator"></div>
       <p class="app-menu-label">{{ t('menu.export') }}</p>
-      <button
-        type="button"
-        class="app-menu-item"
-        role="menuitem"
-        :disabled="exporting"
-        @click="chooseExport(defaultFormat)"
-      >
-        <span class="app-menu-check" aria-hidden="true"></span>
-        <span>{{
-          t('export.quick', { format: exportLabel(defaultFormat) })
-        }}</span>
-      </button>
       <button
         v-for="format in EXPORTS"
         :key="format.id"

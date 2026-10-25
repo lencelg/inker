@@ -79,11 +79,10 @@ const zh = {
   'menu.export': '导出',
   'menu.vim': 'Vim 模式',
   'menu.settings': '设置',
-  'export.pdf': 'PDF（打印）',
-  'export.html': 'HTML 网页',
+  'export.pdf': 'PDF',
+  'export.html': 'HTML',
   'export.docx': 'Word (.docx)',
   'export.contents': '目录',
-  'export.quick': '快速导出：{format}',
   'export.html.title': '导出 HTML',
   'export.html.embedded': '内嵌图片',
   'export.html.linked': '链接图片',
@@ -266,63 +265,37 @@ const zh = {
   'language.zh': '简体中文',
   'language.en': 'English',
   'settings.category.common.label': '常用设置',
-  'settings.category.common.description':
-    '经常调整的设置项会集中显示在这里。',
+  'settings.category.common.description': '经常使用的选项。',
   'settings.category.editor.label': '文本编辑器',
-  'settings.category.editor.description':
-    '控制源代码编辑器的字体、键位和写作体验。',
+  'settings.category.editor.description': '字体、键位与写作体验。',
   'settings.category.preview.label': '预览',
-  'settings.category.preview.description':
-    '控制 Markdown 实时预览的渲染方式。',
+  'settings.category.preview.description': 'Markdown 预览的渲染方式。',
   'settings.category.export.label': '导出',
-  'settings.category.export.description':
-    '配置分享笔记时使用的默认导出选项。',
-  'settings.language.description': '选择 Inker 界面使用的显示语言。',
-  'settings.language.hint': '跟随系统时会根据操作系统的语言自动选择。',
-  'settings.colorTheme.description':
-    '指定界面、编辑器和预览区域使用的颜色主题。',
-  'settings.colorTheme.hint': '主题切换会立即应用到整个工作台，并保存在本机。',
+  'settings.category.export.description': '导出格式、图片与目录。',
+  'settings.language.description': '界面显示语言。',
+  'settings.colorTheme.description': '界面、编辑器和预览的配色。',
+  'settings.colorTheme.hint': '切换后立即应用。',
   'settings.colorTheme.reset': '恢复默认主题',
-  'settings.fontSize.description': '控制编辑器字体大小（像素）。',
-  'settings.fontSize.hint': '也可以按住 Ctrl 并滚动鼠标滚轮快速调整。',
+  'settings.fontSize.description': '编辑器字号。',
+  'settings.fontSize.hint': '按住 Ctrl 滚动鼠标滚轮可快速调整。',
   'settings.fontSize.reset': '重置为默认值',
-  'settings.immersive.description':
-    '保持当前行居中并淡化其他内容，减少视觉干扰。',
-  'settings.immersive.hint':
-    '该选项会同时作用于源代码和实时预览两种编辑模式。',
-  'settings.fontFamily.description':
-    '控制编辑器、标签页和文件树使用的等宽字体。',
-  'settings.fontFamily.hint': '字体列表来自本机已安装并随应用打包的字体。',
+  'settings.immersive.description': '当前行居中，其他内容淡化。',
+  'settings.immersive.hint': '作用于源码和实时预览。',
+  'settings.fontFamily.description': '编辑器等宽字体。',
+  'settings.fontFamily.hint': '使用应用内置字体。',
   'settings.fontFamily.reset': '恢复默认字体',
-  'settings.vim.description': '启用 Vim 键位，支持 Normal、Insert、搜索、替换和宏。',
-  'settings.vim.hint': 'Vim 模式仅影响源代码编辑器，实时预览保持标准输入。',
-  'settings.sourceHighlight.description':
-    '控制源码模式中围栏代码块的语法高亮。',
-  'settings.sourceHighlight.hint':
-    '关闭后仅代码块显示为单色，Markdown 语法高亮不受影响。',
-  'settings.codeHighlight.description':
-    '为预览和实时预览中的代码块启用语法高亮。',
-  'settings.codeHighlight.hint':
-    '关闭后代码块会使用纯文本样式，预览中的语言标识也会隐藏。',
-  'settings.codeTheme.description':
-    '选择预览和实时预览中的代码语法配色主题。',
-  'settings.codeTheme.hint': '切换后会立即应用到已经打开的预览内容。',
-  'settings.exportFormat.description':
-    '选择顶部菜单快速导出时默认使用的格式。',
-  'settings.exportFormat.hint':
-    '导出菜单仍可为单次导出选择 PDF、HTML 或 Word。',
-  'settings.includeImages.description':
-    'HTML 导出时默认内嵌本地图片。',
-  'settings.includeImages.hint':
-    '内嵌模式生成单文件；链接模式保留原始图片路径。PDF 和 Word 始终内嵌图片。',
-  'settings.openAfterExport.description':
-    '导出完成后使用系统默认应用打开生成的文件。',
-  'settings.openAfterExport.hint':
-    '文件仍会先通过系统保存对话框写入你选择的位置。',
-  'settings.includeToc.description':
-    '为 HTML、PDF 和 Word 导出生成目录。',
-  'settings.includeToc.hint':
-    '目录会列出文档中的一到四级标题；Word 打开后可更新页码。',
+  'settings.vim.description': '启用 Vim 键位。',
+  'settings.vim.hint': '仅影响源代码编辑器。',
+  'settings.sourceHighlight.description': '源码模式代码块高亮。',
+  'settings.sourceHighlight.hint': '关闭后代码块显示为单色。',
+  'settings.codeHighlight.description': '预览代码块高亮。',
+  'settings.codeHighlight.hint': '关闭后使用纯文本样式。',
+  'settings.codeTheme.description': '预览代码配色主题。',
+  'settings.includeImages.description': 'HTML 默认内嵌图片。',
+  'settings.includeImages.hint': 'PDF 和 Word 始终内嵌图片。',
+  'settings.openAfterExport.description': '导出后打开文件。',
+  'settings.includeToc.description': '为导出生成目录。',
+  'settings.includeToc.hint': '列出一到四级标题；Word 页码打开后更新。',
   'docx.mermaid.title': 'Mermaid 图表',
   'docx.mermaid.source': '（Mermaid 图表）',
 } as const;
@@ -364,11 +337,10 @@ const en: Record<TranslationKey, string> = {
   'menu.export': 'Export',
   'menu.vim': 'Vim Mode',
   'menu.settings': 'Settings',
-  'export.pdf': 'PDF (Print)',
+  'export.pdf': 'PDF',
   'export.html': 'HTML',
   'export.docx': 'Word (.docx)',
   'export.contents': 'Contents',
-  'export.quick': 'Quick Export: {format}',
   'export.html.title': 'Export HTML',
   'export.html.embedded': 'Embed Images',
   'export.html.linked': 'Link Images',
@@ -566,72 +538,49 @@ const en: Record<TranslationKey, string> = {
   'language.zh': '简体中文',
   'language.en': 'English',
   'settings.category.common.label': 'Common',
-  'settings.category.common.description':
-    'Frequently adjusted settings are collected here.',
+  'settings.category.common.description': 'Frequently used settings.',
   'settings.category.editor.label': 'Text Editor',
   'settings.category.editor.description':
-    'Control fonts, keybindings, and the writing experience in the source editor.',
+    'Fonts, keybindings, and writing experience.',
   'settings.category.preview.label': 'Preview',
   'settings.category.preview.description':
-    'Control how Markdown previews are rendered.',
+    'How Markdown previews are rendered.',
   'settings.category.export.label': 'Export',
   'settings.category.export.description':
-    'Configure default options for sharing notes.',
-  'settings.language.description':
-    'Choose the display language for the Inker interface.',
-  'settings.language.hint':
-    'Follow System selects the language based on your operating system.',
+    'Export format, images, and outline.',
+  'settings.language.description': 'Display language.',
   'settings.colorTheme.description':
-    'Specify the color theme for the workbench, editor, and preview.',
-  'settings.colorTheme.hint':
-    'Theme changes apply to the whole workbench immediately and are saved on this device.',
+    'Colors for the interface, editor, and preview.',
+  'settings.colorTheme.hint': 'Applies immediately.',
   'settings.colorTheme.reset': 'Restore Default Theme',
-  'settings.fontSize.description':
-    'Control the editor font size in pixels.',
-  'settings.fontSize.hint':
-    'You can also hold Ctrl and scroll the mouse wheel to adjust quickly.',
+  'settings.fontSize.description': 'Editor font size.',
+  'settings.fontSize.hint': 'Hold Ctrl and scroll to adjust.',
   'settings.fontSize.reset': 'Reset to Default',
   'settings.immersive.description':
-    'Keep the current line centered and dim other content to reduce distractions.',
-  'settings.immersive.hint':
-    'This option applies to both source and live preview editing modes.',
-  'settings.fontFamily.description':
-    'Control the monospace font used by the editor, tabs, and file tree.',
-  'settings.fontFamily.hint':
-    'Fonts are installed locally and bundled with the application.',
+    'Center the current line and dim other content.',
+  'settings.immersive.hint': 'Applies to source and live preview.',
+  'settings.fontFamily.description': 'Monospace font for the editor.',
+  'settings.fontFamily.hint': 'Uses bundled fonts.',
   'settings.fontFamily.reset': 'Restore Default Font',
-  'settings.vim.description':
-    'Enable Vim keybindings, including Normal, Insert, search, replace, and macros.',
-  'settings.vim.hint':
-    'Vim mode only affects the source editor; live preview keeps standard input.',
+  'settings.vim.description': 'Enable Vim keybindings.',
+  'settings.vim.hint': 'Affects the source editor only.',
   'settings.sourceHighlight.description':
-    'Control syntax highlighting for fenced code blocks in source mode.',
+    'Code block highlighting in source mode.',
   'settings.sourceHighlight.hint':
-    'When disabled, code blocks render in a single color; Markdown syntax highlighting is unaffected.',
+    'Code blocks use a single color when off.',
   'settings.codeHighlight.description':
-    'Enable syntax highlighting for code blocks in preview and live preview.',
-  'settings.codeHighlight.hint':
-    'When disabled, code blocks use plain text styling and language badges are hidden in previews.',
-  'settings.codeTheme.description':
-    'Choose the syntax color theme for code in preview and live preview.',
-  'settings.codeTheme.hint':
-    'Changes apply immediately to previews that are already open.',
-  'settings.exportFormat.description':
-    'Choose the format used by Quick Export in the top menu.',
-  'settings.exportFormat.hint':
-    'The export menu still lets you choose PDF, HTML, or Word for a single export.',
+    'Code block highlighting in previews.',
+  'settings.codeHighlight.hint': 'Uses plain text styling when off.',
+  'settings.codeTheme.description': 'Color theme for preview code.',
   'settings.includeImages.description':
-    'Embed local images by default when exporting HTML.',
+    'Embed images by default in HTML exports.',
   'settings.includeImages.hint':
-    'Embed mode creates a single file; linked mode keeps original image paths. PDF and Word always embed images.',
-  'settings.openAfterExport.description':
-    'Open the generated file with the system default application after export.',
-  'settings.openAfterExport.hint':
-    'The file is still saved through the system save dialog at the location you choose.',
+    'PDF and Word always embed images.',
+  'settings.openAfterExport.description': 'Open the file after export.',
   'settings.includeToc.description':
-    'Generate a table of contents for HTML, PDF, and Word exports.',
+    'Generate a table of contents for exports.',
   'settings.includeToc.hint':
-    'The table of contents lists headings from levels 1 to 4. Page numbers can be updated after Word opens the file.',
+    'Includes headings 1–4; Word updates page numbers on open.',
   'docx.mermaid.title': 'Mermaid Diagram',
   'docx.mermaid.source': '(Mermaid Diagram)',
 };

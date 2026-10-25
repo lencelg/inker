@@ -275,8 +275,19 @@ const theme = EditorView.theme({
   },
   '.cm-content': {
     padding: '14px 18px',
-    caretColor: 'var(--ink)',
+    caretColor: 'var(--editor-caret, var(--ink))',
     color: 'var(--ink)',
+  },
+  '.cm-cursor, .cm-dropCursor': {
+    borderLeftColor: 'var(--editor-caret, var(--ink))',
+    borderLeftWidth: '2px',
+  },
+  '&.cm-focused .cm-cursor, &.cm-focused .cm-dropCursor': {
+    borderLeftColor: 'var(--editor-caret, var(--ink))',
+    borderLeftWidth: '2px',
+  },
+  '.cm-cursor-primary': {
+    borderLeftColor: 'var(--editor-caret, var(--ink))',
   },
   '.cm-gutters': {
     backgroundColor: 'var(--bg-soft)',

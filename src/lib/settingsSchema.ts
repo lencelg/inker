@@ -94,14 +94,6 @@ export function settingsCategories(): SettingsCategory[] {
   ];
 }
 
-function exportOptions(): SettingsOption[] {
-  return [
-    { label: t('export.pdf'), value: 'pdf' },
-    { label: t('export.html'), value: 'html' },
-    { label: t('export.docx'), value: 'docx' },
-  ];
-}
-
 function fontOptions(): SettingsOption[] {
   return FONTS.map((font) => ({
     label: fontLabel(font),
@@ -129,9 +121,6 @@ function settingTemplates(): SettingTemplate[] {
         'chinese',
       ],
       preference: 'language',
-      hint: {
-        text: t('settings.language.hint'),
-      },
     },
     {
       id: 'workbench.colorTheme',
@@ -280,23 +269,6 @@ function settingTemplates(): SettingTemplate[] {
       ],
       preference: 'codeTheme',
       themeImport: 'code',
-      hint: {
-        text: t('settings.codeTheme.hint'),
-      },
-    },
-    {
-      id: 'export.defaultFormat',
-      category: 'export',
-      title: 'Export: Default Format',
-      description: t('settings.exportFormat.description'),
-      controlType: 'select',
-      defaultValue: 'pdf',
-      options: exportOptions(),
-      keywords: ['导出', '格式', 'pdf', 'html', 'word', 'docx'],
-      preference: 'exportFormat',
-      hint: {
-        text: t('settings.exportFormat.hint'),
-      },
     },
     {
       id: 'export.includeImages',
@@ -333,9 +305,6 @@ function settingTemplates(): SettingTemplate[] {
       defaultValue: false,
       keywords: ['导出', '打开', '文件', 'open', 'save'],
       preference: 'exportOpenAfter',
-      hint: {
-        text: t('settings.openAfterExport.hint'),
-      },
     },
   ];
 }
