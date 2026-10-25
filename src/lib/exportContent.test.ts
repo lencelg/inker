@@ -64,6 +64,7 @@ describe('HTML export preparation', () => {
     );
 
     expect(prepared.documentHtml).toContain('class="export-toc"');
+    expect(prepared.documentHtml).toContain('Table of contents');
     expect(prepared.documentHtml).toContain('href="#first"');
     expect(prepared.documentHtml).toContain('href="#second"');
   });

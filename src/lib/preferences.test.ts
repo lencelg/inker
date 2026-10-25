@@ -85,7 +85,7 @@ describe('preferences', () => {
     const defaults = normalizePreferences({});
     expect(defaults.exportEmbedImages).toBe(true);
     expect(defaults.exportOpenAfter).toBe(false);
-    expect(defaults.exportIncludeToc).toBe(true);
+    expect(defaults.exportIncludeToc).toBe(false);
 
     savePreferences(
       normalizePreferences({

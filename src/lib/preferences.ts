@@ -89,7 +89,7 @@ export function normalizePreferences(value: unknown): Preferences {
       : 'system',
     exportEmbedImages: source.exportEmbedImages !== false,
     exportOpenAfter: source.exportOpenAfter === true,
-    exportIncludeToc: source.exportIncludeToc !== false,
+    exportIncludeToc: source.exportIncludeToc === true,
   };
 }
 
@@ -149,11 +149,7 @@ export function readPreferences(): Preferences {
         'true',
       exportIncludeToc:
         window.localStorage.getItem(EXPORT_INCLUDE_TOC_STORAGE_KEY) ===
-        null
-          ? undefined
-          : window.localStorage.getItem(
-              EXPORT_INCLUDE_TOC_STORAGE_KEY,
-            ) === 'true',
+        'true',
     });
 
     if (usedLegacyKeys) savePreferences(preferences);

@@ -290,7 +290,7 @@ function settingTemplates(): SettingTemplate[] {
       title: 'Export: Table of Contents',
       description: t('settings.includeToc.description'),
       controlType: 'checkbox',
-      defaultValue: true,
+      defaultValue: false,
       keywords: ['导出', '目录', 'toc', 'contents', 'heading'],
       preference: 'exportIncludeToc',
       hint: {

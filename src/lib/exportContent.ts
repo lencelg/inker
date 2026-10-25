@@ -160,7 +160,6 @@ body {
   font-size: 0.92em;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--muted);
 }
 .export-body .export-toc ul { margin: 0; padding-left: 1.2em; }
