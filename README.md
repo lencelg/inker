@@ -190,12 +190,12 @@ tempfile                     测试临时目录
 - 图片读取有 20 MB 上限。
 - 图片重命名会保留文件类型。
 
-### 2.10 沉浸式写作
+### 2.10 Zen 模式
 
 - 打字机模式：当前行保持居中。
 - 淡化非当前段落/内容。
 - 支持源码编辑器与实时预览编辑器。
-- 状态栏可切换沉浸式写作，快捷键为 `Ctrl/Cmd+Shift+M`。
+- 状态栏可切换 Zen 模式，快捷键为 `Ctrl/Cmd+Shift+M`。
 
 ### 2.11 主题与字体
 
@@ -350,7 +350,7 @@ tempfile                     测试临时目录
 | 图片缩放与拖动查看 | ✅ 已完成 |
 | 图片粘贴/拖拽到 `assets/` | ✅ 已完成 |
 | 目录锚点跳转 | ✅ 已完成 |
-| 沉浸式写作 | ✅ 已完成 |
+| Zen 模式 | ✅ 已完成 |
 | 主题 / 字体 / 字号 | ✅ 已完成 |
 | 代码高亮主题切换 | ✅ 已完成 |
 | 自定义界面主题导入 | ✅ 已完成 |
@@ -459,7 +459,7 @@ markdown-note-taking/
 - 侧栏可见性和宽度
 - 侧边预览分隔比例
 - 光标行列、预览焦点行、滚动比例
-- 沉浸式写作
+- Zen 模式
 - 设置浮层
 - 导出与打印预览
 - 错误、确认框、输入框
@@ -563,7 +563,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-font-size` | 字体大小 |
 | `inker-font-family` | 编辑器字体 |
 | `inker-vim` | Vim 模式 |
-| `inker-immersive` | 沉浸式写作 |
+| `inker-immersive` | Zen 模式 |
 | `inker-code-highlight` | 预览代码高亮 |
 | `inker-code-theme` | 代码高亮主题 |
 | `inker-source-highlight` | 源码代码块语法高亮 |
@@ -750,7 +750,7 @@ Markdown 图片路径
 | 快捷键 | 功能 |
 | --- | --- |
 | `Ctrl/Cmd+S` | 保存当前笔记 |
-| `Ctrl/Cmd+Shift+M` | 切换沉浸式写作 |
+| `Ctrl/Cmd+Shift+M` | 切换 Zen 模式 |
 | `Ctrl/Cmd+滚轮` | 调整字体大小 |
 | `Ctrl/Cmd+D` | 源码编辑器选择下一个相同文本 |
 | `Alt+点击` | 源码编辑器添加多光标 |

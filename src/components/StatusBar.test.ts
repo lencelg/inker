@@ -59,6 +59,7 @@ describe('StatusBar mode menu', () => {
 
   it('emits the immersive toggle', async () => {
     const wrapper = mountStatusBar();
+    expect(wrapper.find('.status-focus').text()).toBe('Zen');
     await wrapper.find('.status-focus').trigger('click');
     expect(wrapper.emitted('immersiveToggle')).toHaveLength(1);
     wrapper.unmount();
