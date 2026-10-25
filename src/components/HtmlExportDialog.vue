@@ -123,9 +123,6 @@ onBeforeUnmount(() => {
                 : t('export.html.linkedHint')
             }}
           </p>
-          <p class="html-export-preview-note">
-            {{ t('export.html.previewNote') }}
-          </p>
         </div>
 
         <ul v-if="warnings.length" class="html-export-warnings">
@@ -279,10 +276,6 @@ onBeforeUnmount(() => {
 
 .html-export-info p {
   margin: 0;
-}
-
-.html-export-preview-note {
-  color: var(--faint);
 }
 
 .html-export-warnings {

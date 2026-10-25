@@ -90,8 +90,6 @@ const zh = {
     '图片会转换为 Data URL，生成可单独分享的单个文件。',
   'export.html.linkedHint':
     '保留原始图片路径，文件更小，但移动 HTML 时需要同时移动图片。',
-  'export.html.previewNote':
-    '预览使用内嵌图片的版本；保存时按所选方式处理图片。',
   'export.html.save': '保存 HTML',
   'export.html.preview': '预览',
   'export.html.size': '约 {size}',
@@ -347,8 +345,6 @@ const en: Record<TranslationKey, string> = {
     'Images are converted to data URLs, producing a single file that can be shared on its own.',
   'export.html.linkedHint':
     'Original image paths are kept. The file is smaller, but images must move with the HTML.',
-  'export.html.previewNote':
-    'The preview uses the embedded-image version. Images are handled according to the selected mode when saving.',
   'export.html.save': 'Save HTML',
   'export.html.preview': 'Preview',
   'export.html.size': 'About {size}',
