@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLanguage } from './i18n';
-import { prepareExport } from './exportContent';
+import {
+  buildDocxPreviewDocument,
+  prepareExport,
+} from './exportContent';
 import { api } from '../api';
 
 vi.mock('../api', () => ({
@@ -67,6 +70,26 @@ describe('HTML export preparation', () => {
     expect(prepared.documentHtml).toContain('Table of contents');
     expect(prepared.documentHtml).toContain('href="#first"');
     expect(prepared.documentHtml).toContain('href="#second"');
+  });
+
+  it('places the DOCX preview table of contents before the document', async () => {
+    const prepared = await prepareExport(
+      'notes/toc.md',
+      '# Title\n\n## First\n\nText\n\n## Second\n\nMore',
+      { embedImages: true, includeToc: false },
+    );
+
+    const html = buildDocxPreviewDocument(
+      prepared,
+      true,
+      'github-dark',
+    );
+    expect(html).toContain('class="export-toc"');
+    expect(html).toContain('class="page-break"');
+    expect(html.indexOf('class="export-toc"')).toBeLessThan(
+      html.indexOf('<h1'),
+    );
+    expect(html).toContain('--code-bg: #0d1117');
   });
 
   it('embeds local images with data URLs', async () => {

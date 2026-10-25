@@ -9,19 +9,21 @@ import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import EditorTabs from './components/EditorTabs.vue';
+import ExportPreviewDialog from './components/ExportPreviewDialog.vue';
 import HtmlExportDialog from './components/HtmlExportDialog.vue';
 import ImagePane from './components/ImagePane.vue';
 import InkerMark from './components/InkerMark.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
-import PrintPreview from './components/PrintPreview.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import SearchPanel from './components/SearchPanel.vue';
 import SettingsOverlay from './components/SettingsOverlay.vue';
 import StatusBar from './components/StatusBar.vue';
 import {
+  buildDocxBase64,
+  buildDocxPreviewDocument,
   prepareExport,
-  saveDocxExport,
+  saveDocxBase64,
   saveHtmlExport,
   type PreparedExport,
 } from './lib/exportContent';
@@ -74,10 +76,12 @@ const switching = ref(false);
 const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
 const exporting = ref(false);
-const printPreview = ref<{
+const exportPreview = ref<{
+  format: 'pdf' | 'docx';
   title: string;
   html: string;
   warnings: string[];
+  docxBase64?: string;
 } | null>(null);
 const htmlExport = ref<{
   title: string;
@@ -580,7 +584,8 @@ async function handleExport(
         embedImages: true,
         includeToc: preferencesValue.exportIncludeToc,
       });
-      printPreview.value = {
+      exportPreview.value = {
+        format: 'pdf',
         title: prepared.title,
         html: prepared.documentHtml,
         warnings: prepared.warnings,
@@ -620,14 +625,48 @@ async function handleExport(
       embedImages: true,
       includeToc: false,
     });
-    const path = await saveDocxExport(prepared, {
+    const docxBase64 = await buildDocxBase64(prepared, {
       codeTheme: preferencesValue.codeTheme,
       includeToc: preferencesValue.exportIncludeToc,
     });
-    if (prepared.warnings.length > 0) {
-      warning.value = prepared.warnings.join(' ');
-    }
-    if (path && preferencesValue.exportOpenAfter) {
+    exportPreview.value = {
+      format: 'docx',
+      title: prepared.title,
+      html: buildDocxPreviewDocument(
+        prepared,
+        preferencesValue.exportIncludeToc,
+        preferencesValue.codeTheme,
+      ),
+      warnings: prepared.warnings,
+      docxBase64,
+    };
+  } catch (err) {
+    setError(err);
+  } finally {
+    exporting.value = false;
+  }
+}
+
+async function savePreviewDocx(): Promise<void> {
+  const current = exportPreview.value;
+  if (
+    !current ||
+    current.format !== 'docx' ||
+    !current.docxBase64 ||
+    exporting.value
+  ) {
+    return;
+  }
+
+  exporting.value = true;
+  try {
+    const path = await saveDocxBase64(
+      current.title,
+      current.docxBase64,
+    );
+    if (!path) return;
+    exportPreview.value = null;
+    if (preferences.value.exportOpenAfter) {
       await openExportedFile(path);
     }
   } catch (err) {
@@ -1653,12 +1692,15 @@ function errorMessage(err: unknown): string {
       @cancel="cancelPrompt"
     />
 
-    <PrintPreview
-      v-if="printPreview"
-      :title="printPreview.title"
-      :html="printPreview.html"
-      :warnings="printPreview.warnings"
-      @close="printPreview = null"
+    <ExportPreviewDialog
+      v-if="exportPreview"
+      :format="exportPreview.format"
+      :title="exportPreview.title"
+      :html="exportPreview.html"
+      :warnings="exportPreview.warnings"
+      :busy="exporting"
+      @save="savePreviewDocx"
+      @close="exportPreview = null"
     />
 
     <HtmlExportDialog

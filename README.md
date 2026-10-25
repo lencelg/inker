@@ -298,15 +298,19 @@ tempfile                     测试临时目录
 | 格式 | 实现 |
 | --- | --- |
 | HTML | 导出对话框提供“内嵌图片 / 链接图片”两种模式，并显示预览、文件体积和警告；可选目录，使用当前代码高亮主题和文档元数据 |
-| Word `.docx` | 使用 `docx` 生成文档：原生多级列表、表格边框/列宽/重复表头、连续代码块与语法颜色、Word 原生公式、JPEG/PNG/SVG 图片、Mermaid 2x 栅格化、目录、页码、文档属性和内部链接 |
-| PDF | 打印预览后调用系统浏览器打印；包含分页控制、目录、代码主题和打印专用样式 |
+| Word `.docx` | 先在内存中生成文档，再通过分页预览确认后保存；使用 `docx` 生成原生多级列表、表格边框/列宽/重复表头、连续代码块与语法颜色、Word 原生公式、JPEG/PNG/SVG 图片、Mermaid 2x 栅格化、目录、页码、文档属性和内部链接 |
+| PDF | 应用内 A4 分页预览后调用 WebView 打印；预览与打印复用同一份分页 DOM、目录、代码主题和打印专用样式 |
 
 导出行为：
 
 - 复用当前 Markdown 渲染、代码高亮开关和代码主题。
 - 本地图片在 PDF/Word 中始终内嵌；HTML 可切换内嵌或保留原始路径。
 - 尝试下载并内嵌远程图片；失败时保留链接并显示警告。
+- 统一使用 A4、20mm 页边距和 170 × 257mm 内容区；PDF 与 Word 预览都显示页码。
 - 支持 `\pagebreak` 或 `\newpage` 段落作为强制分页标记。
+- 长段落按行拆分；列表按条目、表格按行拆分，并尽量保持代码块、图片、引用和目录整块呈现。
+- PDF 预览和打印使用同一份分页 DOM，避免打印时再次分页；Word 预览使用同一分页器配合 Word 版式样式。
+- Word 最终分页仍可能受本机字体和 Word 自身排版影响。
 - 导出设置包括 HTML 图片模式、目录（默认关闭）和导出后打开。
 - Word 目录页码会在 Word 打开后由字段更新；HTML/PDF 目录使用内部锚点。
 
@@ -409,7 +413,7 @@ markdown-note-taking/
 │   │   ├── SettingsPanel.vue      # 设置状态编排
 │   │   ├── ConfirmDialog.vue
 │   │   ├── PromptDialog.vue
-│   │   ├── PrintPreview.vue
+│   │   ├── ExportPreviewDialog.vue # PDF / Word 分页预览
 │   │   ├── HtmlExportDialog.vue   # HTML 导出预览与图片模式
 │   │   ├── InkerMark.vue
 │   │   └── settings/
@@ -427,6 +431,8 @@ markdown-note-taking/
 │       ├── themeImport.ts         # 界面主题 / 代码主题解析与清洗
 │       ├── docxExport.ts          # DOCX 内容转换
 │       ├── exportContent.ts       # HTML / PDF / 导出准备
+│       ├── pageLayout.ts          # 统一 A4 页面规格与预览样式
+│       ├── pagination.ts          # DOM 测量、分页与页面切片
 │       ├── fileKinds.ts           # 图片扩展名识别
 │       ├── i18n.ts                # 中英文文案与系统语言检测
 │       ├── imageView.ts           # 图片缩放与平移计算
@@ -713,8 +719,9 @@ Markdown 图片路径
 - 解析本地图片为 Data URL。
 - 渲染 Mermaid SVG。
 - 生成独立 HTML。
-- PDF 使用 `PrintPreview.vue` 的 iframe 和系统打印。
-- DOCX 通过 `docxExport.ts` 将渲染后的 DOM 转换为 Word 文档结构。
+- PDF 使用 `ExportPreviewDialog.vue` 的 iframe 分页，并从同一个 iframe 调用系统打印。
+- `pagination.ts` 在 iframe 内按 A4 内容区测量块高，按段落行、列表条目和表格行拆分，生成固定页面。
+- DOCX 通过 `docxExport.ts` 将渲染后的 DOM 转换为 Word 文档结构；`buildDocxPreviewDocument` 为其生成 Word 版式预览。
 
 ---
 
@@ -847,7 +854,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：29 个测试文件，104 个测试通过
+- 前端：29 个测试文件，105 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -863,6 +870,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 中英文界面、系统语言检测与切换
 - HTML 导出模式、目录和图片策略
 - DOCX 原生列表、表格、公式、目录与页码
+- DOCX 预览目录位置与独立分页
 - 图片文件识别
 - 主区域滚轮减速
 - 源码缩略图几何映射

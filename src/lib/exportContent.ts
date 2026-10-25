@@ -385,14 +385,14 @@ function applyPageBreaks(container: HTMLElement): void {
   }
 }
 
-function addTableOfContents(
+function createTableOfContents(
   container: HTMLElement,
   language: 'zh' | 'en',
-): void {
+): HTMLElement | null {
   const headings = Array.from(
     container.querySelectorAll<HTMLElement>('h1, h2, h3, h4'),
   ).filter((heading) => heading.id);
-  if (headings.length < 2) return;
+  if (headings.length < 2) return null;
 
   const nav = document.createElement('nav');
   nav.className = 'export-toc';
@@ -413,15 +413,46 @@ function addTableOfContents(
     root.append(item);
   }
   nav.append(root);
+  container.dataset.exportToc = 'true';
+  if (language === 'zh') container.lang = 'zh-CN';
+  return nav;
+}
 
+function addTableOfContents(
+  container: HTMLElement,
+  language: 'zh' | 'en',
+): void {
+  const nav = createTableOfContents(container, language);
+  if (!nav) return;
   const firstHeading = container.querySelector('h1');
   if (firstHeading) {
     firstHeading.after(nav);
   } else {
     container.prepend(nav);
   }
-  container.dataset.exportToc = 'true';
-  if (language === 'zh') container.lang = 'zh-CN';
+}
+
+function buildDocumentHtml(
+  title: string,
+  contentHtml: string,
+  language: 'zh' | 'en',
+  codeTheme: CodeThemeId,
+): string {
+  const theme = codeThemeById(codeTheme);
+  const themeVars = `:root { --code-bg: ${theme.background}; --code-fg: ${theme.foreground}; }`;
+  return `<!doctype html>
+<html lang="${language === 'zh' ? 'zh-CN' : 'en'}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Inker">
+<title>${escapeHtml(title)}</title>
+<style>${theme.css}\n${EXPORT_CSS}\n${themeVars}</style>
+</head>
+<body>
+<article class="markdown-body export-body">${contentHtml}</article>
+</body>
+</html>`;
 }
 
 export async function prepareExport(
@@ -518,23 +549,12 @@ export async function prepareExport(
       : exportTitle(notePath)
     ).slice(0, 120);
   const contentHtml = container.innerHTML;
-  const codeTheme = codeThemeById(
+  const documentHtml = buildDocumentHtml(
+    title,
+    contentHtml,
+    language,
     options.codeTheme ?? DEFAULT_CODE_THEME,
   );
-  const themeVars = `:root { --code-bg: ${codeTheme.background}; --code-fg: ${codeTheme.foreground}; }`;
-  const documentHtml = `<!doctype html>
-<html lang="${language === 'zh' ? 'zh-CN' : 'en'}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="Inker">
-<title>${escapeHtml(title)}</title>
-<style>${codeTheme.css}\n${EXPORT_CSS}\n${themeVars}</style>
-</head>
-<body>
-<article class="markdown-body export-body">${contentHtml}</article>
-</body>
-</html>`;
 
   return {
     title,
@@ -543,6 +563,29 @@ export async function prepareExport(
     documentHtml,
     warnings,
   };
+}
+
+export function buildDocxPreviewDocument(
+  prepared: PreparedExport,
+  includeToc: boolean,
+  codeTheme: CodeThemeId = DEFAULT_CODE_THEME,
+): string {
+  const container = prepared.container.cloneNode(true) as HTMLElement;
+  if (includeToc) {
+    const language = getLanguage();
+    const nav = createTableOfContents(container, language);
+    if (nav) {
+      const pageBreak = document.createElement('div');
+      pageBreak.className = 'page-break';
+      container.prepend(nav, pageBreak);
+    }
+  }
+  return buildDocumentHtml(
+    prepared.title,
+    container.innerHTML,
+    getLanguage(),
+    codeTheme,
+  );
 }
 
 function joinDirectory(directory: string, fileName: string): string {
@@ -567,17 +610,23 @@ export async function saveHtmlExport(
   return path;
 }
 
-export async function saveDocxExport(
+export async function buildDocxBase64(
   prepared: PreparedExport,
   options: SaveDocxOptions = {},
-): Promise<string | null> {
+): Promise<string> {
   const { docxToBase64 } = await import('./docxExport');
-  const base64 = await docxToBase64(prepared.container, prepared.title, {
+  return docxToBase64(prepared.container, prepared.title, {
     codeTheme: options.codeTheme,
     includeToc: options.includeToc,
   });
+}
+
+export async function saveDocxBase64(
+  title: string,
+  base64: string,
+): Promise<string | null> {
   const path = await save({
-    defaultPath: `${safeFileName(prepared.title)}.docx`,
+    defaultPath: `${safeFileName(title)}.docx`,
     filters: [{ name: 'Word', extensions: ['docx'] }],
   });
   if (!path) return null;
