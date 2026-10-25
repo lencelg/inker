@@ -43,6 +43,7 @@ import {
   type Preferences,
 } from './lib/preferences';
 import type { ViewMode } from './lib/viewModes';
+import { applySlowWheel } from './lib/wheelScroll';
 import type { FileEntry, NotesState, SearchMatch } from './types';
 
 const WysiwygPane = defineAsyncComponent(
@@ -374,6 +375,10 @@ onMounted(() => {
     capture: true,
     passive: false,
   });
+  window.addEventListener('wheel', handleSlowScrollWheel, {
+    capture: true,
+    passive: false,
+  });
   void appWindow
     .isMaximized()
     .then((maximized) => {
@@ -399,6 +404,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown, true);
   window.removeEventListener('wheel', handleGlobalWheel, true);
+  window.removeEventListener('wheel', handleSlowScrollWheel, true);
   unlistenWindow?.();
 });
 
@@ -450,6 +456,10 @@ function handleGlobalWheel(event: WheelEvent): void {
   const direction = Math.sign(wheelAccumulator);
   wheelAccumulator = 0;
   setFontSize(preferences.value.fontSize - direction);
+}
+
+function handleSlowScrollWheel(event: WheelEvent): void {
+  applySlowWheel(event);
 }
 
 function handleCursor(position: {
