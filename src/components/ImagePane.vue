@@ -223,7 +223,6 @@ onBeforeUnmount(() => {
 
     <footer class="image-footer">
       <span class="image-name">{{ name }}</span>
-      <span class="image-hint">{{ t('image.hint') }}</span>
       <div class="image-meta">
         <span v-if="dimensions" class="image-dimensions">
           {{ dimensions.width }} × {{ dimensions.height }}
@@ -341,17 +340,9 @@ onBeforeUnmount(() => {
 
 .image-name {
   min-width: 0;
-  overflow: hidden;
-  font-family: var(--mono-font);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.image-hint {
   flex: 1;
   overflow: hidden;
-  color: var(--faint);
-  text-align: center;
+  font-family: var(--mono-font);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -361,6 +352,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
 }
 
 .image-dimensions {
