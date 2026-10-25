@@ -183,6 +183,8 @@ tempfile                     测试临时目录
   `png`、`apng`、`jpg`、`jpeg`、`gif`、`webp`、`svg`、`bmp`、`ico`、`avif`
 - 图片可在主区域打开为独立标签页。
 - 图片查看器显示文件名和实际尺寸。
+- 支持鼠标滚轮缩放，缩放以鼠标位置为中心。
+- 支持按住鼠标左键拖动图片、缩放百分比、加减按钮和双击/重置复位。
 - Markdown 中的本地图片通过 Rust 后端读取并转换为内嵌 Data URL。
 - WYSIWYG 中粘贴/拖拽图片会写入 `assets/`。
 - 图片读取有 20 MB 上限。
@@ -297,6 +299,7 @@ tempfile                     测试临时目录
 | Mermaid | ✅ 已完成 |
 | 原始 HTML（清洗后渲染） | ✅ 已完成 |
 | 本地图片与图片标签页 | ✅ 已完成 |
+| 图片缩放与拖动查看 | ✅ 已完成 |
 | 图片粘贴/拖拽到 `assets/` | ✅ 已完成 |
 | 目录锚点跳转 | ✅ 已完成 |
 | 沉浸式写作 | ✅ 已完成 |
@@ -363,6 +366,7 @@ markdown-note-taking/
 │       ├── docxExport.ts          # DOCX 内容转换
 │       ├── exportContent.ts       # HTML / PDF / 导出准备
 │       ├── fileKinds.ts           # 图片扩展名识别
+│       ├── imageView.ts           # 图片缩放与平移计算
 │       ├── fonts.ts               # 字体列表
 │       ├── lineEndings.ts         # LF / CRLF 处理
 │       ├── markdown.ts            # markdown-it 渲染配置
@@ -770,7 +774,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：15 个测试文件，56 个测试通过
+- 前端：16 个测试文件，60 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
