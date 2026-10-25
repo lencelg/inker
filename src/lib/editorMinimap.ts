@@ -12,22 +12,37 @@ import { wheelDeltaPixels } from './wheelScroll';
 const HEADING_NODE = /^(?:ATX|Setext)Heading[1-6]$/;
 const MINIMAP_PADDING = 6;
 const MIN_THUMB_HEIGHT = 24;
+const MAX_ROW_PITCH = 2;
+const BASE_ALPHA = 0.38;
+const TOKEN_ALPHA = 0.68;
+const HEADING_ALPHA = 0.85;
+const MAX_VISUAL_ROWS = 2000;
 
 interface MinimapSegment {
   from: number;
   to: number;
   color: string;
+  alpha: number;
+}
+
+interface MinimapChunk {
+  start: number;
+  end: number;
 }
 
 interface LineInfo {
   number: number;
   text: string;
-  indent: number;
-  end: number;
-  top: number;
-  blockHeight: number;
+  rowStart: number;
   visualRows: number;
+  top: number;
+  chunks: MinimapChunk[];
   segments: MinimapSegment[];
+}
+
+interface NodePaint {
+  color: string;
+  alpha: number;
 }
 
 interface MinimapPalette {
@@ -88,43 +103,34 @@ function readPalette(): MinimapPalette {
 function nodeStyle(
   name: string,
   palette: MinimapPalette,
-): string | null {
-  if (HEADING_NODE.test(name)) return palette.heading;
+): NodePaint | null {
+  if (HEADING_NODE.test(name)) {
+    return { color: palette.heading, alpha: HEADING_ALPHA };
+  }
   switch (name) {
     case 'InlineCode':
     case 'CodeText':
-      return palette.code;
+      return { color: palette.code, alpha: TOKEN_ALPHA };
     case 'CodeInfo':
-      return palette.type;
+      return { color: palette.type, alpha: TOKEN_ALPHA };
     case 'Link':
     case 'Image':
     case 'URL':
-      return palette.link;
-    case 'StrongEmphasis':
-      return palette.strong;
-    case 'Emphasis':
-      return palette.emphasis;
+      return { color: palette.link, alpha: TOKEN_ALPHA };
     case 'HTMLBlock':
     case 'HTMLTag':
-      return palette.tag;
+      return { color: palette.tag, alpha: TOKEN_ALPHA };
+    case 'StrongEmphasis':
+      return { color: palette.strong, alpha: 0.58 };
+    case 'Emphasis':
+      return { color: palette.emphasis, alpha: 0.52 };
     case 'QuoteMark':
-      return palette.quote;
+      return { color: palette.quote, alpha: 0.5 };
     case 'ListMark':
-      return palette.marker;
+      return { color: palette.marker, alpha: 0.5 };
     default:
       return null;
   }
-}
-
-function leadingIndent(text: string): number {
-  let indent = 0;
-  for (const character of text) {
-    if (character === ' ') indent += 1;
-    else if (character === '\t') indent += 4;
-    else break;
-    if (indent >= MINIMAP_MAX_COLUMN) break;
-  }
-  return Math.min(indent, MINIMAP_MAX_COLUMN);
 }
 
 export class EditorMinimap {
@@ -142,7 +148,10 @@ export class EditorMinimap {
   private overlayContext: CanvasRenderingContext2D | null = null;
   private width = 0;
   private height = 0;
-  private scale = 1;
+  private rowPitch = MAX_ROW_PITCH;
+  private drawnHeight = 0;
+  private totalRows = 1;
+  private charsPerRow = 80;
   private lines: LineInfo[] = [];
   private palette = readPalette();
   private lineCount = 0;
@@ -303,19 +312,25 @@ export class EditorMinimap {
     const contentHeight = Math.max(1, this.view.contentHeight);
     const hostHeight = this.host.clientHeight;
     const hostWidth = this.host.clientWidth;
+    const charsPerRow = this.measureCharsPerRow();
     const layoutChanged =
       this.layoutDirty ||
       lineCount !== this.lineCount ||
       contentHeight !== this.contentHeight ||
       hostHeight !== this.hostHeight ||
-      hostWidth !== this.hostWidth;
+      hostWidth !== this.hostWidth ||
+      charsPerRow !== this.charsPerRow;
 
     if (layoutChanged) {
       this.layoutAll();
       this.drawAll();
       this.selectionDirty = false;
     } else if (this.pendingLines.size > 0) {
-      this.redrawLines(this.pendingLines);
+      if (!this.redrawLines(this.pendingLines)) {
+        this.layoutAll();
+        this.drawAll();
+        this.selectionDirty = false;
+      }
     }
 
     this.pendingLines.clear();
@@ -336,54 +351,124 @@ export class EditorMinimap {
     this.hostHeight = hostHeight;
     this.hostWidth = hostWidth;
     this.lineCount = state.doc.lines;
-    this.scale =
-      hostHeight > 0 ? hostHeight / contentHeight : 1;
     this.palette = readPalette();
+    this.charsPerRow = this.measureCharsPerRow();
+
+    const rowCounts: number[] = [];
+    let totalRows = 0;
+    for (let number = 1; number <= state.doc.lines; number += 1) {
+      const visualRows = this.measureVisualRows(
+        state.doc.line(number).from,
+      );
+      rowCounts.push(visualRows);
+      totalRows += visualRows;
+    }
+    this.totalRows = Math.max(1, totalRows);
+    this.rowPitch =
+      hostHeight > 0
+        ? Math.min(MAX_ROW_PITCH, hostHeight / this.totalRows)
+        : MAX_ROW_PITCH;
+    this.drawnHeight = Math.min(
+      hostHeight,
+      this.totalRows * this.rowPitch,
+    );
 
     const segmentMap = this.collectSegments(state, this.palette);
     const lines: LineInfo[] = [];
+    let rowStart = 0;
     for (let number = 1; number <= state.doc.lines; number += 1) {
+      const visualRows = rowCounts[number - 1];
       lines.push(
         this.buildLineInfo(
           state,
           number,
+          rowStart,
+          visualRows,
           segmentMap.get(number) ?? [],
         ),
       );
+      rowStart += visualRows;
     }
     this.lines = lines;
+  }
+
+  private measureVisualRows(from: number): number {
+    const block = this.view.lineBlockAt(from);
+    const lineHeight = Math.max(1, this.view.defaultLineHeight);
+    return Math.max(
+      1,
+      Math.min(
+        MAX_VISUAL_ROWS,
+        Math.round(block.height / lineHeight),
+      ),
+    );
+  }
+
+  private measureCharsPerRow(): number {
+    const styles = getComputedStyle(this.view.contentDOM);
+    const padding =
+      (Number.parseFloat(styles.paddingLeft) || 0) +
+      (Number.parseFloat(styles.paddingRight) || 0);
+    const width = this.view.contentDOM.clientWidth - padding;
+    const characterWidth = this.view.defaultCharacterWidth;
+    if (!(width > 0) || !(characterWidth > 0)) {
+      return Math.max(1, this.maxColumn);
+    }
+    return Math.max(1, Math.floor(width / characterWidth));
   }
 
   private buildLineInfo(
     state: EditorState,
     number: number,
+    rowStart: number,
+    visualRows: number,
     segments: MinimapSegment[],
   ): LineInfo {
     const line = state.doc.line(number);
-    const block = this.view.lineBlockAt(line.from);
-    const text = line.text;
-    const end = Math.min(
-      text.trimEnd().length,
-      this.maxColumn,
-    );
-    const blockHeight = Math.max(1, block.height * this.scale);
-    const lineHeight = Math.max(
-      1,
-      this.view.defaultLineHeight * this.scale,
-    );
     return {
       number,
-      text,
-      indent: Math.min(leadingIndent(text), end),
-      end,
-      top: block.top * this.scale,
-      blockHeight,
-      visualRows: Math.min(
-        200,
-        Math.max(1, Math.round(blockHeight / lineHeight)),
-      ),
+      text: line.text,
+      rowStart,
+      visualRows,
+      top: rowStart * this.rowPitch,
+      chunks: this.splitChunks(line.text, visualRows),
       segments,
     };
+  }
+
+  private splitChunks(
+    text: string,
+    visualRows: number,
+  ): MinimapChunk[] {
+    if (visualRows <= 1) {
+      return [{ start: 0, end: text.length }];
+    }
+    const chunks: MinimapChunk[] = [];
+    let offset = 0;
+    for (let row = 0; row < visualRows - 1; row += 1) {
+      if (offset >= text.length) break;
+      const remainingRows = visualRows - row;
+      let end =
+        offset +
+        Math.max(
+          1,
+          Math.ceil((text.length - offset) / remainingRows),
+        );
+      end = Math.min(text.length, end);
+      if (end >= text.length) break;
+      const minimum = offset + Math.max(1, Math.floor((end - offset) / 2));
+      const space = text.lastIndexOf(' ', end);
+      if (space >= minimum) end = space + 1;
+      chunks.push({ start: offset, end });
+      offset = end;
+    }
+    if (offset < text.length) {
+      chunks.push({ start: offset, end: text.length });
+    }
+    while (chunks.length < visualRows) {
+      chunks.push({ start: text.length, end: text.length });
+    }
+    return chunks.slice(0, visualRows);
   }
 
   private collectSegments(
@@ -408,8 +493,8 @@ export class EditorMinimap {
       from,
       to,
       enter: (node) => {
-        const color = nodeStyle(node.name, palette);
-        if (!color) return undefined;
+        const paint = nodeStyle(node.name, palette);
+        if (!paint) return undefined;
         let line = state.doc.lineAt(node.from);
         while (true) {
           if (!targets || targets.has(line.number)) {
@@ -417,7 +502,12 @@ export class EditorMinimap {
             const end = Math.min(node.to, line.to) - line.from;
             if (end > start) {
               const list = segments.get(line.number) ?? [];
-              list.push({ from: start, to: end, color });
+              list.push({
+                from: start,
+                to: end,
+                color: paint.color,
+                alpha: paint.alpha,
+              });
               segments.set(line.number, list);
             }
           }
@@ -472,9 +562,19 @@ export class EditorMinimap {
     this.drawOverlay();
   }
 
-  private redrawLines(changed: Set<number>): void {
-    if (!this.ensureCanvases() || !this.baseContext) return;
+  private redrawLines(changed: Set<number>): boolean {
+    if (!this.ensureCanvases() || !this.baseContext) return true;
     const state = this.view.state;
+    for (const number of changed) {
+      if (number < 1 || number > this.lines.length) continue;
+      const visualRows = this.measureVisualRows(
+        state.doc.line(number).from,
+      );
+      if (visualRows !== this.lines[number - 1].visualRows) {
+        return false;
+      }
+    }
+
     const segmentMap = this.collectSegments(
       state,
       this.palette,
@@ -489,23 +589,24 @@ export class EditorMinimap {
       const next = this.buildLineInfo(
         state,
         number,
+        previous.rowStart,
+        previous.visualRows,
         segmentMap.get(number) ?? [],
       );
       this.lines[number - 1] = next;
       top = Math.min(top, previous.top, next.top);
       bottom = Math.max(
         bottom,
-        previous.top + previous.blockHeight,
-        next.top + next.blockHeight,
+        previous.top + previous.visualRows * this.rowPitch,
+        next.top + next.visualRows * this.rowPitch,
       );
     }
     if (!Number.isFinite(top) || !Number.isFinite(bottom)) {
-      this.drawAll();
-      return;
+      return false;
     }
 
-    const clearTop = Math.max(0, top - 2);
-    const clearBottom = Math.min(this.height, bottom + 3);
+    const clearTop = Math.max(0, top - 1);
+    const clearBottom = Math.min(this.height, bottom + 2);
     this.baseContext.clearRect(
       0,
       clearTop,
@@ -514,59 +615,47 @@ export class EditorMinimap {
     );
     for (const line of this.lines) {
       if (
-        line.top <= clearBottom + 2 &&
-        line.top + line.blockHeight >= clearTop - 2
+        line.top + line.visualRows * this.rowPitch >= clearTop - 1 &&
+        line.top <= clearBottom + 1
       ) {
         this.drawLine(this.baseContext, line);
       }
     }
     this.drawOverlay();
+    return true;
   }
 
   private drawLine(
     context: CanvasRenderingContext2D,
     line: LineInfo,
   ): void {
-    if (line.end <= line.indent) return;
-    const step = line.blockHeight / line.visualRows;
-    const height = Math.max(
+    const columns = Math.max(
       1,
-      Math.min(2, Math.round(step * 0.7)),
+      Math.min(this.maxColumn, this.charsPerRow),
     );
     const charWidth =
-      (this.width - MINIMAP_PADDING * 2) / this.maxColumn;
-    let segmentIndex = 0;
-    let runStart = -1;
-    let runEnd = -1;
-    let runColor = '';
+      (this.width - MINIMAP_PADDING * 2) / columns;
+    const glyphWidth = Math.max(0.45, charWidth * 0.78);
+    let currentColor = '';
+    let currentAlpha = -1;
 
-    const flush = (y: number): void => {
-      if (runStart < 0) return;
-      context.fillStyle = runColor;
-      context.fillRect(
-        MINIMAP_PADDING + runStart * charWidth,
-        y,
-        Math.max(0.6, (runEnd - runStart) * charWidth),
-        height,
-      );
-      runStart = -1;
-      runEnd = -1;
-      runColor = '';
-    };
+    for (let row = 0; row < line.chunks.length; row += 1) {
+      const chunk = line.chunks[row];
+      if (chunk.end <= chunk.start) continue;
+      const y = Math.round(line.top + row * this.rowPitch);
+      if (y < -1 || y > this.height + 1) continue;
+      const end = Math.min(chunk.end, chunk.start + this.maxColumn);
+      let segmentIndex = 0;
+      while (
+        segmentIndex < line.segments.length &&
+        line.segments[segmentIndex].to <= chunk.start
+      ) {
+        segmentIndex += 1;
+      }
 
-    for (let row = 0; row < line.visualRows; row += 1) {
-      const y = Math.round(line.top + row * step);
-      if (y < -2 || y > this.height + 2) continue;
-      segmentIndex = 0;
-      runStart = -1;
-      runEnd = -1;
-      runColor = '';
-      for (let column = line.indent; column < line.end; column += 1) {
+      for (let column = chunk.start; column < end; column += 1) {
         const character = line.text[column];
-        if (!character || /\s/.test(character)) {
-          flush(y);
-          continue;
-        }
+        if (!character || /\s/.test(character)) continue;
         while (
           segmentIndex < line.segments.length &&
           line.segments[segmentIndex].to <= column
@@ -574,19 +663,24 @@ export class EditorMinimap {
           segmentIndex += 1;
         }
         const segment = line.segments[segmentIndex];
-        const color =
-          segment && column >= segment.from && column < segment.to
-            ? segment.color
-            : this.palette.base;
-        if (color !== runColor) {
-          flush(y);
-          runColor = color;
-          runStart = column;
+        const painted =
+          segment && column >= segment.from && column < segment.to;
+        const color = painted ? segment.color : this.palette.base;
+        const alpha = painted ? segment.alpha : BASE_ALPHA;
+        if (color !== currentColor || alpha !== currentAlpha) {
+          context.fillStyle = color;
+          context.globalAlpha = alpha;
+          currentColor = color;
+          currentAlpha = alpha;
         }
-        runEnd = column + 1;
+        const x =
+          MINIMAP_PADDING +
+          (column - (row === 0 ? 0 : chunk.start)) * charWidth;
+        if (x > this.width - MINIMAP_PADDING) break;
+        context.fillRect(x, y, glyphWidth, 1);
       }
-      flush(y);
     }
+    context.globalAlpha = 1;
   }
 
   private drawOverlay(): void {
@@ -595,7 +689,7 @@ export class EditorMinimap {
     if (!this.lines.length) return;
 
     const state = this.view.state;
-    this.overlayContext.globalAlpha = 0.72;
+    this.overlayContext.globalAlpha = 0.62;
     this.overlayContext.fillStyle = this.palette.selection;
     for (const range of state.selection.ranges) {
       if (range.empty) continue;
@@ -609,7 +703,7 @@ export class EditorMinimap {
       const top = start.top;
       const bottom = Math.min(
         this.height,
-        end.top + end.blockHeight,
+        end.top + end.visualRows * this.rowPitch,
       );
       this.overlayContext.fillRect(
         1,
@@ -631,7 +725,7 @@ export class EditorMinimap {
       this.scrollElement.scrollTop,
       clientHeight,
       scrollHeight,
-      this.host.clientHeight,
+      Math.max(1, this.drawnHeight),
       18,
     );
     this.sliderHeight = metrics.height;
@@ -670,9 +764,10 @@ export class EditorMinimap {
 
   private onMinimapPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) return;
-    event.preventDefault();
     const rect = this.host.getBoundingClientRect();
     const y = event.clientY - rect.top;
+    if (y < 0 || y > this.drawnHeight) return;
+    event.preventDefault();
     const insideSlider =
       y >= this.sliderTop &&
       y <= this.sliderTop + this.sliderHeight;
@@ -695,7 +790,7 @@ export class EditorMinimap {
     const rect = this.host.getBoundingClientRect();
     const track = Math.max(
       1,
-      rect.height - this.sliderHeight,
+      this.drawnHeight - this.sliderHeight,
     );
     const y = clientY - rect.top - this.dragOffset;
     this.scrollToRatio(y / track);

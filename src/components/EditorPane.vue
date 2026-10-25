@@ -893,8 +893,7 @@ defineExpose({ revealLine, refresh, scrollToLine, captureState, restoreState });
   position: relative;
   flex: none;
   overflow: hidden;
-  background: var(--bg-soft);
-  border-left: 1px solid var(--border);
+  background: var(--panel);
   cursor: pointer;
   touch-action: none;
 }
