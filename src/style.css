@@ -43,6 +43,8 @@
   --editor-active-line: rgba(31, 41, 51, 0.035);
   --editor-active-line-gutter: rgba(31, 41, 51, 0.06);
   --editor-selection: rgba(37, 99, 235, 0.16);
+  --minimap-slider-hover-bg: rgba(255, 255, 255, 0.65);
+  --minimap-slider-hover-border: rgba(31, 41, 51, 0.25);
   --focus-ring: rgba(37, 99, 235, 0.12);
   --folder-icon: #b08a3e;
   --syntax-keyword: #af00db;
@@ -150,6 +152,8 @@
   --editor-active-line: rgba(255, 255, 255, 0.045);
   --editor-active-line-gutter: rgba(255, 255, 255, 0.07);
   --editor-selection: rgba(76, 154, 255, 0.28);
+  --minimap-slider-hover-bg: rgba(255, 255, 255, 0.16);
+  --minimap-slider-hover-border: rgba(255, 255, 255, 0.55);
   --focus-ring: rgba(76, 154, 255, 0.22);
   --folder-icon: #d7ba7d;
   --syntax-keyword: #c586c0;
@@ -290,6 +294,8 @@
   --editor-active-line: rgba(255, 255, 255, 0.045);
   --editor-active-line-gutter: rgba(255, 255, 255, 0.07);
   --editor-selection: #264f78;
+  --minimap-slider-hover-bg: rgba(255, 255, 255, 0.16);
+  --minimap-slider-hover-border: rgba(255, 255, 255, 0.55);
   --focus-ring: rgba(0, 122, 204, 0.35);
   --folder-icon: #d7ba7d;
   --syntax-keyword: #c586c0;
@@ -362,6 +368,8 @@
   --editor-active-line: rgba(111, 195, 223, 0.12);
   --editor-active-line-gutter: rgba(111, 195, 223, 0.18);
   --editor-selection: rgba(111, 195, 223, 0.35);
+  --minimap-slider-hover-bg: rgba(255, 255, 255, 0.2);
+  --minimap-slider-hover-border: #ffffff;
   --focus-ring: rgba(111, 195, 223, 0.5);
   --folder-icon: #ffd700;
   --syntax-keyword: #c586c0;

@@ -125,6 +125,9 @@ tempfile                     测试临时目录
 - 行号、当前行、搜索等 CodeMirror 基础能力。
 - 编辑器顶部显示光标所在标题层级路径，随光标移动实时更新；围栏代码块中的 `#` 不会计入路径。
 - 右侧提供类似 VS Code 的文档缩略图，按 Markdown 语法着色，可点击或拖动快速跳转，并支持滚轮与键盘滚动。
+- 缩略图采用代码层 / 装饰层双 Canvas，滚动条位于缩略图右侧；宽度由 `maxColumn` 配置计算。
+- 文档变化时按行做增量重绘；滚动、缩略图点击和滑块拖拽统一按滚动百分比同步。
+- 悬停或聚焦缩略图时，视口区域显示半透明白色高亮。
 - 多光标：
   - `Mod+D` 选择下一个相同文本
   - `Alt+点击` 添加光标
@@ -440,7 +443,8 @@ markdown-note-taking/
 │       ├── headings.ts            # 标题提取与当前路径计算
 │       ├── lineEndings.ts         # LF / CRLF 处理
 │       ├── markdown.ts            # markdown-it 渲染配置
-│       ├── minimap.ts             # 缩略图坐标与视口计算
+│       ├── minimap.ts             # 缩略图尺寸、坐标与滚动映射
+│       ├── editorMinimap.ts       # 双 Canvas 缩略图与滚动条控制器
 │       ├── mermaid.ts             # Mermaid 延迟加载
 │       ├── paths.ts               # 路径工具
 │       ├── preferences.ts         # 本地偏好读写
@@ -854,7 +858,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：29 个测试文件，105 个测试通过
+- 前端：29 个测试文件，106 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -873,7 +877,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - DOCX 预览目录位置与独立分页
 - 图片文件识别
 - 主区域滚轮减速
-- 源码缩略图几何映射
+- 源码缩略图几何与宽度映射
 - 设置 Schema / 搜索
 - 设置面板交互
 - 自定义下拉框

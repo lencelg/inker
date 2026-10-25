@@ -1,3 +1,5 @@
+export const MINIMAP_MAX_COLUMN = 120;
+
 export interface MinimapViewportMetrics {
   top: number;
   height: number;
@@ -9,12 +11,20 @@ function clampRatio(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-export function minimapLineAtRatio(
-  ratio: number,
-  lineCount: number,
+export function minimapWidthPx(
+  maxColumn = MINIMAP_MAX_COLUMN,
 ): number {
-  const count = Math.max(1, Math.floor(lineCount));
-  return Math.min(count, Math.floor(clampRatio(ratio) * count) + 1);
+  const columns = Math.max(1, maxColumn);
+  return Math.round(Math.min(150, Math.max(56, columns * 0.62 + 12)));
+}
+
+export function minimapScrollTop(
+  ratio: number,
+  scrollHeight: number,
+  clientHeight: number,
+): number {
+  const maximum = Math.max(0, scrollHeight - clientHeight);
+  return clampRatio(ratio) * maximum;
 }
 
 export function minimapViewportMetrics(

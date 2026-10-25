@@ -28,18 +28,14 @@ import { languages } from '@codemirror/language-data';
 import { tags } from '@lezer/highlight';
 import { Vim, getCM, vim } from '@replit/codemirror-vim';
 import Breadcrumbs from './Breadcrumbs.vue';
+import { EditorMinimap } from '../lib/editorMinimap';
 import {
   activeHeadingTrail,
   collectHeadings,
   type HeadingItem,
 } from '../lib/headings';
 import { language, t } from '../lib/i18n';
-import {
-  minimapLineAtRatio,
-  minimapViewportMetrics,
-} from '../lib/minimap';
 import { formatVimMode } from '../lib/vimMode';
-import { wheelDeltaPixels } from '../lib/wheelScroll';
 
 const props = defineProps<{
   initialContent: string;
@@ -61,9 +57,11 @@ const emit = defineEmits<{
 const host = ref<HTMLDivElement | null>(null);
 const breadcrumbs = ref<HeadingItem[]>([]);
 const minimapHost = ref<HTMLDivElement | null>(null);
-const minimapCanvas = ref<HTMLCanvasElement | null>(null);
+const minimapBaseCanvas = ref<HTMLCanvasElement | null>(null);
+const minimapOverlayCanvas = ref<HTMLCanvasElement | null>(null);
 const minimapViewport = ref<HTMLDivElement | null>(null);
-const minimapPercent = ref(0);
+const minimapScrollbar = ref<HTMLDivElement | null>(null);
+const minimapScrollbarThumb = ref<HTMLDivElement | null>(null);
 const vimCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
 const immersiveCompartment = new Compartment();
@@ -79,10 +77,8 @@ let scrollFrame = 0;
 let resizeFrame = 0;
 let centerFrame = 0;
 let vimStatusFrame = 0;
-let minimapFrame = 0;
-let minimapDragging = false;
+let minimap: EditorMinimap | null = null;
 let resizeObserver: ResizeObserver | null = null;
-let themeObserver: MutationObserver | null = null;
 
 interface VimModeEvent {
   mode?: string;
@@ -374,7 +370,6 @@ function scheduleScrollSync(): void {
   if (scrollFrame) return;
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = 0;
-    updateMinimapViewport();
     emitScrollSync();
   });
 }
@@ -399,339 +394,6 @@ function refreshHeadingTrail(): void {
     view.state.selection.main.head,
   ).number;
   breadcrumbs.value = activeHeadingTrail(headings, line);
-}
-
-interface MinimapPalette {
-  base: string;
-  heading: string;
-  code: string;
-  link: string;
-  quote: string;
-  tag: string;
-  marker: string;
-  strong: string;
-  emphasis: string;
-  type: string;
-}
-
-interface MinimapSegment {
-  from: number;
-  to: number;
-  color: string;
-}
-
-const MINIMAP_HEADING = /^(?:ATX|Setext)Heading[1-6]$/;
-
-function minimapColor(
-  styles: CSSStyleDeclaration,
-  name: string,
-  fallback: string,
-): string {
-  return styles.getPropertyValue(name).trim() || fallback;
-}
-
-function readMinimapPalette(): MinimapPalette {
-  const styles = getComputedStyle(document.documentElement);
-  return {
-    base: minimapColor(styles, '--faint', '#9aa3ad'),
-    heading: minimapColor(styles, '--syntax-heading', '#1f4e79'),
-    code: minimapColor(styles, '--syntax-string', '#a31515'),
-    link: minimapColor(styles, '--syntax-link', '#0066cc'),
-    quote: minimapColor(styles, '--syntax-quote', '#6b7280'),
-    tag: minimapColor(styles, '--syntax-tag', '#800000'),
-    marker: minimapColor(styles, '--syntax-operator', '#383a42'),
-    strong: minimapColor(styles, '--ink', '#1f2933'),
-    emphasis: minimapColor(styles, '--muted', '#6b7280'),
-    type: minimapColor(styles, '--syntax-type', '#267f99'),
-  };
-}
-
-function minimapNodeStyle(
-  name: string,
-  palette: MinimapPalette,
-): string | null {
-  if (MINIMAP_HEADING.test(name)) return palette.heading;
-  switch (name) {
-    case 'InlineCode':
-    case 'CodeText':
-      return palette.code;
-    case 'CodeInfo':
-      return palette.type;
-    case 'Link':
-    case 'Image':
-    case 'URL':
-      return palette.link;
-    case 'StrongEmphasis':
-      return palette.strong;
-    case 'Emphasis':
-      return palette.emphasis;
-    case 'HTMLBlock':
-    case 'HTMLTag':
-      return palette.tag;
-    case 'QuoteMark':
-      return palette.quote;
-    case 'ListMark':
-      return palette.marker;
-    default:
-      return null;
-  }
-}
-
-function addMinimapSegments(
-  state: EditorState,
-  segments: Map<number, MinimapSegment[]>,
-  from: number,
-  to: number,
-  color: string,
-): void {
-  if (to <= from) return;
-  let line = state.doc.lineAt(from);
-  while (true) {
-    const start = Math.max(from, line.from) - line.from;
-    const end = Math.min(to, line.to) - line.from;
-    if (end > start) {
-      const list = segments.get(line.number) ?? [];
-      list.push({ from: start, to: end, color });
-      segments.set(line.number, list);
-    }
-    if (line.to >= to || line.number >= state.doc.lines) break;
-    line = state.doc.line(line.number + 1);
-  }
-}
-
-function collectMinimapSegments(
-  state: EditorState,
-  palette: MinimapPalette,
-): Map<number, MinimapSegment[]> {
-  const segments = new Map<number, MinimapSegment[]>();
-  syntaxTree(state).iterate({
-    enter(node) {
-      const color = minimapNodeStyle(node.name, palette);
-      if (!color) return undefined;
-      addMinimapSegments(state, segments, node.from, node.to, color);
-      return false;
-    },
-  });
-  return segments;
-}
-
-function leadingIndent(text: string): number {
-  let indent = 0;
-  for (const character of text) {
-    if (character === ' ') indent += 1;
-    else if (character === '\t') indent += 4;
-    else break;
-    if (indent >= 80) break;
-  }
-  return Math.min(indent, 80);
-}
-
-function drawMinimap(): void {
-  const canvas = minimapCanvas.value;
-  const minimap = minimapHost.value;
-  if (!canvas || !minimap || !view) return;
-
-  const width = minimap.clientWidth;
-  const height = minimap.clientHeight;
-  if (width < 2 || height < 2) return;
-
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const pixelWidth = Math.max(1, Math.round(width * dpr));
-  const pixelHeight = Math.max(1, Math.round(height * dpr));
-  if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
-  if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
-
-  const context = canvas.getContext('2d');
-  if (!context) return;
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  context.clearRect(0, 0, width, height);
-
-  const state = view.state;
-  const lineCount = state.doc.lines;
-  const palette = readMinimapPalette();
-  const segments = collectMinimapSegments(state, palette);
-  const padding = 6;
-  const contentWidth = Math.max(1, width - padding * 2);
-  let widthChars = 60;
-  for (let number = 1; number <= lineCount; number += 1) {
-    const length = state.doc.line(number).text.trimEnd().length;
-    if (length > widthChars) widthChars = length;
-    if (widthChars >= 180) {
-      widthChars = 180;
-      break;
-    }
-  }
-  const charWidth = Math.min(1, contentWidth / widthChars);
-  const lineStep = Math.min(2.4, height / lineCount);
-  const barHeight = Math.max(0.8, Math.min(2.2, lineStep * 0.72));
-
-  for (let number = 1; number <= lineCount; number += 1) {
-    const line = state.doc.line(number);
-    const text = line.text;
-    const end = text.trimEnd().length;
-    if (end === 0) continue;
-
-    const indent = leadingIndent(text);
-    const y = (number - 1) * lineStep;
-    const x = padding + indent * charWidth;
-    const baseWidth = Math.min(
-      contentWidth - indent * charWidth,
-      Math.max(1, (end - indent) * charWidth),
-    );
-    if (baseWidth <= 0) continue;
-
-    context.globalAlpha = 0.5;
-    context.fillStyle = palette.base;
-    context.fillRect(x, y, baseWidth, barHeight);
-
-    const lineSegments = segments.get(number);
-    if (!lineSegments) continue;
-    context.globalAlpha = 0.94;
-    for (const segment of lineSegments) {
-      const start = Math.max(segment.from, indent);
-      const finish = Math.min(segment.to, end);
-      if (finish <= start) continue;
-      const segmentX = padding + start * charWidth;
-      const segmentWidth = Math.max(0.8, (finish - start) * charWidth);
-      if (segmentX >= width - padding) continue;
-      context.fillStyle = segment.color;
-      context.fillRect(
-        segmentX,
-        y,
-        Math.min(segmentWidth, width - padding - segmentX),
-        barHeight,
-      );
-    }
-  }
-  context.globalAlpha = 1;
-}
-
-function updateMinimapViewport(): void {
-  const minimap = minimapHost.value;
-  const slider = minimapViewport.value;
-  if (!minimap || !slider || !scrollElement) return;
-
-  const metrics = minimapViewportMetrics(
-    scrollElement.scrollTop,
-    scrollElement.clientHeight,
-    scrollElement.scrollHeight,
-    minimap.clientHeight,
-    18,
-  );
-  slider.style.height = `${metrics.height}px`;
-  slider.style.transform = `translateY(${metrics.top}px)`;
-  minimapPercent.value = Math.round(metrics.ratio * 100);
-}
-
-function scheduleMinimapDraw(): void {
-  if (minimapFrame) return;
-  minimapFrame = requestAnimationFrame(() => {
-    minimapFrame = 0;
-    drawMinimap();
-    updateMinimapViewport();
-  });
-}
-
-function minimapLineAtClientY(clientY: number): number {
-  const minimap = minimapHost.value;
-  if (!minimap || !view) return 1;
-  const rect = minimap.getBoundingClientRect();
-  const ratio = (clientY - rect.top) / Math.max(1, rect.height);
-  return minimapLineAtRatio(ratio, view.state.doc.lines);
-}
-
-function scrollFromMinimap(clientY: number): void {
-  if (!view) return;
-  scrollToLine(minimapLineAtClientY(clientY));
-}
-
-function startMinimapDrag(event: PointerEvent): void {
-  if (event.button !== 0) return;
-  const minimap = minimapHost.value;
-  if (!minimap) return;
-  event.preventDefault();
-  minimapDragging = true;
-  minimap.setPointerCapture(event.pointerId);
-  scrollFromMinimap(event.clientY);
-  view?.focus();
-}
-
-function moveMinimapDrag(event: PointerEvent): void {
-  if (!minimapDragging) return;
-  event.preventDefault();
-  scrollFromMinimap(event.clientY);
-}
-
-function endMinimapDrag(event: PointerEvent): void {
-  if (!minimapDragging) return;
-  minimapDragging = false;
-  const minimap = minimapHost.value;
-  if (minimap?.hasPointerCapture(event.pointerId)) {
-    minimap.releasePointerCapture(event.pointerId);
-  }
-}
-
-function handleMinimapWheel(event: WheelEvent): void {
-  if (
-    !scrollElement ||
-    event.defaultPrevented ||
-    event.ctrlKey ||
-    event.metaKey ||
-    event.altKey ||
-    event.shiftKey ||
-    event.deltaY === 0 ||
-    Math.abs(event.deltaX) > Math.abs(event.deltaY)
-  ) {
-    return;
-  }
-  const maximum =
-    scrollElement.scrollHeight - scrollElement.clientHeight;
-  if (maximum <= 0) return;
-  event.preventDefault();
-  scrollElement.scrollTop = Math.min(
-    maximum,
-    Math.max(
-      0,
-      scrollElement.scrollTop +
-        wheelDeltaPixels(event, scrollElement.clientHeight),
-    ),
-  );
-}
-
-function handleMinimapKeydown(event: KeyboardEvent): void {
-  if (!scrollElement) return;
-  const maximum =
-    scrollElement.scrollHeight - scrollElement.clientHeight;
-  if (maximum <= 0) return;
-
-  let delta: number | null = null;
-  switch (event.key) {
-    case 'ArrowUp':
-      delta = -48;
-      break;
-    case 'ArrowDown':
-      delta = 48;
-      break;
-    case 'PageUp':
-      delta = -scrollElement.clientHeight * 0.85;
-      break;
-    case 'PageDown':
-      delta = scrollElement.clientHeight * 0.85;
-      break;
-    case 'Home':
-      delta = -scrollElement.scrollTop;
-      break;
-    case 'End':
-      delta = maximum - scrollElement.scrollTop;
-      break;
-    default:
-      return;
-  }
-  event.preventDefault();
-  scrollElement.scrollTop = Math.min(
-    maximum,
-    Math.max(0, scrollElement.scrollTop + delta),
-  );
 }
 
 function activeBlock(
@@ -933,13 +595,13 @@ onMounted(() => {
           if (update.docChanged) {
             emit('change', update.state.doc.toString());
             headings = collectHeadings(update.state);
-            scheduleMinimapDraw();
             scheduleScrollSync();
           }
           if (update.docChanged || update.selectionSet) {
             emitCursor();
             refreshHeadingTrail();
             centerSelection();
+            minimap?.handleUpdate(update);
           }
         }),
       ],
@@ -947,32 +609,37 @@ onMounted(() => {
   });
   scrollElement = view.scrollDOM;
   scrollElement.addEventListener('scroll', handleScroll, { passive: true });
+  if (
+    minimapHost.value &&
+    minimapBaseCanvas.value &&
+    minimapOverlayCanvas.value &&
+    minimapViewport.value &&
+    minimapScrollbar.value &&
+    minimapScrollbarThumb.value
+  ) {
+    minimap = new EditorMinimap({
+      view,
+      host: minimapHost.value,
+      baseCanvas: minimapBaseCanvas.value,
+      overlayCanvas: minimapOverlayCanvas.value,
+      slider: minimapViewport.value,
+      scrollbar: minimapScrollbar.value,
+      scrollbarThumb: minimapScrollbarThumb.value,
+    });
+  }
   resizeObserver = new ResizeObserver(() => {
     if (resizeFrame) return;
     resizeFrame = requestAnimationFrame(() => {
       resizeFrame = 0;
-      drawMinimap();
-      updateMinimapViewport();
       emitScrollSync();
     });
   });
   resizeObserver.observe(scrollElement);
-  themeObserver = new MutationObserver(() => scheduleMinimapDraw());
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: [
-      'data-theme',
-      'data-custom-theme',
-      'data-font',
-      'style',
-    ],
-  });
   view.focus();
   scheduleScrollSync();
   emitCursor();
   headings = collectHeadings(view.state);
   refreshHeadingTrail();
-  scheduleMinimapDraw();
   scheduleVimStatus();
 });
 
@@ -1014,8 +681,7 @@ watch(
     resizeFrame = requestAnimationFrame(() => {
       resizeFrame = 0;
       view?.requestMeasure();
-      drawMinimap();
-      updateMinimapViewport();
+      minimap?.refresh();
       emitScrollSync();
     });
   },
@@ -1065,13 +731,8 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(vimStatusFrame);
     vimStatusFrame = 0;
   }
-  if (minimapFrame) {
-    cancelAnimationFrame(minimapFrame);
-    minimapFrame = 0;
-  }
-  minimapDragging = false;
-  themeObserver?.disconnect();
-  themeObserver = null;
+  minimap?.destroy();
+  minimap = null;
   resizeObserver?.disconnect();
   resizeObserver = null;
   scrollElement?.removeEventListener('scroll', handleScroll);
@@ -1168,29 +829,35 @@ defineExpose({ revealLine, refresh, scrollToLine, captureState, restoreState });
       <div
         ref="minimapHost"
         class="minimap"
-        role="scrollbar"
-        :aria-label="t('editor.minimap')"
-        aria-orientation="vertical"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        :aria-valuenow="minimapPercent"
-        tabindex="0"
-        @pointerdown="startMinimapDrag"
-        @pointermove="moveMinimapDrag"
-        @pointerup="endMinimapDrag"
-        @pointercancel="endMinimapDrag"
-        @keydown="handleMinimapKeydown"
-        @wheel="handleMinimapWheel"
+        aria-hidden="true"
       >
         <canvas
-          ref="minimapCanvas"
-          class="minimap-canvas"
-          aria-hidden="true"
+          ref="minimapBaseCanvas"
+          class="minimap-canvas minimap-base"
+        ></canvas>
+        <canvas
+          ref="minimapOverlayCanvas"
+          class="minimap-canvas minimap-overlay"
         ></canvas>
         <div
           ref="minimapViewport"
           class="minimap-viewport"
-          aria-hidden="true"
+        ></div>
+      </div>
+      <div
+        ref="minimapScrollbar"
+        class="editor-scrollbar"
+        role="scrollbar"
+        :aria-label="t('editor.scrollbar')"
+        aria-orientation="vertical"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        tabindex="0"
+      >
+        <div
+          ref="minimapScrollbarThumb"
+          class="editor-scrollbar-thumb"
         ></div>
       </div>
     </div>
@@ -1225,40 +892,111 @@ defineExpose({ revealLine, refresh, scrollToLine, captureState, restoreState });
 .minimap {
   position: relative;
   flex: none;
-  width: 78px;
   overflow: hidden;
-  outline: none;
   background: var(--bg-soft);
   border-left: 1px solid var(--border);
   cursor: pointer;
   touch-action: none;
 }
 
-.minimap:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
 .minimap-canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+  pointer-events: none;
+}
+
+.minimap-base {
+  z-index: 0;
+}
+
+.minimap-overlay {
+  z-index: 1;
 }
 
 .minimap-viewport {
   position: absolute;
+  z-index: 2;
   top: 0;
   right: 2px;
   left: 2px;
   box-sizing: border-box;
-  background: var(--editor-selection);
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  opacity: 0.9;
+  background: var(--minimap-slider-bg, var(--editor-selection));
+  border: 1px solid var(--minimap-slider-border, var(--accent));
+  border-radius: 3px;
+  opacity: 0.92;
   pointer-events: none;
+  transition:
+    background 80ms ease,
+    border-color 80ms ease,
+    box-shadow 80ms ease;
+}
+
+.minimap:hover .minimap-viewport,
+.minimap.is-focused .minimap-viewport,
+.minimap.is-dragging .minimap-viewport {
+  background: var(
+    --minimap-slider-hover-bg,
+    rgba(255, 255, 255, 0.16)
+  );
+  border-color: var(
+    --minimap-slider-hover-border,
+    rgba(255, 255, 255, 0.55)
+  );
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.editor-scrollbar {
+  position: relative;
+  flex: none;
+  width: 12px;
+  outline: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.editor-scrollbar:hover {
+  background: var(--hover);
+}
+
+.editor-scrollbar:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.editor-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  left: 3px;
+  width: 6px;
+  border-radius: 3px;
+  background: var(--faint);
+  opacity: 0.55;
+  transition:
+    background 80ms ease,
+    opacity 80ms ease;
+}
+
+.editor-scrollbar:hover .editor-scrollbar-thumb,
+.editor-scrollbar:focus-visible .editor-scrollbar-thumb,
+.editor-scrollbar.is-dragging .editor-scrollbar-thumb {
+  background: var(--muted);
+  opacity: 1;
 }
 
 .editor-host :deep(.cm-editor) {
   height: 100%;
+}
+
+.editor-host :deep(.cm-scroller) {
+  scrollbar-width: none;
+}
+
+.editor-host :deep(.cm-scroller::-webkit-scrollbar) {
+  width: 0;
+  height: 0;
 }
 
 .editor-host :deep(.cm-immersive-dim) {
