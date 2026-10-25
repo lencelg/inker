@@ -27,6 +27,12 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { tags } from '@lezer/highlight';
 import { Vim, getCM, vim } from '@replit/codemirror-vim';
+import Breadcrumbs from './Breadcrumbs.vue';
+import {
+  activeHeadingTrail,
+  collectHeadings,
+  type HeadingItem,
+} from '../lib/headings';
 import { language, t } from '../lib/i18n';
 import { formatVimMode } from '../lib/vimMode';
 
@@ -48,6 +54,7 @@ const emit = defineEmits<{
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
+const breadcrumbs = ref<HeadingItem[]>([]);
 const vimCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
 const immersiveCompartment = new Compartment();
@@ -57,6 +64,7 @@ const attributesCompartment = new Compartment();
 const vimExtension = vim({ status: false });
 
 let view: EditorView | null = null;
+let headings: HeadingItem[] = [];
 let scrollElement: HTMLElement | null = null;
 let scrollFrame = 0;
 let resizeFrame = 0;
@@ -372,6 +380,14 @@ function emitCursor(): void {
   });
 }
 
+function refreshHeadingTrail(): void {
+  if (!view) return;
+  const line = view.state.doc.lineAt(
+    view.state.selection.main.head,
+  ).number;
+  breadcrumbs.value = activeHeadingTrail(headings, line);
+}
+
 function activeBlock(
   source: EditorView,
 ): { start: number; end: number } {
@@ -570,10 +586,12 @@ onMounted(() => {
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             emit('change', update.state.doc.toString());
+            headings = collectHeadings(update.state);
             scheduleScrollSync();
           }
           if (update.docChanged || update.selectionSet) {
             emitCursor();
+            refreshHeadingTrail();
             centerSelection();
           }
         }),
@@ -593,6 +611,8 @@ onMounted(() => {
   view.focus();
   scheduleScrollSync();
   emitCursor();
+  headings = collectHeadings(view.state);
+  refreshHeadingTrail();
   scheduleVimStatus();
 });
 
@@ -772,10 +792,22 @@ defineExpose({ revealLine, refresh, scrollToLine, captureState, restoreState });
 </script>
 
 <template>
-  <div ref="host" class="editor-host"></div>
+  <div class="editor-shell">
+    <Breadcrumbs :items="breadcrumbs" />
+    <div ref="host" class="editor-host"></div>
+  </div>
 </template>
 
 <style scoped>
+.editor-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .editor-host {
   flex: 1;
   min-height: 0;

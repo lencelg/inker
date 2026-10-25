@@ -123,6 +123,7 @@ tempfile                     测试临时目录
 - Markdown 语法高亮。
 - 自动换行。
 - 行号、当前行、搜索等 CodeMirror 基础能力。
+- 编辑器顶部显示光标所在标题层级路径，随光标移动实时更新；围栏代码块中的 `#` 不会计入路径。
 - 多光标：
   - `Mod+D` 选择下一个相同文本
   - `Alt+点击` 添加光标
@@ -147,6 +148,7 @@ tempfile                     测试临时目录
 - 本地图片解析。
 - 粘贴、拖拽图片时保存到当前笔记所在目录的 `assets/` 文件夹。
 - 多光标。
+- 顶部标题面包屑随选区更新。
 - Markdown 同步序列化，并保留原文件的 CRLF / LF 行尾风格。
 
 ### 2.7 Markdown 渲染
@@ -352,6 +354,7 @@ tempfile                     测试临时目录
 | 图片缩放与拖动查看 | ✅ 已完成 |
 | 图片粘贴/拖拽到 `assets/` | ✅ 已完成 |
 | 目录锚点跳转 | ✅ 已完成 |
+| 标题面包屑导航 | ✅ 已完成 |
 | Zen 模式 | ✅ 已完成 |
 | 主题 / 字体 / 字号 | ✅ 已完成 |
 | 代码高亮主题切换 | ✅ 已完成 |
@@ -394,6 +397,7 @@ markdown-note-taking/
 │   │   ├── SearchPanel.vue        # 全文搜索
 │   │   ├── EditorTabs.vue         # 标签页
 │   │   ├── EditorPane.vue         # CodeMirror / Vim
+│   │   ├── Breadcrumbs.vue        # 光标所在标题路径
 │   │   ├── WysiwygPane.vue        # Milkdown 实时预览
 │   │   ├── PreviewPane.vue        # Markdown 只读预览
 │   │   ├── ImagePane.vue          # 图片查看器
@@ -425,6 +429,7 @@ markdown-note-taking/
 │       ├── i18n.ts                # 中英文文案与系统语言检测
 │       ├── imageView.ts           # 图片缩放与平移计算
 │       ├── fonts.ts               # 字体列表
+│       ├── headings.ts            # 标题提取与当前路径计算
 │       ├── lineEndings.ts         # LF / CRLF 处理
 │       ├── markdown.ts            # markdown-it 渲染配置
 │       ├── mermaid.ts             # Mermaid 延迟加载
@@ -839,7 +844,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：26 个测试文件，95 个测试通过
+- 前端：28 个测试文件，100 个测试通过
 - Rust：14 个测试通过
 
 覆盖范围包括：
@@ -848,6 +853,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 锚点查找与中文 slug
 - 预览滚动同步
 - 预览锚点点击
+- 标题面包屑路径提取与渲染
 - LF / CRLF
 - ProseMirror 多光标
 - 偏好设置

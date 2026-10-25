@@ -30,6 +30,7 @@ import {
   type EditorView,
 } from '@milkdown/kit/prose/view';
 import { $prose, $view, getMarkdown } from '@milkdown/kit/utils';
+import Breadcrumbs from './Breadcrumbs.vue';
 import { api } from '../api';
 import {
   findAnchorTarget,
@@ -37,6 +38,7 @@ import {
   scrollToAnchor,
 } from '../lib/anchors';
 import { codeHighlightRanges } from '../lib/codeHighlight';
+import type { BreadcrumbItem } from '../lib/headings';
 import { localizeError, language, t } from '../lib/i18n';
 import {
   applyLineEnding,
@@ -59,6 +61,7 @@ const emit = defineEmits<{ change: [content: string] }>();
 
 const host = ref<HTMLDivElement | null>(null);
 const error = ref('');
+const breadcrumbs = ref<BreadcrumbItem[]>([]);
 const mermaidTextUpdaters = new Set<() => void>();
 const imageCache = new Map<string, string>();
 const keepsCrlf = usesCrlf(props.initialContent);
@@ -592,6 +595,41 @@ const syncPlugin = $prose((ctx) => {
   });
 });
 
+function updateBreadcrumbTrail(view: EditorView): void {
+  const head = view.state.selection.head;
+  const trail: BreadcrumbItem[] = [];
+  view.state.doc.forEach((node, offset) => {
+    if (offset > head || node.type.name !== 'heading') return;
+    const level = Number(node.attrs.level);
+    if (!Number.isInteger(level) || level < 1 || level > 6) return;
+    while (
+      trail.length > 0 &&
+      trail[trail.length - 1].level >= level
+    ) {
+      trail.pop();
+    }
+    trail.push({ level, text: node.textContent.trim() });
+  });
+  breadcrumbs.value = trail;
+}
+
+const breadcrumbPlugin = $prose(
+  () =>
+    new Plugin({
+      view: () => ({
+        update: (view, prevState) => {
+          if (
+            view.state.doc.eq(prevState.doc) &&
+            view.state.selection.eq(prevState.selection)
+          ) {
+            return;
+          }
+          updateBreadcrumbTrail(view);
+        },
+      }),
+    }),
+);
+
 async function createEditor(): Promise<void> {
   const target = host.value;
   if (!target) return;
@@ -621,6 +659,7 @@ async function createEditor(): Promise<void> {
     .use(htmlView)
     .use(mermaidView)
     .use(syncPlugin)
+    .use(breadcrumbPlugin)
     .use(immersiveDecorations)
     .use(immersiveCursor)
     .use(uploadPlugin)
@@ -638,6 +677,7 @@ async function createEditor(): Promise<void> {
     ready = true;
     editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
+      updateBreadcrumbTrail(view);
       view.focus();
       scheduleCenter(view);
     });
@@ -707,6 +747,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="wysiwyg-pane">
+    <Breadcrumbs :items="breadcrumbs" />
     <div ref="host" class="wysiwyg-host" @click="onWysiwygClick"></div>
     <div v-if="error" class="wysiwyg-error" role="alert">{{ error }}</div>
   </section>
