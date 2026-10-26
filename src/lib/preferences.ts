@@ -16,6 +16,15 @@ import {
   type LanguagePreference,
 } from './i18n';
 import {
+  DEFAULT_IMAGE_FOLDER,
+  DEFAULT_IMAGE_FORMAT,
+  DEFAULT_IMAGE_NAME_TEMPLATE,
+  DEFAULT_IMAGE_QUALITY,
+  clampImageQuality,
+  isImageFormat,
+  type ImageFormat,
+} from './imagePaste';
+import {
   DEFAULT_THEME,
   LEGACY_THEME_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -33,6 +42,11 @@ export const MAX_AUTO_SAVE_DELAY = 10000;
 export const AUTO_SAVE_STORAGE_KEY = 'inker-auto-save';
 export const AUTO_SAVE_DELAY_STORAGE_KEY = 'inker-auto-save-delay';
 export const RESTORE_SESSION_STORAGE_KEY = 'inker-restore-session';
+export const IMAGE_CONFIRM_STORAGE_KEY = 'inker-image-confirm';
+export const IMAGE_TEMPLATE_STORAGE_KEY = 'inker-image-template';
+export const IMAGE_FORMAT_STORAGE_KEY = 'inker-image-format';
+export const IMAGE_FOLDER_STORAGE_KEY = 'inker-image-folder';
+export const IMAGE_QUALITY_STORAGE_KEY = 'inker-image-quality';
 export const FONT_SIZE_STORAGE_KEY = 'inker-font-size';
 export const FONT_FAMILY_STORAGE_KEY = 'inker-font-family';
 export const VIM_STORAGE_KEY = 'inker-vim';
@@ -68,6 +82,22 @@ export interface Preferences {
   autoSave: boolean;
   autoSaveDelay: number;
   restoreSession: boolean;
+  imageConfirmPaste: boolean;
+  imageNameTemplate: string;
+  imageFormat: ImageFormat;
+  imageFolder: string;
+  imageQuality: number;
+}
+
+export function normalizeImageFolder(value: string): string {
+  return value
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\/{2,}/g, '/');
+}
+
+function normalizeImageTemplate(value: string): string {
+  return value.trim() === '' ? DEFAULT_IMAGE_NAME_TEMPLATE : value;
 }
 
 export function clampFontSize(value: number): number {
@@ -110,6 +140,19 @@ export function normalizePreferences(value: unknown): Preferences {
     autoSave: source.autoSave === true,
     autoSaveDelay: clampAutoSaveDelay(Number(source.autoSaveDelay)),
     restoreSession: source.restoreSession !== false,
+    imageConfirmPaste: source.imageConfirmPaste !== false,
+    imageNameTemplate:
+      typeof source.imageNameTemplate === 'string'
+        ? normalizeImageTemplate(source.imageNameTemplate)
+        : DEFAULT_IMAGE_NAME_TEMPLATE,
+    imageFormat: isImageFormat(source.imageFormat)
+      ? source.imageFormat
+      : DEFAULT_IMAGE_FORMAT,
+    imageFolder:
+      typeof source.imageFolder === 'string'
+        ? normalizeImageFolder(source.imageFolder)
+        : DEFAULT_IMAGE_FOLDER,
+    imageQuality: clampImageQuality(Number(source.imageQuality)),
   };
 }
 
@@ -141,6 +184,21 @@ export function readPreferences(): Preferences {
     );
     const rawRestoreSession = window.localStorage.getItem(
       RESTORE_SESSION_STORAGE_KEY,
+    );
+    const rawImageConfirm = window.localStorage.getItem(
+      IMAGE_CONFIRM_STORAGE_KEY,
+    );
+    const rawImageTemplate = window.localStorage.getItem(
+      IMAGE_TEMPLATE_STORAGE_KEY,
+    );
+    const rawImageFormat = window.localStorage.getItem(
+      IMAGE_FORMAT_STORAGE_KEY,
+    );
+    const rawImageFolder = window.localStorage.getItem(
+      IMAGE_FOLDER_STORAGE_KEY,
+    );
+    const rawImageQuality = window.localStorage.getItem(
+      IMAGE_QUALITY_STORAGE_KEY,
     );
     const preferences = normalizePreferences({
       theme: read(THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY),
@@ -184,6 +242,14 @@ export function readPreferences(): Preferences {
         rawRestoreSession === null
           ? undefined
           : rawRestoreSession === 'true',
+      imageConfirmPaste:
+        rawImageConfirm === null ? undefined : rawImageConfirm === 'true',
+      imageNameTemplate:
+        rawImageTemplate === null ? undefined : rawImageTemplate,
+      imageFormat: rawImageFormat === null ? undefined : rawImageFormat,
+      imageFolder: rawImageFolder === null ? undefined : rawImageFolder,
+      imageQuality:
+        rawImageQuality === null ? undefined : Number(rawImageQuality),
     });
 
     if (usedLegacyKeys) savePreferences(preferences);
@@ -251,6 +317,26 @@ export function savePreferences(preferences: Preferences): void {
     window.localStorage.setItem(
       RESTORE_SESSION_STORAGE_KEY,
       String(preferences.restoreSession),
+    );
+    window.localStorage.setItem(
+      IMAGE_CONFIRM_STORAGE_KEY,
+      String(preferences.imageConfirmPaste),
+    );
+    window.localStorage.setItem(
+      IMAGE_TEMPLATE_STORAGE_KEY,
+      preferences.imageNameTemplate,
+    );
+    window.localStorage.setItem(
+      IMAGE_FORMAT_STORAGE_KEY,
+      preferences.imageFormat,
+    );
+    window.localStorage.setItem(
+      IMAGE_FOLDER_STORAGE_KEY,
+      preferences.imageFolder,
+    );
+    window.localStorage.setItem(
+      IMAGE_QUALITY_STORAGE_KEY,
+      String(preferences.imageQuality),
     );
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);

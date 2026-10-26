@@ -24,6 +24,7 @@ import EditorTabs from './components/EditorTabs.vue';
 import ExportPreviewDialog from './components/ExportPreviewDialog.vue';
 import HtmlExportDialog from './components/HtmlExportDialog.vue';
 import ImagePane from './components/ImagePane.vue';
+import ImagePasteDialog from './components/ImagePasteDialog.vue';
 import InkerMark from './components/InkerMark.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
@@ -40,6 +41,18 @@ import {
   type PreparedExport,
   type SaveDocxOptions,
 } from './lib/exportContent';
+import {
+  blobToBase64,
+  buildImageFileName,
+  convertImageFile,
+  encodeMarkdownImagePath,
+  extensionForFormat,
+  renderImageName,
+  sanitizeImageStem,
+  stripImageExtension,
+  type ImageFormat,
+  type ImageSaveResult,
+} from './lib/imagePaste';
 import {
   clearWorkspaceDrafts,
   putDraftEntry,
@@ -94,6 +107,14 @@ interface EditorTabState {
   line: number;
   column: number;
   scrollTop: number;
+}
+
+interface PendingImagePaste {
+  file: File;
+  defaultName: string;
+  extension: string;
+  folder: string;
+  resolve: (name: string | null) => void;
 }
 
 const SESSION_DEBOUNCE_MS = 400;
@@ -176,6 +197,10 @@ const editorPane = ref<{
     column: number;
     scrollTop: number;
   }) => void;
+  promptImageName: (
+    defaultName: string,
+    extension?: string,
+  ) => Promise<string | null>;
 } | null>(null);
 
 const tabStates = new Map<string, EditorTabState>();
@@ -261,8 +286,11 @@ interface PromptState {
 
 const confirmation = ref<PendingConfirmation | null>(null);
 const prompt = ref<PromptState | null>(null);
+const imagePaste = ref<PendingImagePaste | null>(null);
+const wysiwygPane = ref<{ focus: () => void } | null>(null);
 const saveTasks = new Map<string, Promise<boolean>>();
 let wheelAccumulator = 0;
+let imageRequestActive = false;
 
 function readSplitRatio(): number {
   try {
@@ -484,6 +512,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('blur', handleWindowBlur);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('beforeunload', handleBeforeUnload);
+  cancelImagePasteName();
   cancelAllAutoSaveTimers();
   clearDraftTimer();
   clearSessionTimer();
@@ -520,6 +549,137 @@ function updatePreferences(patch: Partial<Preferences>): void {
   preferences.value = next;
   savePreferences(next);
   applyPreferences(next);
+}
+
+function requestImagePasteName(
+  file: File,
+  defaultName: string,
+  format: ImageFormat,
+  folder: string,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    imagePaste.value = {
+      file,
+      defaultName,
+      extension: extensionForFormat(format),
+      folder,
+      resolve,
+    };
+  });
+}
+
+function focusActiveEditor(): void {
+  if (viewMode.value === 'wysiwyg') {
+    wysiwygPane.value?.focus();
+  } else {
+    editorPane.value?.refresh();
+  }
+}
+
+function confirmImagePasteName(name: string): void {
+  const pending = imagePaste.value;
+  imagePaste.value = null;
+  pending?.resolve(name);
+  if (pending) focusActiveEditor();
+}
+
+function cancelImagePasteName(): void {
+  const pending = imagePaste.value;
+  imagePaste.value = null;
+  pending?.resolve(null);
+  if (pending) focusActiveEditor();
+}
+
+async function requestImageSave(
+  file: File,
+): Promise<ImageSaveResult | null> {
+  if (imageRequestActive || closeInProgress || closeApproved) return null;
+  const tab = activeTab.value;
+  if (!tab || isImagePath(tab.path)) return null;
+  if (imagePaste.value || prompt.value || confirmation.value) return null;
+
+  imageRequestActive = true;
+  const session = editorSession.value;
+  try {
+    const notePath = tab.path;
+    const format = preferences.value.imageFormat;
+    const folder = preferences.value.imageFolder.trim();
+    const quality = preferences.value.imageQuality;
+    const defaultName = renderImageName(
+      preferences.value.imageNameTemplate,
+      { notePath },
+    );
+    let stem = defaultName;
+
+    if (preferences.value.imageConfirmPaste) {
+      const useVim =
+        preferences.value.vimEnabled && viewMode.value !== 'wysiwyg';
+      let chosen: string | null = null;
+      if (useVim) {
+        chosen = editorPane.value
+          ? await editorPane.value.promptImageName(
+              defaultName,
+              extensionForFormat(format),
+            )
+          : null;
+      } else {
+        chosen = await requestImagePasteName(
+          file,
+          defaultName,
+          format,
+          folder,
+        );
+      }
+      if (chosen === null) return null;
+      stem = sanitizeImageStem(stripImageExtension(chosen.trim()));
+    }
+
+    if (
+      activeTab.value?.path !== notePath ||
+      editorSession.value !== session ||
+      closeInProgress ||
+      closeApproved
+    ) {
+      return null;
+    }
+
+    const blob = await convertImageFile(file, format, quality);
+    if (
+      activeTab.value?.path !== notePath ||
+      editorSession.value !== session ||
+      closeInProgress ||
+      closeApproved
+    ) {
+      return null;
+    }
+
+    const data = await blobToBase64(blob);
+    const fileName = buildImageFileName(stem, format);
+    const source = await api.saveImage(notePath, folder, fileName, data);
+    window.setTimeout(() => {
+      void refreshEntries().catch((err) => setError(err));
+    }, 0);
+    return {
+      source: encodeMarkdownImagePath(source),
+      alt: stem,
+    };
+  } catch (err) {
+    if (err instanceof Error && err.message === 'IMAGE_FORMAT_UNSUPPORTED') {
+      setError(t('imagePaste.unsupportedFormat'));
+    } else if (err instanceof Error && err.message === 'IMAGE_TOO_LARGE') {
+      setError(t('imagePaste.tooLarge'));
+    } else if (
+      err instanceof Error &&
+      err.message === 'IMAGE_CONVERT_FAILED'
+    ) {
+      setError(t('imagePaste.convertFailed'));
+    } else {
+      setError(err);
+    }
+    return null;
+  } finally {
+    imageRequestActive = false;
+  }
 }
 
 function clearSessionTimer(): void {
@@ -895,7 +1055,7 @@ async function prepareForClose(): Promise<boolean> {
 
   if (await saveAllDirtyTabs()) return true;
   if (await saveAllDirtyTabs()) return true;
-  if (confirmation.value || prompt.value) return false;
+  if (confirmation.value || prompt.value || imagePaste.value) return false;
 
   const closeAnyway = await askConfirmation({
     title: t('close.saveFailedTitle'),
@@ -917,6 +1077,9 @@ async function handleCloseRequested(
   if (closeInProgress || confirmation.value || prompt.value || busy.value) {
     return;
   }
+  if (imagePaste.value) {
+    cancelImagePasteName();
+  }
 
   closeInProgress = true;
   try {
@@ -924,7 +1087,7 @@ async function handleCloseRequested(
     persistSessionNow();
     cancelAllAutoSaveTimers();
     await Promise.allSettled([...saveTasks.values()]);
-    if (confirmation.value || prompt.value) {
+    if (confirmation.value || prompt.value || imagePaste.value) {
       closeApproved = false;
       scheduleAutoSaveForDirtyTabs();
       return;
@@ -1728,6 +1891,7 @@ async function chooseFolder(): Promise<void> {
 }
 
 function resetTabs(): void {
+  cancelImagePasteName();
   cancelAllAutoSaveTimers();
   clearDraftTimer();
   clearSessionTimer();
@@ -2252,12 +2416,14 @@ watch(
 
         <WysiwygPane
           v-else-if="viewMode === 'wysiwyg'"
+          ref="wysiwygPane"
           :key="editorSession"
           :initial-content="activeTab.content"
           :note-path="activeTab.path"
           :read-only="switching || mutating"
           :immersive="immersiveEnabled"
           :code-highlight="preferences.codeHighlight"
+          :request-image-save="requestImageSave"
           @change="handleContentChange"
         />
 
@@ -2286,6 +2452,7 @@ watch(
               :layout-key="previewLayoutKey"
               :immersive="immersiveEnabled"
               :source-highlight="preferences.sourceHighlight"
+              :request-image-save="requestImageSave"
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"
@@ -2360,6 +2527,16 @@ watch(
       :save-state="saveState"
       @mode-change="setViewMode"
       @immersive-toggle="toggleImmersive"
+    />
+
+    <ImagePasteDialog
+      v-if="imagePaste"
+      :file="imagePaste.file"
+      :default-name="imagePaste.defaultName"
+      :extension="imagePaste.extension"
+      :folder="imagePaste.folder"
+      @confirm="confirmImagePasteName"
+      @cancel="cancelImagePasteName"
     />
 
     <ConfirmDialog

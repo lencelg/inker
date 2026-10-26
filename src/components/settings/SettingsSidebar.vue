@@ -7,6 +7,7 @@ import {
   Eye,
   FileText,
   FolderCog,
+  Image as ImageIcon,
   Settings2,
 } from '@lucide/vue';
 import { t } from '../../lib/i18n';
@@ -40,6 +41,7 @@ const categoryIcons = {
   settings: Settings2,
   editor: FileText,
   preview: Eye,
+  images: ImageIcon,
   export: Download,
 } as const;
 

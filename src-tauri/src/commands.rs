@@ -48,12 +48,14 @@ pub fn save_note(app: AppHandle, path: String, content: String) -> Result<(), St
 pub fn save_note_image(
     app: AppHandle,
     note_path: String,
+    folder: String,
     file_name: String,
     data: String,
 ) -> Result<String, String> {
     save_image_file(
         &require_notes_dir(&app)?,
         &note_path,
+        &folder,
         &file_name,
         &data,
     )

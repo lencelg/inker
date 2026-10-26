@@ -1122,3 +1122,36 @@ button:disabled {
   color: var(--error);
   font-size: 12px;
 }
+
+.vim-image-prompt {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+}
+
+.vim-image-prompt-label {
+  color: var(--statusbar-muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.vim-image-prompt-input {
+  min-width: 140px;
+  max-width: 420px;
+  flex: 1;
+  padding: 1px 5px;
+  border: 1px solid var(--statusbar-border);
+  border-radius: 3px;
+  outline: none;
+  background: transparent;
+  color: var(--statusbar-ink);
+  font-family: var(--mono-font);
+  font-size: 11px;
+}
+
+.vim-image-prompt-input:focus {
+  border-color: var(--accent);
+}

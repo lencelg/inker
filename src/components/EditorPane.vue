@@ -35,6 +35,10 @@ import {
   type HeadingItem,
 } from '../lib/headings';
 import { language, t } from '../lib/i18n';
+import {
+  imageFilesFrom,
+  type ImageSaveHandler,
+} from '../lib/imagePaste';
 import { formatVimMode } from '../lib/vimMode';
 
 const props = defineProps<{
@@ -44,6 +48,7 @@ const props = defineProps<{
   layoutKey?: string;
   immersive: boolean;
   sourceHighlight: boolean;
+  requestImageSave: ImageSaveHandler;
 }>();
 
 const emit = defineEmits<{
@@ -73,6 +78,7 @@ const vimExtension = vim({ status: false });
 let view: EditorView | null = null;
 let headings: HeadingItem[] = [];
 let scrollElement: HTMLElement | null = null;
+let cancelImagePrompt: (() => void) | null = null;
 let scrollFrame = 0;
 let resizeFrame = 0;
 let centerFrame = 0;
@@ -562,6 +568,9 @@ onMounted(() => {
   Vim.defineEx('write', 'w', () => {
     emit('saveRequest');
   });
+  Vim.defineEx('pasteimage', 'pi', () => {
+    void pasteImageFromClipboard();
+  });
   view = new EditorView({
     parent: host.value,
     state: EditorState.create({
@@ -578,6 +587,33 @@ onMounted(() => {
         EditorState.allowMultipleSelections.of(true),
         multiCursorKeymap,
         multiCursorMouse,
+        EditorView.domEventHandlers({
+          paste: (event, editorView) => {
+            if (props.readOnly) return false;
+            const files = imageFilesFrom(event.clipboardData);
+            if (files.length === 0) return false;
+            event.preventDefault();
+            void uploadImages(
+              editorView,
+              files,
+              editorView.state.selection.main.from,
+            );
+            return true;
+          },
+          drop: (event, editorView) => {
+            if (props.readOnly) return false;
+            const files = imageFilesFrom(event.dataTransfer);
+            if (files.length === 0) return false;
+            event.preventDefault();
+            const position =
+              editorView.posAtCoords({
+                x: event.clientX,
+                y: event.clientY,
+              }) ?? editorView.state.selection.main.from;
+            void uploadImages(editorView, files, position);
+            return true;
+          },
+        }),
         basicSetup,
         markdown({ codeLanguages: languages }),
         syntaxHighlighting(syntaxTheme),
@@ -646,6 +682,7 @@ onMounted(() => {
 watch(
   () => props.vimEnabled,
   (enabled) => {
+    if (!enabled) cancelImagePrompt?.();
     view?.dispatch({
       effects: vimCompartment.reconfigure(enabled ? vimExtension : []),
     });
@@ -737,6 +774,8 @@ onBeforeUnmount(() => {
   resizeObserver = null;
   scrollElement?.removeEventListener('scroll', handleScroll);
   scrollElement = null;
+  cancelImagePrompt?.();
+  cancelImagePrompt = null;
   cancelPendingRestoreScroll();
   view?.destroy();
   view = null;
@@ -825,13 +864,148 @@ function restoreState(state: EditorViewState): void {
   });
 }
 
+function notifyVim(message: string): void {
+  if (!view) return;
+  const cm = getCM(view);
+  if (!cm) return;
+  const span = document.createElement('span');
+  span.className = 'cm-vim-message';
+  span.textContent = message;
+  cm.openNotification(span, { bottom: true, duration: 4000 });
+}
+
+async function pasteImageFromClipboard(): Promise<void> {
+  if (!view || props.readOnly) return;
+  if (!navigator.clipboard?.read) {
+    notifyVim(t('imagePaste.clipboardUnavailable'));
+    return;
+  }
+
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const type = item.types.find((value) => value.startsWith('image/'));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      const suffix = type.slice('image/'.length).replace(/\+.*$/, '');
+      const file = new File([blob], `clipboard.${suffix || 'png'}`, {
+        type,
+      });
+      const result = await props.requestImageSave(file);
+      if (!result || !view?.dom.isConnected) return;
+      insertMarkdownImage(
+        view,
+        result.source,
+        result.alt,
+        view.state.selection.main.from,
+      );
+      return;
+    }
+    notifyVim(t('imagePaste.clipboardEmpty'));
+  } catch {
+    notifyVim(t('imagePaste.clipboardUnavailable'));
+  }
+}
+
+function insertMarkdownImage(
+  editorView: EditorView,
+  source: string,
+  alt: string,
+  position: number,
+): void {
+  const markdown = `![${alt}](${source})`;
+  const from = Math.min(
+    Math.max(0, position),
+    editorView.state.doc.length,
+  );
+  editorView.dispatch({
+    changes: { from, insert: markdown },
+    selection: { anchor: from + markdown.length },
+    scrollIntoView: true,
+  });
+  editorView.focus();
+}
+
+async function uploadImages(
+  editorView: EditorView,
+  files: File[],
+  position: number,
+): Promise<void> {
+  let next = position;
+  for (const file of files) {
+    const result = await props.requestImageSave(file);
+    if (!result || !editorView.dom.isConnected) return;
+    insertMarkdownImage(editorView, result.source, result.alt, next);
+    next = editorView.state.selection.main.from;
+  }
+}
+
+function promptImageName(
+  defaultName: string,
+  extension?: string,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const cm = view ? getCM(view) : null;
+    if (!cm) {
+      resolve(null);
+      return;
+    }
+    cancelImagePrompt?.();
+
+    let settled = false;
+    const settle = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      cancelImagePrompt = null;
+      resolve(value);
+    };
+
+    const template = document.createElement('span');
+    template.className = 'vim-image-prompt';
+    const label = document.createElement('span');
+    label.className = 'vim-image-prompt-label';
+    label.textContent = extension
+      ? `${t('imagePaste.vimPrompt')} (.${extension})`
+      : t('imagePaste.vimPrompt');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'vim-image-prompt-input';
+    input.value = defaultName;
+    template.append(label, input);
+
+    const close = cm.openDialog(
+      template,
+      (value: string) => {
+        const trimmed = String(value ?? '').trim();
+        settle(trimmed === '' ? defaultName : trimmed);
+      },
+      {
+        value: defaultName,
+        selectValueOnOpen: true,
+        onClose: () => settle(null),
+      },
+    );
+    cancelImagePrompt = () => {
+      close();
+      settle(null);
+    };
+  });
+}
+
 function refresh(): void {
   if (!view) return;
   view.requestMeasure();
   view.focus();
 }
 
-defineExpose({ revealLine, refresh, scrollToLine, captureState, restoreState });
+defineExpose({
+  revealLine,
+  refresh,
+  scrollToLine,
+  captureState,
+  restoreState,
+  promptImageName,
+});
 </script>
 
 <template>

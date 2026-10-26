@@ -201,7 +201,12 @@ tempfile                     测试临时目录
 - 支持鼠标滚轮缩放，缩放以鼠标位置为中心。
 - 支持按住鼠标左键拖动图片、缩放百分比、加减按钮和双击/重置复位。
 - Markdown 中的本地图片通过 Rust 后端读取并转换为内嵌 Data URL。
-- WYSIWYG 中粘贴/拖拽图片会写入 `assets/`。
+- 源码编辑器与实时预览都支持通过 `Ctrl/Cmd+V` 粘贴图片，也支持拖拽图片。
+- 默认在保存前弹出命名窗口，显示缩略图、目标目录和扩展名；可在设置中关闭。
+- Vim 源码模式下不弹窗，改为在底部 Vim 命令行输入名称；Enter 确认、Esc 取消。请在插入模式使用 `Ctrl/Cmd+V`；Normal 模式的 `Ctrl+V` 仍是 Vim 的块选择，可使用 `:pasteimage`（别名 `:pi`）从系统剪贴板粘贴图片。
+- 默认保存到工作区根目录的 `assets/`，可在设置中改为其他相对目录（如 `image`、`assets/screenshots`）。
+- 图片命名支持模板（默认 `{datetime}`），保存格式支持 PNG / JPEG / WebP。
+- 嵌套笔记会插入正确的相对路径，例如 `../assets/20261027-143012.png`。
 - 图片读取有 20 MB 上限。
 - 图片重命名会保留文件类型。
 
@@ -287,9 +292,11 @@ tempfile                     测试临时目录
   - 常用设置
   - 文本编辑器
   - 预览
+  - 图片
   - 导出
 - 设置项支持：
   - 数字输入
+  - 文本输入
   - 下拉选择
   - 复选框
   - 修改状态标记
@@ -382,7 +389,7 @@ tempfile                     测试临时目录
 | 原始 HTML（清洗后渲染） | ✅ 已完成 |
 | 本地图片与图片标签页 | ✅ 已完成 |
 | 图片缩放与拖动查看 | ✅ 已完成 |
-| 图片粘贴/拖拽到 `assets/` | ✅ 已完成 |
+| 图片粘贴/拖拽与命名 | ✅ 源码/WYSIWYG、弹窗/Vim 底栏、模板/格式/目录 |
 | 目录锚点跳转 | ✅ 已完成 |
 | 标题面包屑导航 | ✅ 已完成 |
 | 源码编辑器缩略图 | ✅ 已完成 |
@@ -395,7 +402,7 @@ tempfile                     测试临时目录
 | HTML / Word / PDF 导出 | ✅ 已完成 |
 | Debian `.deb` 打包 | ✅ 已完成 |
 | “工作区”设置 | ⚠️ 目前为空状态占位 |
-| 导出分类中的选项 | ⚠️ 目前只更新设置面板内状态，尚未接入导出流程 |
+| 导出分类中的选项 | ✅ 已接入导出流程 |
 | 云同步 / 多设备同步 | ❌ 未实现 |
 | 自动保存 | ✅ 可选，默认关闭 |
 | 会话恢复 / 草稿恢复 | ✅ 已完成 |
@@ -433,6 +440,7 @@ markdown-note-taking/
 │   │   ├── WysiwygPane.vue        # Milkdown 实时预览
 │   │   ├── PreviewPane.vue        # Markdown 只读预览
 │   │   ├── ImagePane.vue          # 图片查看器
+│   │   ├── ImagePasteDialog.vue    # 粘贴图片命名与预览
 │   │   ├── StatusBar.vue          # 底部状态栏
 │   │   ├── AppMenu.vue            # 顶部应用菜单
 │   │   ├── SettingsOverlay.vue    # 设置浮层
@@ -461,6 +469,7 @@ markdown-note-taking/
 │       ├── pagination.ts          # DOM 测量、分页与页面切片
 │       ├── fileKinds.ts           # 图片扩展名识别
 │       ├── i18n.ts                # 中英文文案与系统语言检测
+│       ├── imagePaste.ts          # 图片命名、格式转换与路径编码
 │       ├── imageView.ts           # 图片缩放与平移计算
 │       ├── fonts.ts               # 字体列表
 │       ├── headings.ts            # 标题提取与当前路径计算
@@ -625,6 +634,11 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-restore-session` | 启动时恢复会话（默认开启） |
 | `inker-session-v1` | 按笔记文件夹保存的会话快照 |
 | `inker-drafts-v1` | 未保存内容的崩溃草稿 |
+| `inker-image-confirm` | 粘贴图片时是否确认名称 |
+| `inker-image-template` | 图片命名模板 |
+| `inker-image-format` | 图片保存格式（`png` / `jpeg` / `webp`） |
+| `inker-image-folder` | 图片保存目录（相对工作区根目录） |
+| `inker-image-quality` | JPEG/WebP 编码质量 |
 
 应用会兼容读取旧的 `markleaf-*` 偏好键，并在首次读取时迁移到 `inker-*`。
 
@@ -694,14 +708,19 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 上传：
 
 ```text
-粘贴/拖拽图片
-  → 前端读取为 Base64
-  → api.saveImage()
+Ctrl/Cmd+V 或拖拽图片
+  → 两个编辑器共用 App.requestImageSave()
+  → 按命名模板生成默认名
+  → 需要确认时：普通模式弹窗 / Vim 源码模式底栏输入
+  → canvas 转为目标格式（同格式直接透传）
+  → api.saveImage(notePath, folder, fileName, data)
   → save_note_image()
-  → 写入笔记同目录下 assets/
-  → 返回相对路径
-  → 插入 Markdown 图片节点
+  → 在工作区相对目录中创建文件夹并写入
+  → 返回相对当前笔记的路径（如 ../assets/x.png）
+  → 插入 Markdown 图片 / WYSIWYG image 节点
 ```
+
+命名模板支持 `{date}`、`{time}`、`{datetime}`、`{timestamp}`、`{note}`，以及中文别名 `{日期}`、`{时间}`、`{日期时间}`、`{时间戳}`、`{笔记}`。扩展名由保存格式决定；同名文件由后端追加 `-1`、`-2`。
 
 读取：
 
@@ -815,6 +834,7 @@ Markdown 图片路径
 | `Ctrl/Cmd+滚轮` | 调整字体大小 |
 | `Ctrl/Cmd+D` | 源码编辑器选择下一个相同文本 |
 | `Alt+点击` | 源码编辑器添加多光标 |
+| `Ctrl/Cmd+V` | 粘贴图片（源码 / 实时预览） |
 | `:w` | Vim 模式保存 |
 | `Esc` | 关闭菜单 / 设置 / Vim 命令输入 |
 
@@ -898,8 +918,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：31 个测试文件，150 个测试通过
-- Rust：14 个测试通过
+- 前端：33 个测试文件，178 个测试通过
+- Rust：21 个测试通过
 
 覆盖范围包括：
 
@@ -914,6 +934,9 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 会话快照校验、裁剪与工作区容量
 - 崩溃草稿的写入、淘汰、重命名与工作区隔离
 - 状态栏保存状态
+- 图片命名模板、名称清洗、格式映射与 Markdown 路径编码
+- 图片命名弹窗的确认、取消、空名称校验与预览
+- Rust 图片保存目录、嵌套笔记相对路径、目录穿越与符号链接拒绝
 - 中英文界面、系统语言检测与切换
 - HTML 导出模式、目录和图片策略
 - DOCX 原生列表、表格、公式、目录与页码
@@ -995,6 +1018,9 @@ cargo tauri icon assets/icons/inker.svg
 
 12. **会话与草稿依赖 WebView localStorage**
     清理 WebView 数据会丢失会话与草稿。单条草稿超过 256 KB、总量超过约 2 MB 或条目超过 20 条时不会写入；自动保存关闭时，这类大文件没有崩溃恢复保护。
+
+13. **图片粘贴转换有格式边界**
+    只输出 PNG / JPEG / WebP；GIF 粘贴后只保留首帧，SVG 会被栅格化，JPEG 透明区域填白。同格式图片直接透传，质量设置不会重新编码。WebView 不支持 WebP 编码时会提示改用 PNG。撤销插入不会删除已保存的图片文件，重复粘贴也不会自动去重；多光标时图片只插入主光标处。远程图片 URL 不会被下载。
 
 ---
 

@@ -6,8 +6,14 @@ import {
   FONT_SIZE_STORAGE_KEY,
   IMMERSIVE_STORAGE_KEY,
   LANGUAGE_STORAGE_KEY,
+  IMAGE_CONFIRM_STORAGE_KEY,
+  IMAGE_FOLDER_STORAGE_KEY,
+  IMAGE_FORMAT_STORAGE_KEY,
+  IMAGE_QUALITY_STORAGE_KEY,
+  IMAGE_TEMPLATE_STORAGE_KEY,
   RESTORE_SESSION_STORAGE_KEY,
   VIM_STORAGE_KEY,
+  normalizeImageFolder,
   normalizePreferences,
   readPreferences,
   savePreferences,
@@ -104,6 +110,77 @@ describe('preferences', () => {
     expect(
       normalizePreferences({ autoSaveDelay: 1000.6 }).autoSaveDelay,
     ).toBe(1001);
+  });
+
+  it('defaults image preferences', () => {
+    const defaults = normalizePreferences({});
+    expect(defaults.imageConfirmPaste).toBe(true);
+    expect(defaults.imageNameTemplate).toBe('{datetime}');
+    expect(defaults.imageFormat).toBe('png');
+    expect(defaults.imageFolder).toBe('assets');
+    expect(defaults.imageQuality).toBe(0.92);
+  });
+
+  it('normalizes image paths, templates, formats and quality', () => {
+    expect(normalizeImageFolder('/image/')).toBe('image');
+    expect(normalizeImageFolder('assets\\shots')).toBe('assets/shots');
+    expect(normalizeImageFolder('assets//shots/')).toBe('assets/shots');
+    expect(normalizeImageFolder('/')).toBe('');
+    expect(normalizeImageFolder('')).toBe('');
+
+    expect(
+      normalizePreferences({ imageFolder: '/image/' }).imageFolder,
+    ).toBe('image');
+    expect(
+      normalizePreferences({ imageFolder: '' }).imageFolder,
+    ).toBe('');
+    expect(
+      normalizePreferences({ imageNameTemplate: '  ' }).imageNameTemplate,
+    ).toBe('{datetime}');
+    expect(
+      normalizePreferences({ imageFormat: 'gif' }).imageFormat,
+    ).toBe('png');
+    expect(
+      normalizePreferences({ imageQuality: 2 }).imageQuality,
+    ).toBe(1);
+    expect(
+      normalizePreferences({ imageConfirmPaste: false }).imageConfirmPaste,
+    ).toBe(false);
+  });
+
+  it('persists image preferences', () => {
+    savePreferences(
+      normalizePreferences({
+        imageConfirmPaste: false,
+        imageNameTemplate: '{note}-{time}',
+        imageFormat: 'webp',
+        imageFolder: 'image/screenshots',
+        imageQuality: 0.8,
+      }),
+    );
+
+    expect(window.localStorage.getItem(IMAGE_CONFIRM_STORAGE_KEY)).toBe(
+      'false',
+    );
+    expect(window.localStorage.getItem(IMAGE_TEMPLATE_STORAGE_KEY)).toBe(
+      '{note}-{time}',
+    );
+    expect(window.localStorage.getItem(IMAGE_FORMAT_STORAGE_KEY)).toBe(
+      'webp',
+    );
+    expect(window.localStorage.getItem(IMAGE_FOLDER_STORAGE_KEY)).toBe(
+      'image/screenshots',
+    );
+    expect(window.localStorage.getItem(IMAGE_QUALITY_STORAGE_KEY)).toBe(
+      '0.8',
+    );
+
+    const stored = readPreferences();
+    expect(stored.imageConfirmPaste).toBe(false);
+    expect(stored.imageNameTemplate).toBe('{note}-{time}');
+    expect(stored.imageFormat).toBe('webp');
+    expect(stored.imageFolder).toBe('image/screenshots');
+    expect(stored.imageQuality).toBe(0.8);
   });
 
   it('persists auto-save and session preferences', () => {

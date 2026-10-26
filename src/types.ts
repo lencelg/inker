@@ -43,6 +43,7 @@ export interface NotesApi {
   saveNote(path: string, content: string): Promise<void>;
   saveImage(
     notePath: string,
+    folder: string,
     fileName: string,
     data: string,
   ): Promise<string>;

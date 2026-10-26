@@ -41,6 +41,10 @@ import { codeHighlightRanges } from '../lib/codeHighlight';
 import type { BreadcrumbItem } from '../lib/headings';
 import { localizeError, language, t } from '../lib/i18n';
 import {
+  imageFilesFrom,
+  type ImageSaveHandler,
+} from '../lib/imagePaste';
+import {
   applyLineEnding,
   normalizeLineEndings,
   usesCrlf,
@@ -55,6 +59,7 @@ const props = defineProps<{
   readOnly: boolean;
   immersive: boolean;
   codeHighlight: boolean;
+  requestImageSave: ImageSaveHandler;
 }>();
 
 const emit = defineEmits<{ change: [content: string] }>();
@@ -389,47 +394,6 @@ const immersiveCursor = $prose(
     }),
 );
 
-const MIME_EXTENSIONS: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/gif': 'gif',
-  'image/webp': 'webp',
-  'image/svg+xml': 'svg',
-};
-
-function imageFilesFrom(data: DataTransfer | null): File[] {
-  if (!data) return [];
-
-  const fromItems = Array.from(data.items)
-    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => file !== null);
-  if (fromItems.length > 0) return fromItems;
-
-  return Array.from(data.files).filter((file) =>
-    file.type.startsWith('image/'),
-  );
-}
-
-function imageFileName(file: File): string {
-  const name = file.name.trim();
-  if (name && /\.[a-z0-9]+$/i.test(name)) return name;
-  const extension = MIME_EXTENSIONS[file.type] ?? 'png';
-  return `pasted-${Date.now()}.${extension}`;
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(
-      ...bytes.subarray(index, index + chunkSize),
-    );
-  }
-  return window.btoa(binary);
-}
-
 function insertImage(
   view: EditorView,
   source: string,
@@ -474,30 +438,12 @@ async function uploadImages(
   files: File[],
   position?: number,
 ): Promise<void> {
-  let first = true;
+  let next = position;
   for (const file of files) {
-    try {
-      const data = await fileToBase64(file);
-      const source = await api.saveImage(
-        props.notePath,
-        imageFileName(file),
-        data,
-      );
-      if (!view.dom.isConnected) return;
-      insertImage(
-        view,
-        source,
-        file.name || t('wysiwyg.imageAlt'),
-        first ? position : undefined,
-      );
-      first = false;
-    } catch (err) {
-      showError(
-        localizeError(
-          err instanceof Error ? err.message : String(err),
-        ),
-      );
-    }
+    const result = await props.requestImageSave(file);
+    if (!result || !view.dom.isConnected) return;
+    insertImage(view, result.source, result.alt, next);
+    next = view.state.selection.from;
   }
 }
 
@@ -728,6 +674,14 @@ watch(language, () => {
       .dom.setAttribute('aria-label', t('editor.markdownContent'));
   });
 });
+
+function focus(): void {
+  editor?.action((ctx) => {
+    ctx.get(editorViewCtx).focus();
+  });
+}
+
+defineExpose({ focus });
 
 onMounted(() => {
   void createEditor();

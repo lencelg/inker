@@ -2,6 +2,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::Serialize;
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -158,6 +159,7 @@ pub fn save_note(notes_dir: &Path, relative: &str, content: &str) -> Result<(), 
 pub fn save_note_image(
     notes_dir: &Path,
     note_relative: &str,
+    folder: &str,
     file_name: &str,
     data: &str,
 ) -> Result<String, String> {
@@ -186,40 +188,124 @@ pub fn save_note_image(
         return Err("不支持的图片格式".to_string());
     }
 
-    let stem = sanitize_image_stem(
+    let mut stem = sanitize_image_stem(
         original
             .file_stem()
             .and_then(|value| value.to_str())
             .unwrap_or("image"),
     );
+    if is_windows_reserved(&stem) {
+        stem.push_str("-image");
+    }
     let base = note_path
         .parent()
         .ok_or_else(|| "无法确定笔记所在文件夹".to_string())?;
-    let assets = base.join("assets");
-    fs::create_dir_all(&assets).map_err(|error| format!("创建图片目录失败：{error}"))?;
-    let assets = fs::canonicalize(&assets)
+    let assets = resolve_asset_dir(&root, folder)?;
+
+    let mut counter = 0usize;
+    let (candidate, mut handle) = loop {
+        let name = if counter == 0 {
+            format!("{stem}.{extension}")
+        } else {
+            format!("{stem}-{counter}.{extension}")
+        };
+        let path = assets.join(name);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(handle) => break (path, handle),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                counter += 1;
+                if counter > 9999 {
+                    return Err("无法生成唯一的图片文件名".to_string());
+                }
+            }
+            Err(error) => return Err(format!("保存图片失败：{error}")),
+        }
+    };
+
+    handle
+        .write_all(&bytes)
+        .map_err(|error| format!("保存图片失败：{error}"))?;
+    relative_from(base, &candidate)
+}
+
+fn resolve_asset_dir(root: &Path, folder: &str) -> Result<PathBuf, String> {
+    let normalized = folder.trim().replace('\\', "/");
+    let normalized = normalized.trim_matches('/');
+    let components = validate_relative(normalized, true)?;
+    let mut current = root.to_path_buf();
+
+    for component in components {
+        current.push(&component);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() {
+                    return Err("不允许访问符号链接".to_string());
+                }
+                if !metadata.is_dir() {
+                    return Err("图片目录不是文件夹".to_string());
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                match fs::create_dir(&current) {
+                    Ok(()) => {}
+                    Err(error)
+                        if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                    Err(error) => {
+                        return Err(format!("创建图片目录失败：{error}"));
+                    }
+                }
+                let created = fs::symlink_metadata(&current)
+                    .map_err(|error| format!("读取图片目录失败：{error}"))?;
+                if created.file_type().is_symlink() || !created.is_dir() {
+                    return Err("图片目录不是文件夹".to_string());
+                }
+            }
+            Err(error) => return Err(format!("读取图片目录失败：{error}")),
+        }
+    }
+
+    let canonical = fs::canonicalize(&current)
         .map_err(|error| format!("读取图片目录失败：{error}"))?;
-    if !assets.starts_with(&root) {
+    if !canonical.starts_with(root) {
         return Err("图片目录超出笔记文件夹".to_string());
     }
+    Ok(canonical)
+}
 
-    let mut candidate = assets.join(format!("{stem}.{extension}"));
-    let mut counter = 1;
-    while candidate.exists() {
-        if counter > 9999 {
-            return Err("无法生成唯一的图片文件名".to_string());
-        }
-        candidate = assets.join(format!("{stem}-{counter}.{extension}"));
-        counter += 1;
+fn relative_from(base: &Path, target: &Path) -> Result<String, String> {
+    let base_components: Vec<_> = base.components().collect();
+    let target_components: Vec<_> = target.components().collect();
+    let mut common = 0;
+    while common < base_components.len()
+        && common < target_components.len()
+        && base_components[common] == target_components[common]
+    {
+        common += 1;
     }
 
-    fs::write(&candidate, bytes).map_err(|error| format!("保存图片失败：{error}"))?;
-    let relative = candidate
-        .strip_prefix(base)
-        .map_err(|_| "无法生成图片路径".to_string())?;
-    Ok(relative
-        .to_string_lossy()
-        .replace(std::path::MAIN_SEPARATOR, "/"))
+    let mut parts: Vec<String> = Vec::new();
+    for component in &base_components[common..] {
+        if matches!(component, std::path::Component::Normal(_)) {
+            parts.push("..".to_string());
+        }
+    }
+    for component in &target_components[common..] {
+        match component {
+            std::path::Component::Normal(value) => {
+                parts.push(value.to_string_lossy().to_string());
+            }
+            _ => return Err("无法生成图片路径".to_string()),
+        }
+    }
+
+    if parts.is_empty() {
+        return Err("无法生成图片路径".to_string());
+    }
+    Ok(parts.join("/"))
 }
 
 fn sanitize_image_stem(value: &str) -> String {
@@ -1016,16 +1102,28 @@ mod tests {
         fs::write(root.join("Note.md"), "# Note").unwrap();
         let data = BASE64.encode([137u8, 80, 78, 71]);
 
-        let first = save_note_image(&root, "Note.md", "screen shot.png", &data)
-            .unwrap();
+        let first = save_note_image(
+            &root,
+            "Note.md",
+            "assets",
+            "screen shot.png",
+            &data,
+        )
+        .unwrap();
         assert_eq!(first, "assets/screen-shot.png");
         assert_eq!(
             fs::read(root.join("assets/screen-shot.png")).unwrap(),
             vec![137, 80, 78, 71]
         );
 
-        let second = save_note_image(&root, "Note.md", "screen shot.png", &data)
-            .unwrap();
+        let second = save_note_image(
+            &root,
+            "Note.md",
+            "assets",
+            "screen shot.png",
+            &data,
+        )
+        .unwrap();
         assert_eq!(second, "assets/screen-shot-1.png");
     }
 
@@ -1035,8 +1133,153 @@ mod tests {
         fs::write(root.join("Note.md"), "# Note").unwrap();
         let data = BASE64.encode(b"not an image");
         assert!(
-            save_note_image(&root, "Note.md", "note.md", &data).is_err()
+            save_note_image(&root, "Note.md", "assets", "note.md", &data)
+                .is_err()
         );
-        assert!(save_note_image(&root, "Note.md", "note.png", "%%%").is_err());
+        assert!(
+            save_note_image(&root, "Note.md", "assets", "note.png", "%%%")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn saves_images_into_a_workspace_folder_for_nested_notes() {
+        let (_temp, root) = setup();
+        fs::create_dir(root.join("sub")).unwrap();
+        fs::write(root.join("sub/Note.md"), "# Note").unwrap();
+        let data = BASE64.encode([137u8, 80, 78, 71]);
+
+        let relative = save_note_image(
+            &root,
+            "sub/Note.md",
+            "image/screens",
+            "shot.png",
+            &data,
+        )
+        .unwrap();
+        assert_eq!(relative, "../image/screens/shot.png");
+        assert_eq!(
+            fs::read(root.join("image/screens/shot.png")).unwrap(),
+            vec![137, 80, 78, 71]
+        );
+
+        let asset =
+            read_note_asset(&root, "sub/Note.md", &relative).unwrap();
+        assert_eq!(asset.mime, "image/png");
+        assert_eq!(asset.data, data);
+    }
+
+    #[test]
+    fn saves_images_into_the_workspace_root() {
+        let (_temp, root) = setup();
+        fs::create_dir(root.join("sub")).unwrap();
+        fs::write(root.join("sub/Note.md"), "# Note").unwrap();
+        let data = BASE64.encode([137u8, 80, 78, 71]);
+
+        let relative =
+            save_note_image(&root, "sub/Note.md", "/", "shot.png", &data)
+                .unwrap();
+        assert_eq!(relative, "../shot.png");
+        assert!(root.join("shot.png").exists());
+    }
+
+    #[test]
+    fn rejects_image_folder_escapes() {
+        let (_temp, root) = setup();
+        fs::write(root.join("Note.md"), "# Note").unwrap();
+        let data = BASE64.encode([137u8, 80, 78, 71]);
+
+        for folder in [
+            "../outside",
+            "image/../../outside",
+            "..",
+            "/..",
+            "C:",
+        ] {
+            assert!(
+                save_note_image(&root, "Note.md", folder, "shot.png", &data)
+                    .is_err(),
+                "folder {folder} should be rejected"
+            );
+        }
+        assert!(!root.parent().unwrap().join("outside").exists());
+    }
+
+    #[test]
+    fn returns_relative_image_paths() {
+        assert_eq!(
+            relative_from(
+                Path::new("/root/sub"),
+                Path::new("/root/image/shot.png"),
+            )
+            .unwrap(),
+            "../image/shot.png"
+        );
+        assert_eq!(
+            relative_from(
+                Path::new("/root"),
+                Path::new("/root/image/shot.png"),
+            )
+            .unwrap(),
+            "image/shot.png"
+        );
+        assert_eq!(
+            relative_from(
+                Path::new("/root/sub/deep"),
+                Path::new("/root/image/shot.png"),
+            )
+            .unwrap(),
+            "../../image/shot.png"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_image_folders() {
+        use std::os::unix::fs::symlink;
+
+        let (temp, root) = setup();
+        fs::write(root.join("Note.md"), "# Note").unwrap();
+        let outside = temp.path().join("Outside");
+        fs::create_dir(&outside).unwrap();
+        symlink(&outside, root.join("linked")).unwrap();
+        let data = BASE64.encode([137u8, 80, 78, 71]);
+
+        assert!(
+            save_note_image(&root, "Note.md", "linked", "shot.png", &data)
+                .is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_follow_existing_image_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let (temp, root) = setup();
+        fs::write(root.join("Note.md"), "# Note").unwrap();
+        fs::create_dir(root.join("assets")).unwrap();
+        let outside = temp.path().join("outside.png");
+        symlink(&outside, root.join("assets/shot.png")).unwrap();
+        let data = BASE64.encode([137u8, 80, 78, 71]);
+
+        let relative =
+            save_note_image(&root, "Note.md", "assets", "shot.png", &data)
+                .unwrap();
+        assert_eq!(relative, "assets/shot-1.png");
+        assert!(!outside.exists());
+        assert!(root.join("assets/shot-1.png").exists());
+    }
+
+    #[test]
+    fn renames_windows_reserved_image_stems() {
+        let (_temp, root) = setup();
+        fs::write(root.join("Note.md"), "# Note").unwrap();
+        let data = BASE64.encode([137u8, 80, 78, 71]);
+
+        let relative =
+            save_note_image(&root, "Note.md", "assets", "CON.png", &data)
+                .unwrap();
+        assert_eq!(relative, "assets/CON-image.png");
     }
 }

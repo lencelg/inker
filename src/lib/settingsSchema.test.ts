@@ -4,6 +4,7 @@ import {
   createSettingsSchema,
   isSettingModified,
   matchesSetting,
+  settingsCategories,
 } from './settingsSchema';
 
 describe('settings schema', () => {
@@ -86,6 +87,63 @@ describe('settings schema', () => {
     expect(restoreSession?.value).toBe(false);
     expect(restoreSession?.defaultValue).toBe(true);
     expect(restoreSession?.preference).toBe('restoreSession');
+  });
+
+  it('exposes image settings in the images category', () => {
+    const schema = createSettingsSchema(
+      normalizePreferences({
+        imageConfirmPaste: false,
+        imageNameTemplate: '{note}',
+        imageFormat: 'webp',
+        imageFolder: 'image',
+        imageQuality: 0.8,
+      }),
+    );
+
+    const confirm = schema.find(
+      (setting) => setting.id === 'images.confirmPaste',
+    );
+    const template = schema.find(
+      (setting) => setting.id === 'images.nameTemplate',
+    );
+    const format = schema.find((setting) => setting.id === 'images.format');
+    const folder = schema.find((setting) => setting.id === 'images.folder');
+    const quality = schema.find((setting) => setting.id === 'images.quality');
+
+    expect(confirm?.category).toBe('images');
+    expect(confirm?.value).toBe(false);
+    expect(confirm?.defaultValue).toBe(true);
+    expect(confirm?.preference).toBe('imageConfirmPaste');
+
+    expect(template?.controlType).toBe('text');
+    expect(template?.value).toBe('{note}');
+    expect(template?.defaultValue).toBe('{datetime}');
+    expect(template?.preference).toBe('imageNameTemplate');
+
+    expect(format?.controlType).toBe('select');
+    expect(format?.value).toBe('webp');
+    expect(format?.defaultValue).toBe('png');
+    expect(format?.options?.map((option) => option.value)).toEqual([
+      'png',
+      'jpeg',
+      'webp',
+    ]);
+
+    expect(folder?.controlType).toBe('text');
+    expect(folder?.value).toBe('image');
+    expect(folder?.defaultValue).toBe('assets');
+
+    expect(quality?.controlType).toBe('input');
+    expect(quality?.value).toBe(0.8);
+    expect(quality?.defaultValue).toBe(0.92);
+    expect(quality?.min).toBe(0.1);
+    expect(quality?.max).toBe(1);
+  });
+
+  it('includes a dedicated images category', () => {
+    expect(settingsCategories().map((category) => category.id)).toContain(
+      'images',
+    );
   });
 
   it('searches auto-save settings by keywords', () => {

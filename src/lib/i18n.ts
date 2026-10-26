@@ -292,6 +292,8 @@ const zh = {
   'settings.category.editor.description': '字体、键位与写作体验。',
   'settings.category.preview.label': '预览',
   'settings.category.preview.description': 'Markdown 预览的渲染方式。',
+  'settings.category.images.label': '图片',
+  'settings.category.images.description': '粘贴图片的命名、格式与保存位置。',
   'settings.category.export.label': '导出',
   'settings.category.export.description': '导出格式、图片与目录。',
   'settings.language.description': '界面显示语言。',
@@ -325,6 +327,32 @@ const zh = {
   'settings.openAfterExport.description': '导出后打开文件。',
   'settings.includeToc.description': '为导出生成目录。',
   'settings.includeToc.hint': '列出一到四级标题；Word 页码打开后更新。',
+  'settings.imageConfirmPaste.description': '粘贴图片时先确认文件名。',
+  'settings.imageConfirmPaste.hint': '关闭后直接按命名模板保存。',
+  'settings.imageNameTemplate.description': '图片文件名模板，扩展名由保存格式决定。',
+  'settings.imageNameTemplate.hint':
+    '可用 {date}、{time}、{datetime}、{timestamp}、{note}，以及 {日期}、{时间}、{笔记} 等中文别名。',
+  'settings.imageFormat.description': '粘贴图片保存为哪种格式。',
+  'settings.imageFolder.description': '相对工作区根目录的保存目录。',
+  'settings.imageFolder.hint':
+    '例如 image 或 assets/screenshots；留空表示工作区根目录。',
+  'settings.imageQuality.description': 'JPEG/WebP 的编码质量。',
+  'settings.imageQuality.hint': '仅对 JPEG 和 WebP 生效。',
+  'imagePaste.title': '命名图片',
+  'imagePaste.nameLabel': '文件名',
+  'imagePaste.target': '保存到 {path}',
+  'imagePaste.rootFolder': '工作区根目录',
+  'imagePaste.sameName': '同名文件会自动追加编号。',
+  'imagePaste.confirm': '保存图片',
+  'imagePaste.preview': '图片预览',
+  'imagePaste.vimPrompt': '图片名称：',
+  'imagePaste.emptyName': '请输入文件名。',
+  'imagePaste.unsupportedFormat':
+    '当前环境不支持该图片格式，请改用 PNG。',
+  'imagePaste.convertFailed': '图片转换失败。',
+  'imagePaste.tooLarge': '图片文件过大（最大 20 MB）。',
+  'imagePaste.clipboardEmpty': '剪贴板中没有图片。',
+  'imagePaste.clipboardUnavailable': '无法读取剪贴板图片。',
   'docx.mermaid.title': 'Mermaid 图表',
   'docx.mermaid.source': '（Mermaid 图表）',
 } as const;
@@ -600,6 +628,9 @@ const en: Record<TranslationKey, string> = {
   'settings.category.preview.label': 'Preview',
   'settings.category.preview.description':
     'How Markdown previews are rendered.',
+  'settings.category.images.label': 'Images',
+  'settings.category.images.description':
+    'Naming, format, and location for pasted images.',
   'settings.category.export.label': 'Export',
   'settings.category.export.description':
     'Export format, images, and outline.',
@@ -647,6 +678,40 @@ const en: Record<TranslationKey, string> = {
     'Generate a table of contents for exports.',
   'settings.includeToc.hint':
     'Includes headings 1–4; Word updates page numbers on open.',
+  'settings.imageConfirmPaste.description':
+    'Ask for a file name before saving a pasted image.',
+  'settings.imageConfirmPaste.hint':
+    'When off, the naming template is used directly.',
+  'settings.imageNameTemplate.description':
+    'File name template; the extension comes from the save format.',
+  'settings.imageNameTemplate.hint':
+    'Use {date}, {time}, {datetime}, {timestamp}, {note}, or Chinese aliases such as {日期}, {时间}, {笔记}.',
+  'settings.imageFormat.description':
+    'Format used when saving pasted images.',
+  'settings.imageFolder.description':
+    'Folder relative to the workspace root.',
+  'settings.imageFolder.hint':
+    'For example image or assets/screenshots; leave empty for the workspace root.',
+  'settings.imageQuality.description':
+    'Encoding quality for JPEG and WebP.',
+  'settings.imageQuality.hint': 'Only applies to JPEG and WebP.',
+  'imagePaste.title': 'Name Image',
+  'imagePaste.nameLabel': 'File name',
+  'imagePaste.target': 'Save to {path}',
+  'imagePaste.rootFolder': 'Workspace root',
+  'imagePaste.sameName':
+    'An existing file with the same name gets a numeric suffix.',
+  'imagePaste.confirm': 'Save Image',
+  'imagePaste.preview': 'Image preview',
+  'imagePaste.vimPrompt': 'Image name: ',
+  'imagePaste.emptyName': 'Enter a file name.',
+  'imagePaste.unsupportedFormat':
+    'This environment cannot encode the selected image format. Use PNG instead.',
+  'imagePaste.convertFailed': 'Failed to convert the image.',
+  'imagePaste.tooLarge': 'Image file is too large (max 20 MB).',
+  'imagePaste.clipboardEmpty': 'No image found in the clipboard.',
+  'imagePaste.clipboardUnavailable':
+    'Could not read an image from the clipboard.',
   'docx.mermaid.title': 'Mermaid Diagram',
   'docx.mermaid.source': '(Mermaid Diagram)',
 };
@@ -719,6 +784,7 @@ const BACKEND_EXACT: Record<string, string> = {
   '图片文件过大（最大 20 MB）': 'Image file is too large (max 20 MB)',
   不支持的图片格式: 'Unsupported image format',
   图片目录超出笔记文件夹: 'Image directory is outside the notes folder',
+  图片目录不是文件夹: 'Image folder is not a directory',
   无法生成唯一的图片文件名:
     'Could not generate a unique image file name',
   不允许访问符号链接: 'Symlinks are not allowed',

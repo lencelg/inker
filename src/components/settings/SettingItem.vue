@@ -31,6 +31,10 @@ function onNumberChange(event: Event): void {
   emit('update', value);
 }
 
+function onTextChange(event: Event): void {
+  emit('update', (event.target as HTMLInputElement).value);
+}
+
 function onCheckboxChange(event: Event): void {
   emit('update', (event.target as HTMLInputElement).checked);
 }
@@ -59,6 +63,16 @@ function onCheckboxChange(event: Event): void {
           :labelledby="`${setting.id}-title`"
           @update="emit('update', $event)"
         />
+
+        <div v-else-if="setting.controlType === 'text'" class="text-shell">
+          <input
+            type="text"
+            class="setting-text"
+            :value="String(setting.value)"
+            :aria-labelledby="`${setting.id}-title`"
+            @input="onTextChange"
+          />
+        </div>
 
         <div v-else-if="setting.controlType === 'input'" class="number-shell">
           <input
@@ -184,9 +198,9 @@ function onCheckboxChange(event: Event): void {
   min-height: 28px;
 }
 
-.number-shell {
+.number-shell,
+.text-shell {
   display: flex;
-  width: 160px;
   height: 28px;
   align-items: center;
   border: 1px solid var(--border);
@@ -194,12 +208,22 @@ function onCheckboxChange(event: Event): void {
   background: var(--bg-soft);
 }
 
-.number-shell:focus-within {
+.number-shell {
+  width: 160px;
+}
+
+.text-shell {
+  width: min(320px, 100%);
+}
+
+.number-shell:focus-within,
+.text-shell:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
-.setting-number {
+.setting-number,
+.setting-text {
   width: 100%;
   height: 100%;
   padding: 0 8px;
@@ -209,6 +233,9 @@ function onCheckboxChange(event: Event): void {
   color: var(--ink);
   font-family: var(--mono-font);
   font-size: 11.5px;
+}
+
+.setting-number {
   appearance: textfield;
 }
 

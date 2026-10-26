@@ -14,14 +14,28 @@ import {
   allThemes,
 } from './themes';
 import {
+  DEFAULT_IMAGE_FOLDER,
+  DEFAULT_IMAGE_FORMAT,
+  DEFAULT_IMAGE_NAME_TEMPLATE,
+  DEFAULT_IMAGE_QUALITY,
+  IMAGE_FORMATS,
+  MAX_IMAGE_QUALITY,
+  MIN_IMAGE_QUALITY,
+} from './imagePaste';
+import {
   LANGUAGE_OPTIONS,
   t,
   type TranslationKey,
 } from './i18n';
 
-export type SettingsCategoryId = 'common' | 'editor' | 'preview' | 'export';
+export type SettingsCategoryId =
+  | 'common'
+  | 'editor'
+  | 'preview'
+  | 'images'
+  | 'export';
 export type SettingsScope = 'user' | 'workspace';
-export type SettingsControlType = 'input' | 'select' | 'checkbox';
+export type SettingsControlType = 'input' | 'select' | 'checkbox' | 'text';
 export type SettingsValue = string | number | boolean;
 
 export interface SettingsOption {
@@ -58,7 +72,7 @@ export interface SettingsCategory {
   id: SettingsCategoryId;
   label: string;
   description: string;
-  icon: 'settings' | 'editor' | 'preview' | 'export';
+  icon: 'settings' | 'editor' | 'preview' | 'images' | 'export';
 }
 
 export interface SettingsSection extends SettingsCategory {
@@ -89,6 +103,12 @@ export function settingsCategories(): SettingsCategory[] {
       label: t('settings.category.preview.label'),
       description: t('settings.category.preview.description'),
       icon: 'preview',
+    },
+    {
+      id: 'images',
+      label: t('settings.category.images.label'),
+      description: t('settings.category.images.description'),
+      icon: 'images',
     },
     {
       id: 'export',
@@ -342,6 +362,119 @@ function settingTemplates(): SettingTemplate[] {
       ],
       preference: 'codeTheme',
       themeImport: 'code',
+    },
+    {
+      id: 'images.confirmPaste',
+      category: 'images',
+      title: 'Images: Confirm on Paste',
+      description: t('settings.imageConfirmPaste.description'),
+      controlType: 'checkbox',
+      defaultValue: true,
+      keywords: [
+        '图片',
+        '粘贴',
+        '命名',
+        '确认',
+        'image',
+        'paste',
+        'confirm',
+        'name',
+      ],
+      preference: 'imageConfirmPaste',
+      hint: {
+        text: t('settings.imageConfirmPaste.hint'),
+      },
+    },
+    {
+      id: 'images.nameTemplate',
+      category: 'images',
+      title: 'Images: File Name Template',
+      description: t('settings.imageNameTemplate.description'),
+      controlType: 'text',
+      defaultValue: DEFAULT_IMAGE_NAME_TEMPLATE,
+      keywords: [
+        '图片',
+        '命名',
+        '模板',
+        '文件名',
+        'image',
+        'name',
+        'template',
+        'pattern',
+      ],
+      preference: 'imageNameTemplate',
+      hint: {
+        text: t('settings.imageNameTemplate.hint'),
+      },
+    },
+    {
+      id: 'images.format',
+      category: 'images',
+      title: 'Images: Save Format',
+      description: t('settings.imageFormat.description'),
+      controlType: 'select',
+      defaultValue: DEFAULT_IMAGE_FORMAT,
+      options: IMAGE_FORMATS.map((format) => ({
+        label: format.label,
+        value: format.id,
+      })),
+      keywords: [
+        '图片',
+        '格式',
+        'png',
+        'jpeg',
+        'jpg',
+        'webp',
+        'image',
+        'format',
+      ],
+      preference: 'imageFormat',
+    },
+    {
+      id: 'images.folder',
+      category: 'images',
+      title: 'Images: Save Folder',
+      description: t('settings.imageFolder.description'),
+      controlType: 'text',
+      defaultValue: DEFAULT_IMAGE_FOLDER,
+      keywords: [
+        '图片',
+        '目录',
+        '路径',
+        '文件夹',
+        'image',
+        'folder',
+        'path',
+        'assets',
+      ],
+      preference: 'imageFolder',
+      hint: {
+        text: t('settings.imageFolder.hint'),
+      },
+    },
+    {
+      id: 'images.quality',
+      category: 'images',
+      title: 'Images: Quality',
+      description: t('settings.imageQuality.description'),
+      controlType: 'input',
+      defaultValue: DEFAULT_IMAGE_QUALITY,
+      min: MIN_IMAGE_QUALITY,
+      max: MAX_IMAGE_QUALITY,
+      step: 0.01,
+      keywords: [
+        '图片',
+        '质量',
+        '压缩',
+        'jpeg',
+        'webp',
+        'image',
+        'quality',
+      ],
+      preference: 'imageQuality',
+      hint: {
+        text: t('settings.imageQuality.hint'),
+      },
     },
     {
       id: 'export.includeImages',
