@@ -1,7 +1,19 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import {
+  computed,
+  defineAsyncComponent,
+  markRaw,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
 import type { UnlistenFn } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import {
+  getCurrentWindow,
+  type CloseRequestedEvent,
+} from '@tauri-apps/api/window';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
 import ActivityRail from './components/ActivityRail.vue';
@@ -28,6 +40,19 @@ import {
   type PreparedExport,
   type SaveDocxOptions,
 } from './lib/exportContent';
+import {
+  clearWorkspaceDrafts,
+  putDraftEntry,
+  readDraftList,
+  readDraftsForWorkspace,
+  removeDraft,
+  removeDraftEntry,
+  removeDraftsUnder,
+  renameDrafts,
+  writeDraft,
+  writeDraftList,
+  type DraftEntry,
+} from './lib/drafts';
 import { isImagePath } from './lib/fileKinds';
 import { localizeError, t } from './lib/i18n';
 import { renderMarkdown } from './lib/markdown';
@@ -45,6 +70,12 @@ import {
   savePreferences,
   type Preferences,
 } from './lib/preferences';
+import {
+  pruneWorkspaceSession,
+  readWorkspaceSession,
+  writeWorkspaceSession,
+  type WorkspaceSession,
+} from './lib/session';
 import type { ViewMode } from './lib/viewModes';
 import { applySlowWheel } from './lib/wheelScroll';
 import type { FileEntry, NotesState, SearchMatch } from './types';
@@ -59,6 +90,16 @@ interface NoteTab {
   savedContent: string;
 }
 
+interface EditorTabState {
+  line: number;
+  column: number;
+  scrollTop: number;
+}
+
+const SESSION_DEBOUNCE_MS = 400;
+const SESSION_MAX_INTERVAL_MS = 5000;
+const DRAFT_IDLE_MS = 2000;
+const DRAFT_MAX_INTERVAL_MS = 15000;
 const SPLIT_STORAGE_KEY = 'inker-split-ratio';
 const LEGACY_SPLIT_STORAGE_KEY = 'markleaf-split-ratio';
 const SIDEBAR_WIDTH_STORAGE_KEY = 'inker-sidebar-width';
@@ -137,6 +178,19 @@ const editorPane = ref<{
   }) => void;
 } | null>(null);
 
+const tabStates = new Map<string, EditorTabState>();
+const autoSaveTimers = new Map<string, number>();
+let draftTimer = 0;
+let lastDraftFlushAt = 0;
+let lastSessionPersistAt = 0;
+let sessionTimer = 0;
+let sessionHydrating = false;
+let closeApproved = false;
+let closeInProgress = false;
+let suppressDrafts = false;
+let restoringTabPath: string | null = null;
+let unlistenClose: UnlistenFn | null = null;
+
 applyPreferences(preferences.value);
 
 const activeTab = computed(
@@ -172,6 +226,12 @@ const tabItems = computed(() =>
     kind: isImagePath(tab.path) ? ('image' as const) : ('note' as const),
   })),
 );
+const saveState = computed<'saved' | 'saving' | 'dirty' | null>(() => {
+  const tab = activeTab.value;
+  if (!tab || isImagePath(tab.path)) return null;
+  if (savingPaths.value.includes(tab.path)) return 'saving';
+  return tab.content === tab.savedContent ? 'saved' : 'dirty';
+});
 
 interface ConfirmOptions {
   title: string;
@@ -386,6 +446,15 @@ onMounted(() => {
     capture: true,
     passive: false,
   });
+  window.addEventListener('blur', handleWindowBlur);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  void appWindow
+    .onCloseRequested(handleCloseRequested)
+    .then((unlisten) => {
+      unlistenClose = unlisten;
+    })
+    .catch(() => undefined);
   void appWindow
     .isMaximized()
     .then((maximized) => {
@@ -412,19 +481,37 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleGlobalKeydown, true);
   window.removeEventListener('wheel', handleGlobalWheel, true);
   window.removeEventListener('wheel', handleSlowScrollWheel, true);
+  window.removeEventListener('blur', handleWindowBlur);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+  cancelAllAutoSaveTimers();
+  clearDraftTimer();
+  clearSessionTimer();
   unlistenWindow?.();
+  unlistenClose?.();
 });
 
 async function bootstrap(): Promise<void> {
+  sessionHydrating = true;
   try {
     const state = await api.getState();
     applyState(state);
+    let restored = false;
+    try {
+      restored = await restoreWorkspaceSession(state);
+    } catch {
+      restored = false;
+    }
+    if (restored) return;
     const first = firstNotePath(state.entries);
     if (first) {
       await openNote(first);
     }
   } catch (err) {
     setError(err);
+  } finally {
+    sessionHydrating = false;
+    scheduleSessionPersist();
   }
 }
 
@@ -433,6 +520,238 @@ function updatePreferences(patch: Partial<Preferences>): void {
   preferences.value = next;
   savePreferences(next);
   applyPreferences(next);
+}
+
+function clearSessionTimer(): void {
+  if (sessionTimer) {
+    window.clearTimeout(sessionTimer);
+    sessionTimer = 0;
+  }
+}
+
+function captureTabState(path: string | null = activePath.value): void {
+  if (!path || path !== activePath.value || restoringTabPath === path) return;
+  const tab = tabs.value.find((item) => item.path === path);
+  if (!tab || isImagePath(tab.path) || viewMode.value === 'wysiwyg') return;
+  const state = editorPane.value?.captureState();
+  if (!state) return;
+  const previous = tabStates.get(path);
+  tabStates.set(path, {
+    line: state.line,
+    column: state.column,
+    scrollTop:
+      viewMode.value === 'preview' && previous
+        ? previous.scrollTop
+        : state.scrollTop,
+  });
+}
+
+async function restoreTabState(path: string | null): Promise<void> {
+  if (!path || viewMode.value === 'wysiwyg') return;
+  const tab = tabs.value.find((item) => item.path === path);
+  if (!tab || isImagePath(tab.path)) return;
+  const state = tabStates.get(path);
+  if (!state) return;
+  const session = editorSession.value;
+  restoringTabPath = path;
+  try {
+    await nextTick();
+    if (activePath.value !== path || editorSession.value !== session) return;
+    editorPane.value?.restoreState(state);
+    tabStates.set(path, { ...state });
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  } finally {
+    if (restoringTabPath === path) restoringTabPath = null;
+  }
+}
+
+function buildWorkspaceSession(): WorkspaceSession | null {
+  if (!notesDir.value || !preferences.value.restoreSession) return null;
+  captureTabState(activePath.value);
+  return {
+    version: 1,
+    tabs: tabs.value.map((tab) => ({
+      path: tab.path,
+      ...(tabStates.get(tab.path) ?? { line: 1, column: 1, scrollTop: 0 }),
+    })),
+    activePath: activePath.value,
+    previewPath: previewPath.value,
+    viewMode: viewMode.value,
+    expandedPaths: [...expandedPaths.value],
+    activeView: activeView.value,
+    sidebarVisible: sidebarVisible.value,
+    savedAt: Date.now(),
+  };
+}
+
+function persistSessionNow(): void {
+  clearSessionTimer();
+  if (sessionHydrating || !notesDir.value) return;
+  const session = buildWorkspaceSession();
+  if (!session) return;
+  writeWorkspaceSession(notesDir.value, session);
+  lastSessionPersistAt = Date.now();
+}
+
+function scheduleSessionPersist(): void {
+  if (!preferences.value.restoreSession || sessionHydrating) return;
+  if (Date.now() - lastSessionPersistAt >= SESSION_MAX_INTERVAL_MS) {
+    persistSessionNow();
+    return;
+  }
+  clearSessionTimer();
+  sessionTimer = window.setTimeout(() => {
+    sessionTimer = 0;
+    persistSessionNow();
+  }, SESSION_DEBOUNCE_MS);
+}
+
+function cancelAutoSave(path: string): void {
+  const timer = autoSaveTimers.get(path);
+  if (timer === undefined) return;
+  window.clearTimeout(timer);
+  autoSaveTimers.delete(path);
+}
+
+function cancelAllAutoSaveTimers(): void {
+  for (const timer of autoSaveTimers.values()) {
+    window.clearTimeout(timer);
+  }
+  autoSaveTimers.clear();
+}
+
+function forgetTab(path: string): void {
+  cancelAutoSave(path);
+  tabStates.delete(path);
+  if (notesDir.value && !isImagePath(path)) {
+    removeDraft(notesDir.value, path);
+  }
+}
+
+function scheduleAutoSave(path: string): void {
+  if (!preferences.value.autoSave) return;
+  cancelAutoSave(path);
+  autoSaveTimers.set(
+    path,
+    window.setTimeout(() => {
+      autoSaveTimers.delete(path);
+      void runAutoSave(path);
+    }, preferences.value.autoSaveDelay),
+  );
+}
+
+function scheduleAutoSaveForDirtyTabs(): void {
+  if (!preferences.value.autoSave) return;
+  for (const tab of tabs.value) {
+    if (tab.content !== tab.savedContent) {
+      scheduleAutoSave(tab.path);
+    }
+  }
+}
+
+async function runAutoSave(path: string): Promise<void> {
+  if (!preferences.value.autoSave) return;
+  const tab = tabs.value.find((item) => item.path === path);
+  if (!tab || isImagePath(tab.path) || tab.content === tab.savedContent) {
+    return;
+  }
+  if (prompt.value || confirmation.value || busy.value) {
+    scheduleAutoSave(path);
+    return;
+  }
+
+  const saved = await saveTab(tab);
+  if (
+    saved &&
+    tab.content !== tab.savedContent &&
+    preferences.value.autoSave
+  ) {
+    scheduleAutoSave(path);
+  }
+}
+
+async function flushAutoSave(): Promise<void> {
+  if (!preferences.value.autoSave) return;
+  cancelAllAutoSaveTimers();
+  await saveAllDirtyTabs();
+}
+
+function clearDraftTimer(): void {
+  if (draftTimer) {
+    window.clearTimeout(draftTimer);
+    draftTimer = 0;
+  }
+}
+
+function flushDrafts(): void {
+  if (suppressDrafts) return;
+  const dir = notesDir.value;
+  if (!dir) return;
+  clearDraftTimer();
+  lastDraftFlushAt = Date.now();
+
+  let list = readDraftList();
+  let changed = false;
+  for (const tab of tabs.value) {
+    if (isImagePath(tab.path)) continue;
+    const existing = list.find(
+      (entry) => entry.notesDir === dir && entry.path === tab.path,
+    );
+    if (tab.content !== tab.savedContent) {
+      if (existing?.content === tab.content) continue;
+      const next = putDraftEntry(list, {
+        notesDir: dir,
+        path: tab.path,
+        content: tab.content,
+        updatedAt: Date.now(),
+      });
+      if (next !== list) {
+        list = next;
+        changed = true;
+      }
+    } else if (existing) {
+      const next = removeDraftEntry(list, dir, tab.path);
+      if (next !== list) {
+        list = next;
+        changed = true;
+      }
+    }
+  }
+  if (changed) writeDraftList(list);
+}
+
+function scheduleDraftFlush(): void {
+  if (!notesDir.value) return;
+  if (Date.now() - lastDraftFlushAt >= DRAFT_MAX_INTERVAL_MS) {
+    flushDrafts();
+    return;
+  }
+  clearDraftTimer();
+  draftTimer = window.setTimeout(() => {
+    draftTimer = 0;
+    flushDrafts();
+  }, DRAFT_IDLE_MS);
+}
+
+async function handleWindowBlur(): Promise<void> {
+  if (sessionHydrating) return;
+  captureTabState(activePath.value);
+  persistSessionNow();
+  await flushAutoSave();
+  flushDrafts();
+}
+
+function handleVisibilityChange(): void {
+  if (document.visibilityState === 'hidden') {
+    void handleWindowBlur();
+  }
+}
+
+function handleBeforeUnload(): void {
+  persistSessionNow();
+  flushDrafts();
 }
 
 function setFontSize(value: number): void {
@@ -477,6 +796,8 @@ function handleCursor(position: {
   cursorColumn.value = position.column;
   cursorSyncTime = performance.now();
   previewFocusLine.value = position.line;
+  captureTabState(activePath.value);
+  scheduleSessionPersist();
 }
 
 function handleVimMode(mode: string | null): void {
@@ -485,7 +806,8 @@ function handleVimMode(mode: string | null): void {
 
 async function setViewMode(mode: ViewMode): Promise<void> {
   if (viewMode.value === mode) return;
-  const leavingWysiwyg = viewMode.value === 'wysiwyg';
+  const previousMode = viewMode.value;
+  const leavingWysiwyg = previousMode === 'wysiwyg';
   const enteringWysiwyg = mode === 'wysiwyg';
 
   if (enteringWysiwyg) {
@@ -493,6 +815,7 @@ async function setViewMode(mode: ViewMode): Promise<void> {
     const path = activeTab.value?.path;
     pendingEditorRestore.value =
       state && path ? { path, state } : null;
+    if (state && path) tabStates.set(path, state);
   }
 
   viewMode.value = mode;
@@ -516,7 +839,11 @@ async function setViewMode(mode: ViewMode): Promise<void> {
     }
   } else if (mode !== 'preview' && mode !== 'wysiwyg') {
     editorPane.value?.refresh();
+    if (previousMode === 'preview') {
+      await restoreTabState(activePath.value);
+    }
   }
+  scheduleSessionPersist();
 }
 
 function openSettings(): void {
@@ -545,6 +872,78 @@ async function closeWindow(): Promise<void> {
     await appWindow.close();
   } catch (err) {
     setError(err);
+  }
+}
+
+async function prepareForClose(): Promise<boolean> {
+  const dirtyTabs = tabs.value.filter(
+    (tab) => !isImagePath(tab.path) && tab.content !== tab.savedContent,
+  );
+  if (dirtyTabs.length === 0) return true;
+
+  const shouldSave = preferences.value.autoSave
+    ? true
+    : await askConfirmation({
+        title: t('close.windowUnsavedTitle'),
+        message: t('close.windowUnsavedMessage', {
+          count: dirtyTabs.length,
+        }),
+        confirmLabel: t('close.saveAndClose'),
+        danger: false,
+      });
+  if (!shouldSave) return false;
+
+  if (await saveAllDirtyTabs()) return true;
+  if (await saveAllDirtyTabs()) return true;
+  if (confirmation.value || prompt.value) return false;
+
+  const closeAnyway = await askConfirmation({
+    title: t('close.saveFailedTitle'),
+    message: t('close.saveFailedMessage'),
+    confirmLabel: t('close.closeAnyway'),
+  });
+  if (closeAnyway && notesDir.value) {
+    clearWorkspaceDrafts(notesDir.value);
+    suppressDrafts = true;
+  }
+  return closeAnyway;
+}
+
+async function handleCloseRequested(
+  event: CloseRequestedEvent,
+): Promise<void> {
+  if (closeApproved) return;
+  event.preventDefault();
+  if (closeInProgress || confirmation.value || prompt.value || busy.value) {
+    return;
+  }
+
+  closeInProgress = true;
+  try {
+    captureTabState(activePath.value);
+    persistSessionNow();
+    cancelAllAutoSaveTimers();
+    await Promise.allSettled([...saveTasks.values()]);
+    if (confirmation.value || prompt.value) {
+      closeApproved = false;
+      scheduleAutoSaveForDirtyTabs();
+      return;
+    }
+    if (!(await prepareForClose())) {
+      closeApproved = false;
+      flushDrafts();
+      scheduleAutoSaveForDirtyTabs();
+      return;
+    }
+    closeApproved = true;
+    await appWindow.close();
+  } catch (err) {
+    closeApproved = false;
+    suppressDrafts = false;
+    scheduleAutoSaveForDirtyTabs();
+    setError(err);
+  } finally {
+    closeInProgress = false;
   }
 }
 
@@ -761,6 +1160,10 @@ function pruneTabs(): void {
   const stale = tabs.value.filter((tab) => !files.has(tab.path));
   if (stale.length === 0) return;
 
+  for (const tab of stale) {
+    forgetTab(tab.path);
+  }
+
   const activeIndex = tabs.value.findIndex((tab) => tab.path === activePath.value);
   const activeRemoved =
     activeIndex >= 0 && stale.some((tab) => tab.path === activePath.value);
@@ -771,7 +1174,10 @@ function pruneTabs(): void {
   ) {
     previewPath.value = null;
   }
-  if (!activeRemoved) return;
+  if (!activeRemoved) {
+    scheduleSessionPersist();
+    return;
+  }
 
   const fallback = tabs.value[Math.max(0, Math.min(activeIndex, tabs.value.length - 1))];
   if (fallback) {
@@ -785,6 +1191,10 @@ function pruneTabs(): void {
   previewFocusLine.value = 1;
   cursorLine.value = null;
   cursorColumn.value = null;
+  if (fallback) {
+    void restoreTabState(fallback.path);
+  }
+  scheduleSessionPersist();
 }
 
 async function openNote(path: string): Promise<boolean> {
@@ -825,6 +1235,153 @@ function firstNotePath(list: FileEntry[]): string | null {
   );
 }
 
+async function restoreWorkspaceSession(state: NotesState): Promise<boolean> {
+  const dir = state.notesDir;
+  if (!dir) return false;
+
+  const files = new Set(
+    state.entries
+      .filter((entry) => !entry.isDir)
+      .map((entry) => entry.path),
+  );
+  const dirs = new Set(
+    state.entries.filter((entry) => entry.isDir).map((entry) => entry.path),
+  );
+  const snapshot = preferences.value.restoreSession
+    ? readWorkspaceSession(dir)
+    : null;
+  const pruned = snapshot
+    ? pruneWorkspaceSession(snapshot, files, dirs)
+    : null;
+  const sessionTabs = pruned?.tabs ?? [];
+
+  const drafts = new Map<string, DraftEntry>();
+  for (const draft of readDraftsForWorkspace(dir)) {
+    if (!files.has(draft.path) || isImagePath(draft.path)) {
+      removeDraft(dir, draft.path);
+      continue;
+    }
+    drafts.set(draft.path, draft);
+  }
+
+  const sessionPaths = new Set(sessionTabs.map((tab) => tab.path));
+  const orphanPaths = [...drafts.keys()]
+    .filter((path) => !sessionPaths.has(path))
+    .sort();
+  const notePaths = [
+    ...sessionTabs
+      .filter((tab) => !isImagePath(tab.path))
+      .map((tab) => tab.path),
+    ...orphanPaths,
+  ];
+  const results = await Promise.allSettled(
+    notePaths.map((path) => api.readNote(path)),
+  );
+  const contents = new Map<string, string>();
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      contents.set(notePaths[index], result.value.content);
+    }
+  });
+
+  let recovered = 0;
+  const restoredTabs: NoteTab[] = [];
+  for (const tab of sessionTabs) {
+    const image = isImagePath(tab.path);
+    const diskContent = image ? '' : contents.get(tab.path);
+    if (!image && diskContent === undefined) continue;
+    let content = diskContent ?? '';
+    if (!image) {
+      const draft = drafts.get(tab.path);
+      if (draft) {
+        if (draft.content === diskContent) {
+          removeDraft(dir, tab.path);
+        } else {
+          content = draft.content;
+          recovered += 1;
+        }
+      }
+    }
+    restoredTabs.push({
+      path: tab.path,
+      content,
+      savedContent: diskContent ?? '',
+    });
+  }
+
+  for (const path of orphanPaths) {
+    const diskContent = contents.get(path);
+    const draft = drafts.get(path);
+    if (diskContent === undefined || !draft) continue;
+    if (draft.content === diskContent) {
+      removeDraft(dir, path);
+      continue;
+    }
+    restoredTabs.push({
+      path,
+      content: draft.content,
+      savedContent: diskContent,
+    });
+    recovered += 1;
+  }
+  if (restoredTabs.length === 0) return false;
+
+  const paths = new Set(restoredTabs.map((tab) => tab.path));
+  const dirtyPaths = new Set(
+    restoredTabs
+      .filter((tab) => tab.content !== tab.savedContent)
+      .map((tab) => tab.path),
+  );
+  const active =
+    pruned?.activePath && paths.has(pruned.activePath)
+      ? pruned.activePath
+      : restoredTabs[0].path;
+  const preview =
+    pruned?.previewPath &&
+    paths.has(pruned.previewPath) &&
+    !dirtyPaths.has(pruned.previewPath)
+      ? pruned.previewPath
+      : null;
+
+  tabs.value = restoredTabs;
+  activePath.value = active;
+  previewPath.value = preview;
+  viewMode.value = pruned?.viewMode ?? 'source';
+  expandedPaths.value = [
+    ...new Set([...(pruned?.expandedPaths ?? []), ...ancestorDirs(active)]),
+  ];
+  activeView.value = pruned?.activeView ?? 'explorer';
+  sidebarVisible.value = pruned?.sidebarVisible ?? true;
+
+  tabStates.clear();
+  for (const tab of restoredTabs) {
+    if (isImagePath(tab.path)) continue;
+    const saved = sessionTabs.find((item) => item.path === tab.path);
+    if (saved) {
+      tabStates.set(tab.path, {
+        line: saved.line,
+        column: saved.column,
+        scrollTop: saved.scrollTop,
+      });
+    }
+  }
+
+  editorSession.value += 1;
+  editorScrollRatio.value = 0;
+  previewFocusLine.value = 1;
+  cursorLine.value = null;
+  cursorColumn.value = null;
+  revealPath(active);
+
+  await nextTick();
+  await restoreTabState(active);
+
+  if (recovered > 0) {
+    warning.value = t('draft.recovered', { count: recovered });
+  }
+  return true;
+}
+
 function openImagePreview(path: string): void {
   const existing = tabs.value.find((tab) => tab.path === path);
   if (existing) {
@@ -841,6 +1398,7 @@ function openImagePreview(path: string): void {
   const next: NoteTab = { path, content: '', savedContent: '' };
 
   if (replaceable && previewIndex >= 0) {
+    forgetTab(tabs.value[previewIndex].path);
     tabs.value.splice(previewIndex, 1, next);
   } else {
     tabs.value.push(next);
@@ -862,12 +1420,13 @@ function openImagePinned(path: string): void {
   activateTab(path);
 }
 
-function activateTab(path: string): void {
+async function activateTab(path: string): Promise<void> {
   if (!tabs.value.some((tab) => tab.path === path)) return;
   if (activePath.value === path) {
     revealPath(path);
     return;
   }
+  captureTabState(activePath.value);
   activePath.value = path;
   editorSession.value += 1;
   editorScrollRatio.value = 0;
@@ -876,6 +1435,8 @@ function activateTab(path: string): void {
   cursorColumn.value = null;
   clearFeedback();
   revealPath(path);
+  scheduleSessionPersist();
+  await restoreTabState(path);
 }
 
 function revealPath(path: string): void {
@@ -896,6 +1457,9 @@ function handleContentChange(value: string): void {
   ) {
     previewPath.value = null;
   }
+  suppressDrafts = false;
+  scheduleAutoSave(tab.path);
+  scheduleDraftFlush();
 }
 
 function handleEditorScroll(position: { line: number; ratio: number }): void {
@@ -904,6 +1468,8 @@ function handleEditorScroll(position: { line: number; ratio: number }): void {
   if (performance.now() - cursorSyncTime > 150) {
     previewFocusLine.value = position.line;
   }
+  captureTabState(activePath.value);
+  scheduleSessionPersist();
 }
 
 function handlePreviewScroll(line: number): void {
@@ -953,30 +1519,39 @@ function markSaving(path: string, value: boolean): void {
 }
 
 async function saveTab(tab: NoteTab): Promise<boolean> {
-  const pending = saveTasks.get(tab.path);
+  const path = tab.path;
+  const dir = notesDir.value;
+  const pending = saveTasks.get(path);
   if (pending) return pending;
   if (tab.content === tab.savedContent) return true;
 
   const snapshot = tab.content;
-  markSaving(tab.path, true);
+  markSaving(path, true);
 
   const task = (async (): Promise<boolean> => {
     try {
-      await api.saveNote(tab.path, snapshot);
+      await api.saveNote(path, snapshot);
       if (tab.content === snapshot) {
         tab.savedContent = snapshot;
+      }
+      if (dir && !isImagePath(path)) {
+        if (tab.content === snapshot) {
+          removeDraft(dir, path);
+        } else {
+          writeDraft(dir, path, tab.content, Date.now());
+        }
       }
       return true;
     } catch (err) {
       setError(err);
       return false;
     } finally {
-      saveTasks.delete(tab.path);
-      markSaving(tab.path, false);
+      saveTasks.delete(path);
+      markSaving(path, false);
     }
   })();
 
-  saveTasks.set(tab.path, task);
+  saveTasks.set(path, task);
   return task;
 }
 
@@ -1031,6 +1606,7 @@ async function openPreviewNote(path: string): Promise<void> {
       savedContent: detail.content,
     };
     if (replaceable && previewIndex >= 0) {
+      forgetTab(tabs.value[previewIndex].path);
       tabs.value.splice(previewIndex, 1, next);
     } else {
       tabs.value.push(next);
@@ -1118,14 +1694,33 @@ async function chooseFolder(): Promise<void> {
       switching.value = false;
     }
 
-    const state = await api.chooseNotesDir(path);
-    resetTabs();
-    expandedPaths.value = [];
-    applyState(state);
+    captureTabState(activePath.value);
+    persistSessionNow();
 
-    const first = firstNotePath(state.entries);
-    if (first) {
-      await openNote(first);
+    sessionHydrating = true;
+    switching.value = true;
+    try {
+      const state = await api.chooseNotesDir(path);
+      resetTabs();
+      expandedPaths.value = [];
+      applyState(state);
+
+      let restored = false;
+      try {
+        restored = await restoreWorkspaceSession(state);
+      } catch {
+        restored = false;
+      }
+      if (!restored) {
+        const first = firstNotePath(state.entries);
+        if (first) {
+          await openNote(first);
+        }
+      }
+    } finally {
+      sessionHydrating = false;
+      switching.value = false;
+      scheduleSessionPersist();
     }
   } catch (err) {
     setError(err);
@@ -1133,6 +1728,10 @@ async function chooseFolder(): Promise<void> {
 }
 
 function resetTabs(): void {
+  cancelAllAutoSaveTimers();
+  clearDraftTimer();
+  clearSessionTimer();
+  tabStates.clear();
   tabs.value = [];
   activePath.value = null;
   previewPath.value = null;
@@ -1239,8 +1838,28 @@ function requestRename(entry: FileEntry): void {
         expandedPaths.value = expandedPaths.value.map((path) =>
           replacePrefix(path, entry.path, newPath),
         );
+        const movedStates: [string, EditorTabState][] = [];
+        for (const [statePath, state] of tabStates) {
+          const nextPath = replacePrefix(statePath, entry.path, newPath);
+          if (nextPath === statePath) continue;
+          tabStates.delete(statePath);
+          movedStates.push([nextPath, state]);
+        }
+        for (const [statePath, state] of movedStates) {
+          tabStates.set(statePath, state);
+        }
+        cancelAllAutoSaveTimers();
+        if (notesDir.value) {
+          renameDrafts(notesDir.value, entry.path, newPath);
+        }
+        for (const tab of tabs.value) {
+          if (tab.content !== tab.savedContent) {
+            scheduleAutoSave(tab.path);
+          }
+        }
         await refreshEntries();
         revealPath(newPath);
+        scheduleSessionPersist();
       } finally {
         mutating.value = false;
       }
@@ -1282,7 +1901,16 @@ async function requestDelete(entry: FileEntry): Promise<void> {
       activePath.value !== null &&
       isSameOrDescendant(activePath.value, entry.path);
     await api.deleteEntry(entry.path);
+    if (notesDir.value) {
+      removeDraftsUnder(notesDir.value, entry.path);
+    }
+    for (const path of [...tabStates.keys()]) {
+      if (isSameOrDescendant(path, entry.path)) {
+        forgetTab(path);
+      }
+    }
     await refreshEntries();
+    scheduleSessionPersist();
 
     if (activeWasAffected && tabs.value.length === 0) {
       const next = firstNotePath(entries.value);
@@ -1303,6 +1931,10 @@ async function requestCloseTab(path: string): Promise<void> {
   const tab = tabs.value.find((item) => item.path === path);
   if (!tab) return;
 
+  if (tab.content !== tab.savedContent && preferences.value.autoSave) {
+    if (!(await saveTab(tab))) return;
+  }
+
   if (tab.content !== tab.savedContent) {
     const confirmed = await askConfirmation({
       title: t('close.unsavedTitle'),
@@ -1316,11 +1948,16 @@ async function requestCloseTab(path: string): Promise<void> {
 
   const index = tabs.value.findIndex((item) => item.path === path);
   if (index === -1) return;
+  forgetTab(path);
+
   const wasActive = activePath.value === path;
   tabs.value.splice(index, 1);
   if (previewPath.value === path) previewPath.value = null;
 
-  if (!wasActive) return;
+  if (!wasActive) {
+    scheduleSessionPersist();
+    return;
+  }
   const next = tabs.value[Math.min(index, tabs.value.length - 1)];
   if (next) {
     activePath.value = next.path;
@@ -1334,6 +1971,10 @@ async function requestCloseTab(path: string): Promise<void> {
   cursorLine.value = null;
   cursorColumn.value = null;
   clearFeedback();
+  if (next) {
+    void restoreTabState(next.path);
+  }
+  scheduleSessionPersist();
 }
 
 async function refreshEntries(): Promise<void> {
@@ -1393,6 +2034,45 @@ function errorMessage(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   return localizeError(message);
 }
+
+watch(
+  () => [
+    tabs.value.map((tab) => tab.path).join('\u0000'),
+    activePath.value,
+    previewPath.value,
+    viewMode.value,
+    expandedPaths.value.join('\u0000'),
+    activeView.value,
+    sidebarVisible.value,
+  ],
+  () => scheduleSessionPersist(),
+);
+
+watch(
+  () => [
+    preferences.value.autoSave,
+    preferences.value.autoSaveDelay,
+    preferences.value.restoreSession,
+  ],
+  ([autoSave, delay, restoreSession], previous) => {
+    if (!autoSave) {
+      cancelAllAutoSaveTimers();
+      scheduleDraftFlush();
+    } else if (previous?.[0] !== true || previous?.[1] !== delay) {
+      cancelAllAutoSaveTimers();
+      for (const tab of tabs.value) {
+        if (tab.content !== tab.savedContent) {
+          scheduleAutoSave(tab.path);
+        }
+      }
+    }
+    if (!restoreSession) {
+      clearSessionTimer();
+    } else if (previous?.[2] === false) {
+      scheduleSessionPersist();
+    }
+  },
+);
 </script>
 
 <template>
@@ -1677,6 +2357,7 @@ function errorMessage(err: unknown): string {
       :vim-mode="vimMode"
       :line-ending="activeImagePath ? t('app.status.image') : lineEnding"
       :immersive="immersiveEnabled"
+      :save-state="saveState"
       @mode-change="setViewMode"
       @immersive-toggle="toggleImmersive"
     />

@@ -56,6 +56,48 @@ describe('settings schema', () => {
     ).toBe(false);
   });
 
+  it('exposes auto-save and session settings', () => {
+    const schema = createSettingsSchema(
+      normalizePreferences({
+        autoSave: true,
+        autoSaveDelay: 2500,
+        restoreSession: false,
+      }),
+    );
+
+    const autoSave = schema.find(
+      (setting) => setting.id === 'files.autoSave',
+    );
+    const autoSaveDelay = schema.find(
+      (setting) => setting.id === 'files.autoSaveDelay',
+    );
+    const restoreSession = schema.find(
+      (setting) => setting.id === 'workbench.restoreSession',
+    );
+
+    expect(autoSave?.value).toBe(true);
+    expect(autoSave?.defaultValue).toBe(false);
+    expect(autoSave?.preference).toBe('autoSave');
+    expect(autoSaveDelay?.value).toBe(2500);
+    expect(autoSaveDelay?.defaultValue).toBe(1000);
+    expect(autoSaveDelay?.min).toBe(300);
+    expect(autoSaveDelay?.max).toBe(10000);
+    expect(autoSaveDelay?.preference).toBe('autoSaveDelay');
+    expect(restoreSession?.value).toBe(false);
+    expect(restoreSession?.defaultValue).toBe(true);
+    expect(restoreSession?.preference).toBe('restoreSession');
+  });
+
+  it('searches auto-save settings by keywords', () => {
+    const schema = createSettingsSchema(normalizePreferences({}));
+    const autoSave = schema.find(
+      (setting) => setting.id === 'files.autoSave',
+    );
+
+    expect(autoSave && matchesSetting(autoSave, '自动保存')).toBe(true);
+    expect(autoSave && matchesSetting(autoSave, 'autosave')).toBe(true);
+  });
+
   it('searches titles, descriptions and keywords', () => {
     const schema = createSettingsSchema(normalizePreferences({}));
     const vim = schema.find((setting) => setting.id === 'editor.vimMode');

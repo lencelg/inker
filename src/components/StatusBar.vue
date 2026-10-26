@@ -15,6 +15,7 @@ const props = defineProps<{
   vimMode?: string | null;
   lineEnding: string;
   immersive: boolean;
+  saveState?: 'saved' | 'saving' | 'dirty' | null;
 }>();
 
 const emit = defineEmits<{
@@ -24,6 +25,18 @@ const emit = defineEmits<{
 
 const modeLabel = computed(() => viewModeLabel(props.mode));
 const vimModeLabel = computed(() => props.vimMode || 'NORMAL');
+const saveLabel = computed(() => {
+  switch (props.saveState) {
+    case 'saving':
+      return t('status.saving');
+    case 'dirty':
+      return t('status.unsaved');
+    case 'saved':
+      return t('status.saved');
+    default:
+      return '';
+  }
+});
 
 const osName = detectOs();
 
@@ -231,6 +244,13 @@ function onMenuKeyDown(event: KeyboardEvent): void {
           />
         </svg>
       </button>
+      <span
+        v-if="saveLabel"
+        class="status-item status-save"
+        :class="props.saveState"
+      >
+        {{ saveLabel }}
+      </span>
       <span class="status-item">
         {{ t('status.lineColumn', { line: line ?? '-', column: column ?? '-' }) }}
       </span>
@@ -518,6 +538,28 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   color: var(--statusbar-muted);
   font-family: var(--mono-font);
   font-size: 11px;
+}
+
+.status-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.status-save::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-save.saving {
+  color: var(--accent);
+}
+
+.status-save.dirty {
+  color: var(--statusbar-ink);
 }
 
 @media (max-width: 900px) {

@@ -737,12 +737,22 @@ onBeforeUnmount(() => {
   resizeObserver = null;
   scrollElement?.removeEventListener('scroll', handleScroll);
   scrollElement = null;
+  cancelPendingRestoreScroll();
   view?.destroy();
   view = null;
 });
 
+let pendingRestoreFrame = 0;
+
+function cancelPendingRestoreScroll(): void {
+  if (!pendingRestoreFrame) return;
+  cancelAnimationFrame(pendingRestoreFrame);
+  pendingRestoreFrame = 0;
+}
+
 function revealLine(lineNumber: number, column = 1): void {
   if (!view) return;
+  cancelPendingRestoreScroll();
   const safeLine = Math.min(
     Math.max(1, lineNumber),
     view.state.doc.lines,
@@ -761,6 +771,7 @@ function revealLine(lineNumber: number, column = 1): void {
 
 function scrollToLine(lineNumber: number): void {
   if (!view) return;
+  cancelPendingRestoreScroll();
   const safeLine = Math.min(
     Math.max(1, Math.round(lineNumber)),
     view.state.doc.lines,
@@ -804,8 +815,10 @@ function restoreState(state: EditorViewState): void {
   });
   view.requestMeasure();
 
+  cancelPendingRestoreScroll();
   const top = Math.max(0, state.scrollTop);
-  requestAnimationFrame(() => {
+  pendingRestoreFrame = requestAnimationFrame(() => {
+    pendingRestoreFrame = 0;
     if (!view || !scrollElement) return;
     scrollElement.scrollTop = top;
     view.focus();

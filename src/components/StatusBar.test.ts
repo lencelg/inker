@@ -65,6 +65,24 @@ describe('StatusBar mode menu', () => {
     wrapper.unmount();
   });
 
+  it('renders the save state only when provided', async () => {
+    const wrapper = mountStatusBar();
+    expect(wrapper.find('.status-save').exists()).toBe(false);
+
+    await wrapper.setProps({ saveState: 'saved' });
+    expect(wrapper.find('.status-save').text()).toBe('Saved');
+
+    await wrapper.setProps({ saveState: 'dirty' });
+    expect(wrapper.find('.status-save').text()).toBe('Unsaved');
+
+    await wrapper.setProps({ saveState: 'saving' });
+    expect(wrapper.find('.status-save').text()).toBe('Saving…');
+
+    await wrapper.setProps({ saveState: null });
+    expect(wrapper.find('.status-save').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('shows the active Vim mode in the bottom bar', () => {
     const wrapper = mount(StatusBar, {
       attachTo: document.body,

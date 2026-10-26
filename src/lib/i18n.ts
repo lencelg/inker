@@ -64,6 +64,8 @@ const zh = {
   'app.empty.title': '还没有打开笔记',
   'app.empty.description': '在左侧文件树中打开或新建一个 Markdown 文件。',
   'app.status.image': '图片',
+  'draft.recovered':
+    '已恢复 {count} 个未保存的草稿。保存或关闭标签后会清除草稿。',
   'nav.main': '主导航',
   'nav.files': '文件',
   'nav.explorer': '资源管理器',
@@ -143,6 +145,12 @@ const zh = {
   'close.unsavedTitle': '关闭未保存的标签页？',
   'close.unsavedMessage': '“{name}”有未保存的修改，关闭后将丢失。',
   'close.discard': '不保存并关闭',
+  'close.windowUnsavedTitle': '关闭窗口？',
+  'close.windowUnsavedMessage': '有 {count} 个标签页尚未保存。保存并关闭吗？',
+  'close.saveAndClose': '保存并关闭',
+  'close.saveFailedTitle': '保存失败',
+  'close.saveFailedMessage': '部分笔记保存失败。仍要关闭吗？',
+  'close.closeAnyway': '仍然关闭',
   'explorer.emptyRoot': '右键此处新建文件或文件夹。',
   'explorer.emptyNoFolder': '先选择一个文件夹来保存笔记。',
   'explorer.chooseFolder': '选择笔记文件夹',
@@ -181,6 +189,9 @@ const zh = {
   'status.switchMode': '切换编辑模式',
   'status.lineColumn': '行 {line}, 列 {column}',
   'status.spaces': '空格: 4',
+  'status.saved': '已保存',
+  'status.saving': '保存中…',
+  'status.unsaved': '未保存',
   'status.editorMode': '编辑模式',
   'status.wysiwygHint': '编辑时会规范化 Markdown 格式',
   'wysiwyg.showChart': '图表',
@@ -297,6 +308,13 @@ const zh = {
   'settings.fontFamily.reset': '恢复默认字体',
   'settings.vim.description': '启用 Vim 键位。',
   'settings.vim.hint': '仅影响源代码编辑器。',
+  'settings.autoSave.description': '停止输入后自动保存笔记。',
+  'settings.autoSave.hint': '窗口失焦时也会保存。默认关闭。',
+  'settings.autoSaveDelay.description': '停止输入后等待多久自动保存。',
+  'settings.autoSaveDelay.hint': '仅在开启自动保存时生效。',
+  'settings.restoreSession.description':
+    '启动时恢复上次打开的标签、光标和编辑模式。',
+  'settings.restoreSession.hint': '未保存的草稿会在启动时自动恢复。',
   'settings.sourceHighlight.description': '源码模式代码块高亮。',
   'settings.sourceHighlight.hint': '关闭后代码块显示为单色。',
   'settings.codeHighlight.description': '预览代码块高亮。',
@@ -333,6 +351,8 @@ const en: Record<TranslationKey, string> = {
   'app.empty.description':
     'Open or create a Markdown file in the file tree on the left.',
   'app.status.image': 'Image',
+  'draft.recovered':
+    'Recovered {count} unsaved draft(s). Drafts are cleared after saving or closing the tab.',
   'nav.main': 'Main navigation',
   'nav.files': 'Files',
   'nav.explorer': 'Explorer',
@@ -419,6 +439,13 @@ const en: Record<TranslationKey, string> = {
   'close.unsavedMessage':
     '“{name}” has unsaved changes that will be lost when closed.',
   'close.discard': 'Close Without Saving',
+  'close.windowUnsavedTitle': 'Close window?',
+  'close.windowUnsavedMessage':
+    '{count} tab(s) have unsaved changes. Save and close?',
+  'close.saveAndClose': 'Save and Close',
+  'close.saveFailedTitle': 'Save failed',
+  'close.saveFailedMessage': 'Some notes could not be saved. Close anyway?',
+  'close.closeAnyway': 'Close Anyway',
   'explorer.emptyRoot': 'Right-click here to create a file or folder.',
   'explorer.emptyNoFolder': 'Choose a folder to store your notes.',
   'explorer.chooseFolder': 'Choose Notes Folder',
@@ -457,6 +484,9 @@ const en: Record<TranslationKey, string> = {
   'status.switchMode': 'Switch editor mode',
   'status.lineColumn': 'Ln {line}, Col {column}',
   'status.spaces': 'Spaces: 4',
+  'status.saved': 'Saved',
+  'status.saving': 'Saving…',
+  'status.unsaved': 'Unsaved',
   'status.editorMode': 'Editor mode',
   'status.wysiwygHint': 'Markdown formatting is normalized while editing',
   'wysiwyg.showChart': 'Diagram',
@@ -589,6 +619,17 @@ const en: Record<TranslationKey, string> = {
   'settings.fontFamily.reset': 'Restore Default Font',
   'settings.vim.description': 'Enable Vim keybindings.',
   'settings.vim.hint': 'Affects the source editor only.',
+  'settings.autoSave.description':
+    'Save notes automatically after you stop typing.',
+  'settings.autoSave.hint':
+    'Also saves when the window loses focus. Off by default.',
+  'settings.autoSaveDelay.description':
+    'How long to wait after typing before saving.',
+  'settings.autoSaveDelay.hint': 'Only applies when auto save is enabled.',
+  'settings.restoreSession.description':
+    'Restore open tabs, cursor positions, and the editor mode on startup.',
+  'settings.restoreSession.hint':
+    'Unsaved drafts are restored as unsaved changes on startup.',
   'settings.sourceHighlight.description':
     'Code block highlighting in source mode.',
   'settings.sourceHighlight.hint':

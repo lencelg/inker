@@ -27,6 +27,12 @@ import {
 export const DEFAULT_FONT_SIZE = 15;
 export const MIN_FONT_SIZE = 11;
 export const MAX_FONT_SIZE = 28;
+export const DEFAULT_AUTO_SAVE_DELAY = 1000;
+export const MIN_AUTO_SAVE_DELAY = 300;
+export const MAX_AUTO_SAVE_DELAY = 10000;
+export const AUTO_SAVE_STORAGE_KEY = 'inker-auto-save';
+export const AUTO_SAVE_DELAY_STORAGE_KEY = 'inker-auto-save-delay';
+export const RESTORE_SESSION_STORAGE_KEY = 'inker-restore-session';
 export const FONT_SIZE_STORAGE_KEY = 'inker-font-size';
 export const FONT_FAMILY_STORAGE_KEY = 'inker-font-family';
 export const VIM_STORAGE_KEY = 'inker-vim';
@@ -59,11 +65,22 @@ export interface Preferences {
   exportEmbedImages: boolean;
   exportOpenAfter: boolean;
   exportIncludeToc: boolean;
+  autoSave: boolean;
+  autoSaveDelay: number;
+  restoreSession: boolean;
 }
 
 export function clampFontSize(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_FONT_SIZE;
   return Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(value)));
+}
+
+export function clampAutoSaveDelay(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_AUTO_SAVE_DELAY;
+  return Math.min(
+    MAX_AUTO_SAVE_DELAY,
+    Math.max(MIN_AUTO_SAVE_DELAY, Math.round(value)),
+  );
 }
 
 export function normalizePreferences(value: unknown): Preferences {
@@ -90,6 +107,9 @@ export function normalizePreferences(value: unknown): Preferences {
     exportEmbedImages: source.exportEmbedImages !== false,
     exportOpenAfter: source.exportOpenAfter === true,
     exportIncludeToc: source.exportIncludeToc === true,
+    autoSave: source.autoSave === true,
+    autoSaveDelay: clampAutoSaveDelay(Number(source.autoSaveDelay)),
+    restoreSession: source.restoreSession !== false,
   };
 }
 
@@ -114,6 +134,13 @@ export function readPreferences(): Preferences {
     );
     const rawSourceHighlight = window.localStorage.getItem(
       SOURCE_HIGHLIGHT_STORAGE_KEY,
+    );
+    const rawAutoSave = window.localStorage.getItem(AUTO_SAVE_STORAGE_KEY);
+    const rawAutoSaveDelay = window.localStorage.getItem(
+      AUTO_SAVE_DELAY_STORAGE_KEY,
+    );
+    const rawRestoreSession = window.localStorage.getItem(
+      RESTORE_SESSION_STORAGE_KEY,
     );
     const preferences = normalizePreferences({
       theme: read(THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY),
@@ -150,6 +177,13 @@ export function readPreferences(): Preferences {
       exportIncludeToc:
         window.localStorage.getItem(EXPORT_INCLUDE_TOC_STORAGE_KEY) ===
         'true',
+      autoSave: rawAutoSave === null ? undefined : rawAutoSave === 'true',
+      autoSaveDelay:
+        rawAutoSaveDelay === null ? undefined : Number(rawAutoSaveDelay),
+      restoreSession:
+        rawRestoreSession === null
+          ? undefined
+          : rawRestoreSession === 'true',
     });
 
     if (usedLegacyKeys) savePreferences(preferences);
@@ -205,6 +239,18 @@ export function savePreferences(preferences: Preferences): void {
     window.localStorage.setItem(
       EXPORT_INCLUDE_TOC_STORAGE_KEY,
       String(preferences.exportIncludeToc),
+    );
+    window.localStorage.setItem(
+      AUTO_SAVE_STORAGE_KEY,
+      String(preferences.autoSave),
+    );
+    window.localStorage.setItem(
+      AUTO_SAVE_DELAY_STORAGE_KEY,
+      String(preferences.autoSaveDelay),
+    );
+    window.localStorage.setItem(
+      RESTORE_SESSION_STORAGE_KEY,
+      String(preferences.restoreSession),
     );
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);

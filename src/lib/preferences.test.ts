@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  AUTO_SAVE_DELAY_STORAGE_KEY,
+  AUTO_SAVE_STORAGE_KEY,
   CODE_HIGHLIGHT_STORAGE_KEY,
   FONT_SIZE_STORAGE_KEY,
   IMMERSIVE_STORAGE_KEY,
   LANGUAGE_STORAGE_KEY,
+  RESTORE_SESSION_STORAGE_KEY,
   VIM_STORAGE_KEY,
   normalizePreferences,
   readPreferences,
@@ -79,6 +82,51 @@ describe('preferences', () => {
     savePreferences(normalizePreferences({ language: 'en' }));
     expect(window.localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en');
     expect(readPreferences().language).toBe('en');
+  });
+
+  it('defaults auto-save off and session restore on', () => {
+    const defaults = normalizePreferences({});
+    expect(defaults.autoSave).toBe(false);
+    expect(defaults.autoSaveDelay).toBe(1000);
+    expect(defaults.restoreSession).toBe(true);
+  });
+
+  it('clamps the auto-save delay', () => {
+    expect(
+      normalizePreferences({ autoSaveDelay: 100 }).autoSaveDelay,
+    ).toBe(300);
+    expect(
+      normalizePreferences({ autoSaveDelay: 99999 }).autoSaveDelay,
+    ).toBe(10000);
+    expect(
+      normalizePreferences({ autoSaveDelay: Number.NaN }).autoSaveDelay,
+    ).toBe(1000);
+    expect(
+      normalizePreferences({ autoSaveDelay: 1000.6 }).autoSaveDelay,
+    ).toBe(1001);
+  });
+
+  it('persists auto-save and session preferences', () => {
+    savePreferences(
+      normalizePreferences({
+        autoSave: true,
+        autoSaveDelay: 2500,
+        restoreSession: false,
+      }),
+    );
+
+    expect(window.localStorage.getItem(AUTO_SAVE_STORAGE_KEY)).toBe('true');
+    expect(window.localStorage.getItem(AUTO_SAVE_DELAY_STORAGE_KEY)).toBe(
+      '2500',
+    );
+    expect(window.localStorage.getItem(RESTORE_SESSION_STORAGE_KEY)).toBe(
+      'false',
+    );
+
+    const stored = readPreferences();
+    expect(stored.autoSave).toBe(true);
+    expect(stored.autoSaveDelay).toBe(2500);
+    expect(stored.restoreSession).toBe(false);
   });
 
   it('defaults and persists export preferences', () => {

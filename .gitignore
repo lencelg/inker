@@ -4,3 +4,4 @@ target/
 .qoder/
 *.log
 .DS_Store
+.claude

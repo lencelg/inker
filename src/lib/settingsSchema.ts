@@ -1,4 +1,9 @@
-import type { Preferences } from './preferences';
+import {
+  DEFAULT_AUTO_SAVE_DELAY,
+  MAX_AUTO_SAVE_DELAY,
+  MIN_AUTO_SAVE_DELAY,
+  type Preferences,
+} from './preferences';
 import { FONTS, fontLabel } from './fonts';
 import {
   DEFAULT_CODE_THEME,
@@ -177,6 +182,73 @@ function settingTemplates(): SettingTemplate[] {
       preference: 'immersive',
       hint: {
         text: t('settings.immersive.hint'),
+      },
+    },
+    {
+      id: 'files.autoSave',
+      category: 'common',
+      title: 'Files: Auto Save',
+      description: t('settings.autoSave.description'),
+      controlType: 'checkbox',
+      defaultValue: false,
+      keywords: [
+        '自动保存',
+        '保存',
+        '自动',
+        'autosave',
+        'auto save',
+        'save',
+      ],
+      preference: 'autoSave',
+      hint: {
+        text: t('settings.autoSave.hint'),
+      },
+    },
+    {
+      id: 'files.autoSaveDelay',
+      category: 'common',
+      title: 'Files: Auto Save Delay',
+      description: t('settings.autoSaveDelay.description'),
+      controlType: 'input',
+      defaultValue: DEFAULT_AUTO_SAVE_DELAY,
+      min: MIN_AUTO_SAVE_DELAY,
+      max: MAX_AUTO_SAVE_DELAY,
+      step: 100,
+      suffix: 'ms',
+      keywords: [
+        '自动保存',
+        '延迟',
+        '间隔',
+        '等待',
+        'autosave',
+        'delay',
+        'interval',
+      ],
+      preference: 'autoSaveDelay',
+      hint: {
+        text: t('settings.autoSaveDelay.hint'),
+      },
+    },
+    {
+      id: 'workbench.restoreSession',
+      category: 'common',
+      title: 'Workbench: Restore Session',
+      description: t('settings.restoreSession.description'),
+      controlType: 'checkbox',
+      defaultValue: true,
+      keywords: [
+        '会话',
+        '恢复',
+        '启动',
+        '标签',
+        'session',
+        'restore',
+        'startup',
+        'tabs',
+      ],
+      preference: 'restoreSession',
+      hint: {
+        text: t('settings.restoreSession.hint'),
       },
     },
     {
