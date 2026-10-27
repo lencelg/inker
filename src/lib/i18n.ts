@@ -310,6 +310,9 @@ const zh = {
   'settings.fontFamily.reset': '恢复默认字体',
   'settings.vim.description': '启用 Vim 键位。',
   'settings.vim.hint': '仅影响源代码编辑器。',
+  'settings.vimMappings.description': '自定义 Vim 键位映射，每行一条。',
+  'settings.vimMappings.hint':
+    '格式：mode keys command。mode 支持 normal / visual / insert，command 支持 pasteimage / save；例如 normal <Space>p pasteimage。',
   'settings.autoSave.description': '停止输入后自动保存笔记。',
   'settings.autoSave.hint': '窗口失焦时也会保存。默认关闭。',
   'settings.autoSaveDelay.description': '停止输入后等待多久自动保存。',
@@ -650,6 +653,10 @@ const en: Record<TranslationKey, string> = {
   'settings.fontFamily.reset': 'Restore Default Font',
   'settings.vim.description': 'Enable Vim keybindings.',
   'settings.vim.hint': 'Affects the source editor only.',
+  'settings.vimMappings.description':
+    'Custom Vim key mappings, one per line.',
+  'settings.vimMappings.hint':
+    'Format: mode keys command. Modes: normal / visual / insert; commands: pasteimage / save. Example: normal <Space>p pasteimage.',
   'settings.autoSave.description':
     'Save notes automatically after you stop typing.',
   'settings.autoSave.hint':

@@ -27,6 +27,7 @@ import {
   t,
   type TranslationKey,
 } from './i18n';
+import { DEFAULT_VIM_MAPPINGS } from './vimMappings';
 
 export type SettingsCategoryId =
   | 'common'
@@ -35,7 +36,12 @@ export type SettingsCategoryId =
   | 'images'
   | 'export';
 export type SettingsScope = 'user' | 'workspace';
-export type SettingsControlType = 'input' | 'select' | 'checkbox' | 'text';
+export type SettingsControlType =
+  | 'input'
+  | 'select'
+  | 'checkbox'
+  | 'text'
+  | 'textarea';
 export type SettingsValue = string | number | boolean;
 
 export interface SettingsOption {
@@ -298,6 +304,28 @@ function settingTemplates(): SettingTemplate[] {
       preference: 'vimEnabled',
       hint: {
         text: t('settings.vim.hint'),
+      },
+    },
+    {
+      id: 'editor.vimMappings',
+      category: 'editor',
+      title: 'Editor: Vim Custom Mappings',
+      description: t('settings.vimMappings.description'),
+      controlType: 'textarea',
+      defaultValue: DEFAULT_VIM_MAPPINGS,
+      keywords: [
+        'vim',
+        '快捷键',
+        '映射',
+        '键位',
+        'keymap',
+        'mapping',
+        'pasteimage',
+        'save',
+      ],
+      preference: 'vimMappings',
+      hint: {
+        text: t('settings.vimMappings.hint'),
       },
     },
     {

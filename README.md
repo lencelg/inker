@@ -143,6 +143,8 @@ tempfile                     测试临时目录
 - Vim 支持 Normal / Insert / Visual / V-Line / V-Block 等模式。
 - Vim 模式状态和 `:` 命令输入行均整合在应用底部状态栏，不再额外占用编辑器行。
 - 支持 `:w` 保存。
+- 支持 `:pasteimage`（别名 `:pi`）从系统剪贴板粘贴图片。
+- 支持自定义 Vim 键位映射（设置“文本编辑器 → Vim Custom Mappings”），默认 `normal <Space>p pasteimage`；可绑定 `pasteimage` / `save`，支持 normal / visual / insert 模式。
 - 可通过设置关闭源码模式中围栏代码块的语法高亮，默认开启；Markdown 语法高亮不受影响。
 
 ### 2.6 实时预览编辑器
@@ -157,7 +159,7 @@ tempfile                     测试临时目录
 - 代码主题同时作用于预览和实时预览，切换后立即生效。
 - 原始 HTML 渲染（经 DOMPurify 清洗）。
 - 本地图片解析。
-- 粘贴、拖拽图片时保存到当前笔记所在目录的 `assets/` 文件夹。
+- 粘贴、拖拽图片时按图片设置转换格式，并保存到配置的工作区相对目录（默认 `assets/`）。
 - 多光标。
 - 顶部标题面包屑随选区更新。
 - Markdown 同步序列化，并保留原文件的 CRLF / LF 行尾风格。
@@ -297,6 +299,7 @@ tempfile                     测试临时目录
 - 设置项支持：
   - 数字输入
   - 文本输入
+  - 多行文本
   - 下拉选择
   - 复选框
   - 修改状态标记
@@ -487,6 +490,7 @@ markdown-note-taking/
 │       ├── settingsSchema.ts      # 设置面板 Schema
 │       ├── themes.ts              # 主题列表
 │       ├── viewModes.ts           # 编辑模式定义
+│       ├── vimMappings.ts         # 自定义 Vim 键位映射解析
 │       └── vimMode.ts             # Vim 模式名称格式化
 └── src-tauri/
     ├── Cargo.toml
@@ -617,6 +621,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-font-size` | 字体大小 |
 | `inker-font-family` | 编辑器字体 |
 | `inker-vim` | Vim 模式 |
+| `inker-vim-mappings` | 自定义 Vim 键位映射（每行 `mode keys command`） |
 | `inker-immersive` | Zen 模式 |
 | `inker-code-highlight` | 预览代码高亮 |
 | `inker-code-theme` | 代码高亮主题 |
@@ -702,6 +707,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 - 模式显示在应用底部状态栏左侧。
 - Vim 的 `statusbar` DOM 被挂载到状态栏的 `.status-vim-command` 区域。
 - 因此 `:` 命令输入、搜索提示等也显示在底部状态栏，而不是编辑器上方新增一行。
+- 自定义映射通过 `Vim.defineAction` + `Vim.mapCommand(keys, 'action', name, {}, { context })` 注册；设置变化或编辑器重建时用 `Vim.unmap` 清理旧映射，不会删除内置键位。
 
 ### 5.4 图片处理
 
@@ -836,6 +842,8 @@ Markdown 图片路径
 | `Alt+点击` | 源码编辑器添加多光标 |
 | `Ctrl/Cmd+V` | 粘贴图片（源码 / 实时预览） |
 | `:w` | Vim 模式保存 |
+| Normal 模式 `<Space>p` | 粘贴图片（可自定义，默认映射） |
+| `:pasteimage` / `:pi` | Vim 模式从系统剪贴板粘贴图片 |
 | `Esc` | 关闭菜单 / 设置 / Vim 命令输入 |
 
 ---
@@ -918,7 +926,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：33 个测试文件，178 个测试通过
+- 前端：34 个测试文件，187 个测试通过
 - Rust：21 个测试通过
 
 覆盖范围包括：
@@ -936,6 +944,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 状态栏保存状态
 - 图片命名模板、名称清洗、格式映射与 Markdown 路径编码
 - 图片命名弹窗的确认、取消、空名称校验与预览
+- Vim 自定义键位映射解析（模式/命令校验、注释、去重、数量上限）
 - Rust 图片保存目录、嵌套笔记相对路径、目录穿越与符号链接拒绝
 - 中英文界面、系统语言检测与切换
 - HTML 导出模式、目录和图片策略

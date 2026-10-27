@@ -24,6 +24,7 @@ import {
   isImageFormat,
   type ImageFormat,
 } from './imagePaste';
+import { DEFAULT_VIM_MAPPINGS } from './vimMappings';
 import {
   DEFAULT_THEME,
   LEGACY_THEME_STORAGE_KEY,
@@ -47,6 +48,7 @@ export const IMAGE_TEMPLATE_STORAGE_KEY = 'inker-image-template';
 export const IMAGE_FORMAT_STORAGE_KEY = 'inker-image-format';
 export const IMAGE_FOLDER_STORAGE_KEY = 'inker-image-folder';
 export const IMAGE_QUALITY_STORAGE_KEY = 'inker-image-quality';
+export const VIM_MAPPINGS_STORAGE_KEY = 'inker-vim-mappings';
 export const FONT_SIZE_STORAGE_KEY = 'inker-font-size';
 export const FONT_FAMILY_STORAGE_KEY = 'inker-font-family';
 export const VIM_STORAGE_KEY = 'inker-vim';
@@ -87,6 +89,7 @@ export interface Preferences {
   imageFormat: ImageFormat;
   imageFolder: string;
   imageQuality: number;
+  vimMappings: string;
 }
 
 export function normalizeImageFolder(value: string): string {
@@ -153,6 +156,10 @@ export function normalizePreferences(value: unknown): Preferences {
         ? normalizeImageFolder(source.imageFolder)
         : DEFAULT_IMAGE_FOLDER,
     imageQuality: clampImageQuality(Number(source.imageQuality)),
+    vimMappings:
+      typeof source.vimMappings === 'string'
+        ? source.vimMappings
+        : DEFAULT_VIM_MAPPINGS,
   };
 }
 
@@ -199,6 +206,9 @@ export function readPreferences(): Preferences {
     );
     const rawImageQuality = window.localStorage.getItem(
       IMAGE_QUALITY_STORAGE_KEY,
+    );
+    const rawVimMappings = window.localStorage.getItem(
+      VIM_MAPPINGS_STORAGE_KEY,
     );
     const preferences = normalizePreferences({
       theme: read(THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY),
@@ -250,6 +260,8 @@ export function readPreferences(): Preferences {
       imageFolder: rawImageFolder === null ? undefined : rawImageFolder,
       imageQuality:
         rawImageQuality === null ? undefined : Number(rawImageQuality),
+      vimMappings:
+        rawVimMappings === null ? undefined : rawVimMappings,
     });
 
     if (usedLegacyKeys) savePreferences(preferences);
@@ -337,6 +349,10 @@ export function savePreferences(preferences: Preferences): void {
     window.localStorage.setItem(
       IMAGE_QUALITY_STORAGE_KEY,
       String(preferences.imageQuality),
+    );
+    window.localStorage.setItem(
+      VIM_MAPPINGS_STORAGE_KEY,
+      preferences.vimMappings,
     );
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);

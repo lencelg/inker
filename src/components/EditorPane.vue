@@ -40,6 +40,10 @@ import {
   type ImageSaveHandler,
 } from '../lib/imagePaste';
 import { formatVimMode } from '../lib/vimMode';
+import {
+  parseVimMappings,
+  type VimMapping,
+} from '../lib/vimMappings';
 
 const props = defineProps<{
   initialContent: string;
@@ -49,6 +53,7 @@ const props = defineProps<{
   immersive: boolean;
   sourceHighlight: boolean;
   requestImageSave: ImageSaveHandler;
+  vimMappings: string;
 }>();
 
 const emit = defineEmits<{
@@ -79,6 +84,30 @@ let view: EditorView | null = null;
 let headings: HeadingItem[] = [];
 let scrollElement: HTMLElement | null = null;
 let cancelImagePrompt: (() => void) | null = null;
+let appliedVimMappings: VimMapping[] = [];
+
+function clearVimMappings(): void {
+  for (const mapping of appliedVimMappings) {
+    Vim.unmap(mapping.keys, mapping.mode);
+  }
+  appliedVimMappings = [];
+}
+
+function applyVimMappings(): void {
+  clearVimMappings();
+  if (!props.vimEnabled) return;
+
+  for (const mapping of parseVimMappings(props.vimMappings)) {
+    Vim.mapCommand(
+      mapping.keys,
+      'action',
+      mapping.command === 'pasteimage' ? 'inkerPasteImage' : 'inkerSave',
+      {},
+      { context: mapping.mode },
+    );
+    appliedVimMappings.push(mapping);
+  }
+}
 let scrollFrame = 0;
 let resizeFrame = 0;
 let centerFrame = 0;
@@ -571,6 +600,13 @@ onMounted(() => {
   Vim.defineEx('pasteimage', 'pi', () => {
     void pasteImageFromClipboard();
   });
+  Vim.defineAction('inkerPasteImage', () => {
+    void pasteImageFromClipboard();
+  });
+  Vim.defineAction('inkerSave', () => {
+    emit('saveRequest');
+  });
+  applyVimMappings();
   view = new EditorView({
     parent: host.value,
     state: EditorState.create({
@@ -687,8 +723,14 @@ watch(
       effects: vimCompartment.reconfigure(enabled ? vimExtension : []),
     });
     scheduleVimStatus();
+    applyVimMappings();
     view?.focus();
   },
+);
+
+watch(
+  () => props.vimMappings,
+  () => applyVimMappings(),
 );
 
 watch(
@@ -776,6 +818,7 @@ onBeforeUnmount(() => {
   scrollElement = null;
   cancelImagePrompt?.();
   cancelImagePrompt = null;
+  clearVimMappings();
   cancelPendingRestoreScroll();
   view?.destroy();
   view = null;

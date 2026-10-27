@@ -74,6 +74,20 @@ function onCheckboxChange(event: Event): void {
           />
         </div>
 
+        <div
+          v-else-if="setting.controlType === 'textarea'"
+          class="textarea-shell"
+        >
+          <textarea
+            class="setting-textarea"
+            :value="String(setting.value)"
+            :aria-labelledby="`${setting.id}-title`"
+            rows="4"
+            spellcheck="false"
+            @input="onTextChange"
+          ></textarea>
+        </div>
+
         <div v-else-if="setting.controlType === 'input'" class="number-shell">
           <input
             type="number"
@@ -208,6 +222,15 @@ function onCheckboxChange(event: Event): void {
   background: var(--bg-soft);
 }
 
+.textarea-shell {
+  display: flex;
+  width: min(420px, 100%);
+  min-height: 84px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-soft);
+}
+
 .number-shell {
   width: 160px;
 }
@@ -217,9 +240,24 @@ function onCheckboxChange(event: Event): void {
 }
 
 .number-shell:focus-within,
-.text-shell:focus-within {
+.text-shell:focus-within,
+.textarea-shell:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.setting-textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 7px 8px;
+  border: 0;
+  outline: 0;
+  resize: vertical;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--mono-font);
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
 .setting-number,

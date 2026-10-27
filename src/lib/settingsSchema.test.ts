@@ -140,6 +140,20 @@ describe('settings schema', () => {
     expect(quality?.max).toBe(1);
   });
 
+  it('exposes configurable Vim mappings', () => {
+    const schema = createSettingsSchema(normalizePreferences({}));
+    const item = schema.find(
+      (setting) => setting.id === 'editor.vimMappings',
+    );
+
+    expect(item?.category).toBe('editor');
+    expect(item?.controlType).toBe('textarea');
+    expect(item?.defaultValue).toBe('normal <Space>p pasteimage');
+    expect(item?.value).toBe('normal <Space>p pasteimage');
+    expect(item?.preference).toBe('vimMappings');
+    expect(item && matchesSetting(item, 'pasteimage')).toBe(true);
+  });
+
   it('includes a dedicated images category', () => {
     expect(settingsCategories().map((category) => category.id)).toContain(
       'images',

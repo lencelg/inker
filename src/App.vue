@@ -2453,6 +2453,7 @@ watch(
               :immersive="immersiveEnabled"
               :source-highlight="preferences.sourceHighlight"
               :request-image-save="requestImageSave"
+              :vim-mappings="preferences.vimMappings"
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"

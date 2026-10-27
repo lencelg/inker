@@ -12,6 +12,7 @@ import {
   IMAGE_QUALITY_STORAGE_KEY,
   IMAGE_TEMPLATE_STORAGE_KEY,
   RESTORE_SESSION_STORAGE_KEY,
+  VIM_MAPPINGS_STORAGE_KEY,
   VIM_STORAGE_KEY,
   normalizeImageFolder,
   normalizePreferences,
@@ -110,6 +111,26 @@ describe('preferences', () => {
     expect(
       normalizePreferences({ autoSaveDelay: 1000.6 }).autoSaveDelay,
     ).toBe(1001);
+  });
+
+  it('defaults and persists Vim mappings', () => {
+    expect(normalizePreferences({}).vimMappings).toBe(
+      'normal <Space>p pasteimage',
+    );
+    expect(
+      normalizePreferences({ vimMappings: '' }).vimMappings,
+    ).toBe('');
+
+    const mappings = [
+      'normal <Space>p pasteimage',
+      'normal <C-s> save',
+    ].join('\n');
+    savePreferences(normalizePreferences({ vimMappings: mappings }));
+
+    expect(window.localStorage.getItem(VIM_MAPPINGS_STORAGE_KEY)).toBe(
+      mappings,
+    );
+    expect(readPreferences().vimMappings).toBe(mappings);
   });
 
   it('defaults image preferences', () => {
