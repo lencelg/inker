@@ -8,6 +8,7 @@ export const THEMES = [
   { id: 'paper', labelKey: 'theme.paper' },
   { id: 'white', labelKey: 'theme.white' },
   { id: 'dark', labelKey: 'theme.dark' },
+  { id: 'monokai', label: 'Monokai' },
   { id: 'vscode-light', label: 'VS Code Light+' },
   { id: 'vscode-dark', label: 'VS Code Dark+' },
   { id: 'vscode-hc', labelKey: 'theme.vscodeHc' },

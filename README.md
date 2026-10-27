@@ -226,6 +226,7 @@ tempfile                     测试临时目录
 - 暖白
 - 白色
 - 深色
+- Monokai
 - VS Code Light+
 - VS Code Dark+
 - VS Code 高对比
@@ -926,7 +927,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：34 个测试文件，187 个测试通过
+- 前端：35 个测试文件，188 个测试通过
 - Rust：21 个测试通过
 
 覆盖范围包括：
