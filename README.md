@@ -8,7 +8,7 @@ Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` �
 - 应用标识：`com.lencelg.markdownnotes`（为兼容已有配置保持不变）
 - 界面语言：简体中文 / English（默认跟随系统）
 - 主要开发环境：Linux / Wayland / niri
-- 发布包：Debian `.deb`（编译产物约 8 MiB）
+- 发布包：Debian `.deb`（编译产物约 8.6 MiB）
 
 ---
 
@@ -41,6 +41,7 @@ Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` �
 @tauri-apps/api              Tauri 前端 API
 @tauri-apps/plugin-dialog    文件夹/保存对话框
 @tauri-apps/plugin-opener    用系统浏览器打开外部链接
+@tauri-apps/plugin-clipboard-manager  读取系统剪贴板图片
 @codemirror/*                CodeMirror 6 编辑器
 @milkdown/*                  Markdown WYSIWYG 编辑器
 @replit/codemirror-vim       Vim 键位与命令
@@ -59,6 +60,7 @@ Rust 侧主要依赖：
 tauri
 tauri-plugin-dialog
 tauri-plugin-opener
+tauri-plugin-clipboard-manager
 serde / serde_json
 trash                        文件移入系统回收站
 base64                       图片读写
@@ -143,8 +145,8 @@ tempfile                     测试临时目录
 - Vim 支持 Normal / Insert / Visual / V-Line / V-Block 等模式。
 - Vim 模式状态和 `:` 命令输入行均整合在应用底部状态栏，不再额外占用编辑器行。
 - 支持 `:w` 保存。
-- 支持 `:pasteimage`（别名 `:pi`）从系统剪贴板粘贴图片。
-- 支持自定义 Vim 键位映射（设置“文本编辑器 → Vim Custom Mappings”），默认 `normal <Space>p pasteimage`；可绑定 `pasteimage` / `save`，支持 normal / visual / insert 模式。
+- 支持 `:pasteimage`（别名 `:pa`）从系统剪贴板粘贴图片。
+- 支持自定义 Vim 键位映射（设置“文本编辑器 → Vim Custom Mappings”），默认 `normal <Space>p pasteimage`；可绑定 `pasteimage` / `save`，支持 normal / visual / insert 模式。以 `<Space>` 开头的映射会临时占用空格键；清空映射后恢复 Vim 默认的空格右移。
 - 可通过设置关闭源码模式中围栏代码块的语法高亮，默认开启；Markdown 语法高亮不受影响。
 
 ### 2.6 实时预览编辑器
@@ -205,7 +207,7 @@ tempfile                     测试临时目录
 - Markdown 中的本地图片通过 Rust 后端读取并转换为内嵌 Data URL。
 - 源码编辑器与实时预览都支持通过 `Ctrl/Cmd+V` 粘贴图片，也支持拖拽图片。
 - 默认在保存前弹出命名窗口，显示缩略图、目标目录和扩展名；可在设置中关闭。
-- Vim 源码模式下不弹窗，改为在底部 Vim 命令行输入名称；Enter 确认、Esc 取消。请在插入模式使用 `Ctrl/Cmd+V`；Normal 模式的 `Ctrl+V` 仍是 Vim 的块选择，可使用 `:pasteimage`（别名 `:pi`）从系统剪贴板粘贴图片。
+- Vim 源码模式下不弹窗，改为在底部 Vim 命令行输入名称；Enter 确认、Esc 取消。请在插入模式使用 `Ctrl/Cmd+V`；Normal 模式的 `Ctrl+V` 仍是 Vim 的块选择，可使用 `:pasteimage`（别名 `:pa`）从系统剪贴板粘贴图片。
 - 默认保存到工作区根目录的 `assets/`，可在设置中改为其他相对目录（如 `image`、`assets/screenshots`）。
 - 图片命名支持模板（默认 `{datetime}`），保存格式支持 PNG / JPEG / WebP。
 - 嵌套笔记会插入正确的相对路径，例如 `../assets/20261027-143012.png`。
@@ -729,6 +731,8 @@ Ctrl/Cmd+V 或拖拽图片
 
 命名模板支持 `{date}`、`{time}`、`{datetime}`、`{timestamp}`、`{note}`，以及中文别名 `{日期}`、`{时间}`、`{日期时间}`、`{时间戳}`、`{笔记}`。扩展名由保存格式决定；同名文件由后端追加 `-1`、`-2`。
 
+Vim 的 `:pasteimage` / `:pa` / 自定义映射不依赖 WebView Clipboard API，而是通过 `tauri-plugin-clipboard-manager` 读取系统剪贴板的 RGBA 图像并转成 PNG，再进入同一保存流程。WebKitGTK 下 `navigator.clipboard.read()` 不可靠，因此不再作为图片来源；Linux 构建启用了 Wayland data-control。
+
 读取：
 
 ```text
@@ -817,6 +821,7 @@ Markdown 图片路径
   - 窗口拖动
   - 打开/保存对话框
   - 打开外部 URL
+  - 读取系统剪贴板图片
 
 ### 6.3 资源限制
 
@@ -844,7 +849,7 @@ Markdown 图片路径
 | `Ctrl/Cmd+V` | 粘贴图片（源码 / 实时预览） |
 | `:w` | Vim 模式保存 |
 | Normal 模式 `<Space>p` | 粘贴图片（可自定义，默认映射） |
-| `:pasteimage` / `:pi` | Vim 模式从系统剪贴板粘贴图片 |
+| `:pasteimage` / `:pa` | Vim 模式从系统剪贴板粘贴图片 |
 | `Esc` | 关闭菜单 / 设置 / Vim 命令输入 |
 
 ---
@@ -927,7 +932,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：35 个测试文件，188 个测试通过
+- 前端：37 个测试文件，191 个测试通过
 - Rust：21 个测试通过
 
 覆盖范围包括：
@@ -946,6 +951,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 图片命名模板、名称清洗、格式映射与 Markdown 路径编码
 - 图片命名弹窗的确认、取消、空名称校验与预览
 - Vim 自定义键位映射解析（模式/命令校验、注释、去重、数量上限）
+- Vim 命令注册与映射应用不抛错
+- 源码编辑器挂载与初始 Markdown 内容渲染
 - Rust 图片保存目录、嵌套笔记相对路径、目录穿越与符号链接拒绝
 - 中英文界面、系统语言检测与切换
 - HTML 导出模式、目录和图片策略

@@ -38,6 +38,7 @@ import {
   scrollToAnchor,
 } from '../lib/anchors';
 import { codeHighlightRanges } from '../lib/codeHighlight';
+import { readClipboardImageFile } from '../lib/clipboardImage';
 import type { BreadcrumbItem } from '../lib/headings';
 import { localizeError, language, t } from '../lib/i18n';
 import {
@@ -433,6 +434,24 @@ function insertImage(
   view.focus();
 }
 
+async function uploadClipboardImage(
+  view: EditorView,
+  position?: number,
+): Promise<void> {
+  try {
+    const file = await readClipboardImageFile();
+    if (!file) {
+      showError(t('imagePaste.clipboardEmpty'));
+      return;
+    }
+    const result = await props.requestImageSave(file);
+    if (!result || !view.dom.isConnected) return;
+    insertImage(view, result.source, result.alt, position);
+  } catch {
+    showError(t('imagePaste.clipboardUnavailable'));
+  }
+}
+
 async function uploadImages(
   view: EditorView,
   files: File[],
@@ -454,9 +473,15 @@ const uploadPlugin = $prose(
         handlePaste: (view, event) => {
           if (props.readOnly) return false;
           const files = imageFilesFrom(event.clipboardData);
-          if (files.length === 0) return false;
+          if (files.length > 0) {
+            event.preventDefault();
+            void uploadImages(view, files, view.state.selection.from);
+            return true;
+          }
+          const text = event.clipboardData?.getData('text/plain') ?? '';
+          if (text !== '') return false;
           event.preventDefault();
-          void uploadImages(view, files, view.state.selection.from);
+          void uploadClipboardImage(view, view.state.selection.from);
           return true;
         },
         handleDrop: (view, event, _slice, moved) => {

@@ -27,6 +27,7 @@
     "@milkdown/plugin-math": "^7.5.9",
     "@replit/codemirror-vim": "^6.4.0",
     "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2.8.3",
     "@tauri-apps/plugin-opener": "^2.7.2",
     "codemirror": "^6.0.2",

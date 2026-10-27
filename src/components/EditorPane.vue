@@ -35,6 +35,7 @@ import {
   type HeadingItem,
 } from '../lib/headings';
 import { language, t } from '../lib/i18n';
+import { readClipboardImageFile } from '../lib/clipboardImage';
 import {
   imageFilesFrom,
   type ImageSaveHandler,
@@ -85,19 +86,50 @@ let headings: HeadingItem[] = [];
 let scrollElement: HTMLElement | null = null;
 let cancelImagePrompt: (() => void) | null = null;
 let appliedVimMappings: VimMapping[] = [];
+let spaceLeaderActive = false;
 
 function clearVimMappings(): void {
   for (const mapping of appliedVimMappings) {
     Vim.unmap(mapping.keys, mapping.mode);
   }
   appliedVimMappings = [];
+  restoreSpaceMapping();
+}
+
+function restoreSpaceMapping(): void {
+  if (!spaceLeaderActive) return;
+  // Restore the exact built-in <Space> mapping (move right), which has no
+  // context. It must be removed while a longer <Space> prefix is mapped,
+  // otherwise the full match wins and the longer mapping never fires.
+  Vim._mapCommand({
+    keys: '<Space>',
+    type: 'keyToKey',
+    toKeys: 'l',
+  } as never);
+  spaceLeaderActive = false;
+}
+
+function overrideSpaceMapping(): void {
+  if (spaceLeaderActive) return;
+  Vim.unmap('<Space>', undefined as unknown as string);
+  spaceLeaderActive = true;
 }
 
 function applyVimMappings(): void {
   clearVimMappings();
   if (!props.vimEnabled) return;
 
-  for (const mapping of parseVimMappings(props.vimMappings)) {
+  const mappings = parseVimMappings(props.vimMappings);
+  if (
+    mappings.some(
+      (mapping) =>
+        mapping.keys.startsWith('<Space>') && mapping.keys !== '<Space>',
+    )
+  ) {
+    overrideSpaceMapping();
+  }
+
+  for (const mapping of mappings) {
     Vim.mapCommand(
       mapping.keys,
       'action',
@@ -590,14 +622,11 @@ const multiCursorMouse = EditorView.domEventHandlers({
   },
 });
 
-onMounted(() => {
-  if (!host.value) {
-    return;
-  }
+function setupVimCommands(): void {
   Vim.defineEx('write', 'w', () => {
     emit('saveRequest');
   });
-  Vim.defineEx('pasteimage', 'pi', () => {
+  Vim.defineEx('pasteimage', 'pa', () => {
     void pasteImageFromClipboard();
   });
   Vim.defineAction('inkerPasteImage', () => {
@@ -607,6 +636,12 @@ onMounted(() => {
     emit('saveRequest');
   });
   applyVimMappings();
+}
+
+onMounted(() => {
+  if (!host.value) {
+    return;
+  }
   view = new EditorView({
     parent: host.value,
     state: EditorState.create({
@@ -626,14 +661,17 @@ onMounted(() => {
         EditorView.domEventHandlers({
           paste: (event, editorView) => {
             if (props.readOnly) return false;
+            const position = editorView.state.selection.main.from;
             const files = imageFilesFrom(event.clipboardData);
-            if (files.length === 0) return false;
+            if (files.length > 0) {
+              event.preventDefault();
+              void uploadImages(editorView, files, position);
+              return true;
+            }
+            const text = event.clipboardData?.getData('text/plain') ?? '';
+            if (text !== '') return false;
             event.preventDefault();
-            void uploadImages(
-              editorView,
-              files,
-              editorView.state.selection.main.from,
-            );
+            void uploadClipboardImage(editorView, position);
             return true;
           },
           drop: (event, editorView) => {
@@ -713,6 +751,11 @@ onMounted(() => {
   headings = collectHeadings(view.state);
   refreshHeadingTrail();
   scheduleVimStatus();
+  try {
+    setupVimCommands();
+  } catch (error) {
+    console.error('Failed to set up Vim commands', error);
+  }
 });
 
 watch(
@@ -919,32 +962,21 @@ function notifyVim(message: string): void {
 
 async function pasteImageFromClipboard(): Promise<void> {
   if (!view || props.readOnly) return;
-  if (!navigator.clipboard?.read) {
-    notifyVim(t('imagePaste.clipboardUnavailable'));
-    return;
-  }
 
   try {
-    const items = await navigator.clipboard.read();
-    for (const item of items) {
-      const type = item.types.find((value) => value.startsWith('image/'));
-      if (!type) continue;
-      const blob = await item.getType(type);
-      const suffix = type.slice('image/'.length).replace(/\+.*$/, '');
-      const file = new File([blob], `clipboard.${suffix || 'png'}`, {
-        type,
-      });
-      const result = await props.requestImageSave(file);
-      if (!result || !view?.dom.isConnected) return;
-      insertMarkdownImage(
-        view,
-        result.source,
-        result.alt,
-        view.state.selection.main.from,
-      );
+    const file = await readClipboardImageFile();
+    if (!file) {
+      notifyVim(t('imagePaste.clipboardEmpty'));
       return;
     }
-    notifyVim(t('imagePaste.clipboardEmpty'));
+    const result = await props.requestImageSave(file);
+    if (!result || !view?.dom.isConnected) return;
+    insertMarkdownImage(
+      view,
+      result.source,
+      result.alt,
+      view.state.selection.main.from,
+    );
   } catch {
     notifyVim(t('imagePaste.clipboardUnavailable'));
   }
@@ -967,6 +999,21 @@ function insertMarkdownImage(
     scrollIntoView: true,
   });
   editorView.focus();
+}
+
+async function uploadClipboardImage(
+  editorView: EditorView,
+  position: number,
+): Promise<void> {
+  try {
+    const file = await readClipboardImageFile();
+    if (!file) return;
+    const result = await props.requestImageSave(file);
+    if (!result || !editorView.dom.isConnected) return;
+    insertMarkdownImage(editorView, result.source, result.alt, position);
+  } catch {
+    // The clipboard has no readable image.
+  }
 }
 
 async function uploadImages(
