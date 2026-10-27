@@ -76,6 +76,18 @@ export interface CodeThemeDefinition {
 
 export const DEFAULT_CODE_THEME: BuiltInCodeThemeId = 'github-dark';
 const CODE_THEME_STYLE_ID = 'inker-code-theme';
+const SOURCE_SYNTAX_CLASSES = {
+  keyword: 'hljs-keyword',
+  number: 'hljs-number',
+  string: 'hljs-string',
+  comment: 'hljs-comment',
+  type: 'hljs-title class_',
+  function: 'hljs-title function_',
+  variable: 'hljs-variable',
+  operator: 'hljs-operator',
+  tag: 'hljs-tag hljs-name',
+} as const;
+let sourceColorKey = '';
 
 export function isBuiltInCodeThemeId(
   value: unknown,
@@ -116,6 +128,55 @@ export function codeThemeById(id: CodeThemeId): CodeThemeDefinition {
   );
 }
 
+function applySourceSyntaxColors(theme: CodeThemeDefinition): void {
+  if (typeof document === 'undefined' || !document.body) return;
+
+  const root = document.documentElement;
+  const key = `${theme.id}\u0000${theme.css}`;
+  if (
+    key === sourceColorKey &&
+    root.style.getPropertyValue('--code-syntax-keyword') !== ''
+  ) {
+    return;
+  }
+
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.position = 'absolute';
+  host.style.left = '-9999px';
+  host.style.top = '0';
+  host.style.visibility = 'hidden';
+  host.style.pointerEvents = 'none';
+
+  const base = document.createElement('pre');
+  base.className = 'hljs';
+  base.style.color = theme.foreground;
+  host.append(base);
+
+  const samples: Array<[string, HTMLElement]> = [];
+  for (const [name, className] of Object.entries(
+    SOURCE_SYNTAX_CLASSES,
+  )) {
+    const sample = document.createElement('span');
+    sample.className = className;
+    base.append(sample);
+    samples.push([name, sample]);
+  }
+
+  document.body.append(host);
+  try {
+    for (const [name, sample] of samples) {
+      const color = getComputedStyle(sample).color;
+      if (color) {
+        root.style.setProperty(`--code-syntax-${name}`, color);
+      }
+    }
+    sourceColorKey = key;
+  } finally {
+    host.remove();
+  }
+}
+
 export function applyCodeTheme(id: CodeThemeId): void {
   const theme = codeThemeById(id);
   let style = document.getElementById(
@@ -140,4 +201,5 @@ export function applyCodeTheme(id: CodeThemeId): void {
     theme.foreground,
   );
   document.documentElement.dataset.codeTheme = theme.id;
+  applySourceSyntaxColors(theme);
 }

@@ -2,7 +2,7 @@
 
 一个基于 **Tauri 2 + Vue 3** 的本地优先 Markdown 笔记桌面应用。
 
-Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` 文件保存在用户选择的文件夹中。应用提供文件树、全文搜索、多标签页、源码编辑、实时预览、Mermaid、KaTeX、图片、Vim、主题和多格式导出等能力。
+Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` 文件保存在用户选择的文件夹中。应用提供文件树、全文搜索、多标签页、源码编辑、实时预览、快速打开与命令面板、Mermaid、KaTeX、图片、Vim、主题和多格式导出等能力。
 
 - 当前版本：`0.1.0`
 - 应用标识：`com.lencelg.markdownnotes`（为兼容已有配置保持不变）
@@ -158,7 +158,9 @@ tempfile                     测试临时目录
 - Mermaid 图表。
 - 代码块语法高亮（可跟随“预览代码高亮”设置），右上角显示当前语言。
 - 代码高亮主题可切换，内置 GitHub Dark、GitHub Light、Atom One Dark、Monokai、Nord、Tokyo Night 和 VS Dark，默认 GitHub Dark。
-- 代码主题同时作用于预览和实时预览，切换后立即生效。
+- 代码主题同时作用于预览、实时预览，以及源码模式中的围栏代码块；切换后立即生效。
+- 源码模式会为围栏代码块应用代码主题的缩进块背景与 token 配色（关键字、字符串、注释、数字、类型、函数、变量、运算符、标签），Markdown 语法高亮保持不变。
+- 关闭“源码代码块语法高亮”后不应用代码主题配色与背景。
 - 原始 HTML 渲染（经 DOMPurify 清洗）。
 - 本地图片解析。
 - 粘贴、拖拽图片时按图片设置转换格式，并保存到配置的工作区相对目录（默认 `assets/`）。
@@ -370,6 +372,30 @@ tempfile                     测试临时目录
 - 单个草稿上限 256 KB，总计约 2 MB，最多 20 条；超过上限的笔记不写草稿。
 - 大文件、外部修改与 localStorage 清理的边界见 §9。
 
+### 2.17 快速打开与命令面板
+
+参考 VS Code 的快速输入浮层，样式使用当前主题变量：
+
+- `Ctrl/Cmd+P` 打开快速打开，按文件名、相对路径或模糊子序列搜索当前笔记库。
+- 默认只列出 Markdown 笔记；可在命令面板或设置“常用设置 → Workbench: Quick Open Images”中开启图片。
+- 选中笔记后切换到源码模式并打开；选中图片则打开图片标签页。
+- `Ctrl/Cmd+Shift+P` 打开命令面板，可搜索并执行：
+  - `Preferences: Color Theme` / `Code Theme`：进入二级主题列表，当前主题带“当前”标记，可通过“返回”回到命令列表。
+  - 打开设置、切换 Vim / Zen / 自动保存、切换快速打开是否包含图片。
+  - 切换源码 / 实时预览 / 预览 / 侧边预览模式、切换侧栏。
+  - `View: Toggle Live Preview / Side-by-Side Preview`：在实时预览与侧边预览之间来回切换（其他模式下进入侧边预览）。
+  - 保存、切换笔记文件夹。
+  - `Markdown: Create Table Of Contents`。
+- 支持 `↑` / `↓` / `PageUp` / `PageDown` / `Home` / `End` 导航，`Enter` 选择，`Esc` 或点击遮罩关闭；鼠标悬停与点击同样可用。
+- 命令面板在设置浮层之上显示，可从设置界面直接调整主题；选择文件时会关闭设置浮层。
+
+**Create Table Of Contents**：
+
+- 在当前光标处插入 Markdown 列表式目录，包含 H1–H6 标题，按标题层级缩进。
+- 锚点与预览中的标题 ID 使用同一次 Markdown 解析生成，支持中文标题与重复标题后缀。
+- 仅在源码模式或侧边预览模式下可用；预览 / 实时预览模式会提示切换，空文档或无标题时给出提示。
+- 插入块会与上下文自动保留一个空行，并继承当前编辑器的撤销历史。
+
 ---
 
 ## 3. 当前实现情况
@@ -412,6 +438,9 @@ tempfile                     测试临时目录
 | 云同步 / 多设备同步 | ❌ 未实现 |
 | 自动保存 | ✅ 可选，默认关闭 |
 | 会话恢复 / 草稿恢复 | ✅ 已完成 |
+| 快速打开（Ctrl/Cmd+P） | ✅ 已完成 |
+| 命令面板（Ctrl/Cmd+Shift+P） | ✅ 已完成 |
+| 生成目录（TOC） | ✅ 源码 / 侧边预览 |
 | 笔记加密 | ❌ 未实现 |
 | 多窗口编辑 | ❌ 未实现 |
 
@@ -453,6 +482,7 @@ markdown-note-taking/
 │   │   ├── SettingsPanel.vue      # 设置状态编排
 │   │   ├── ConfirmDialog.vue
 │   │   ├── PromptDialog.vue
+│   │   ├── QuickPalette.vue       # VS Code 风格快速打开 / 命令面板
 │   │   ├── ExportPreviewDialog.vue # PDF / Word 分页预览
 │   │   ├── HtmlExportDialog.vue   # HTML 导出预览与图片模式
 │   │   ├── InkerMark.vue
@@ -465,6 +495,7 @@ markdown-note-taking/
 │   │       └── SettingsSelect.vue
 │   └── lib/
 │       ├── anchors.ts             # 标题 slug / 锚点查找 / 滚动
+│       ├── blockInsertion.ts      # 块插入与上下文空行处理
 │       ├── codeHighlight.ts       # highlight.js token 范围映射
 │       ├── codeThemes.ts          # 代码高亮主题与动态样式
 │       ├── customThemes.ts        # 自定义主题注册表与持久化
@@ -484,6 +515,7 @@ markdown-note-taking/
 │       ├── minimap.ts             # 缩略图尺寸、坐标与滚动映射
 │       ├── editorMinimap.ts       # 双 Canvas 缩略图与滚动条控制器
 │       ├── mermaid.ts             # Mermaid 延迟加载
+│       ├── palette.ts             # 快速打开模糊匹配与文件项
 │       ├── paths.ts               # 路径工具
 │       ├── preferences.ts         # 本地偏好读写
 │       ├── session.ts             # 会话快照与工作区存储
@@ -492,6 +524,7 @@ markdown-note-taking/
 │       ├── proseMultiCursor.ts    # ProseMirror 多光标
 │       ├── settingsSchema.ts      # 设置面板 Schema
 │       ├── themes.ts              # 主题列表
+│       ├── toc.ts                 # Markdown 列表式目录生成
 │       ├── viewModes.ts           # 编辑模式定义
 │       ├── vimMappings.ts         # 自定义 Vim 键位映射解析
 │       └── vimMode.ts             # Vim 模式名称格式化
@@ -522,6 +555,7 @@ markdown-note-taking/
 - 光标行列、预览焦点行、滚动比例
 - Zen 模式
 - 设置浮层
+- 快速打开 / 命令面板的层级与候选列表
 - 导出与打印预览
 - 错误、确认框、输入框
 - Tauri 窗口状态
@@ -647,6 +681,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-image-format` | 图片保存格式（`png` / `jpeg` / `webp`） |
 | `inker-image-folder` | 图片保存目录（相对工作区根目录） |
 | `inker-image-quality` | JPEG/WebP 编码质量 |
+| `inker-quick-open-images` | 快速打开是否列出图片（默认否） |
 
 应用会兼容读取旧的 `markleaf-*` 偏好键，并在首次读取时迁移到 `inker-*`。
 
@@ -841,6 +876,8 @@ Markdown 图片路径
 
 | 快捷键 | 功能 |
 | --- | --- |
+| `Ctrl/Cmd+P` | 快速打开文件 |
+| `Ctrl/Cmd+Shift+P` | 打开命令面板 |
 | `Ctrl/Cmd+S` | 保存当前笔记 |
 | `Ctrl/Cmd+Shift+M` | 切换 Zen 模式 |
 | `Ctrl/Cmd+滚轮` | 调整字体大小 |
@@ -932,7 +969,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：37 个测试文件，191 个测试通过
+- 前端：41 个测试文件，229 个测试通过
 - Rust：21 个测试通过
 
 覆盖范围包括：
@@ -953,6 +990,11 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Vim 自定义键位映射解析（模式/命令校验、注释、去重、数量上限）
 - Vim 命令注册与映射应用不抛错
 - 源码编辑器挂载与初始 Markdown 内容渲染
+- 源码编辑器块插入（上下文空行、选区替换、光标位置）
+- 源码围栏代码块的代码主题背景与 token 配色（含自定义代码主题 CSS）
+- 快速打开模糊匹配、排序、文件/图片过滤
+- 快速面板筛选、键盘导航、空状态与关闭
+- Markdown 标题提取与列表式目录生成（层级、范围、转义、重复标题）
 - Rust 图片保存目录、嵌套笔记相对路径、目录穿越与符号链接拒绝
 - 中英文界面、系统语言检测与切换
 - HTML 导出模式、目录和图片策略
@@ -1039,13 +1081,15 @@ cargo tauri icon assets/icons/inker.svg
 13. **图片粘贴转换有格式边界**
     只输出 PNG / JPEG / WebP；GIF 粘贴后只保留首帧，SVG 会被栅格化，JPEG 透明区域填白。同格式图片直接透传，质量设置不会重新编码。WebView 不支持 WebP 编码时会提示改用 PNG。撤销插入不会删除已保存的图片文件，重复粘贴也不会自动去重；多光标时图片只插入主光标处。远程图片 URL 不会被下载。
 
+14. **快速打开与目录生成的范围有限**
+    快速打开只按文件名和相对路径匹配，不搜索笔记正文；默认不列出图片。生成目录只包含顶层 H1–H6 标题（引用、列表内的标题不会计入），输出为列表链接，且仅支持源码与侧边预览模式；实时预览 / 纯预览模式会提示切换。
+
 ---
 
 ## 10. 后续可扩展方向
 
 - 工作区级设置覆盖
 - 最近打开文件列表
-- 自动生成目录
 - 标签拖拽排序
 - 图片缩放、复制、在文件管理器中显示
 - 导出选项与导出流程打通
@@ -1064,4 +1108,4 @@ Inker 的目标是一个轻量、离线优先、文件可迁移的 Markdown 笔�
 - 所有笔记都是普通 Markdown 文件。
 - 渲染、编辑和导出能力尽量在本地完成。
 - 使用 Tauri 控制安装体积和内存占用。
-- 在编辑体验上靠近 VS Code：文件树、标签页、命令面板式菜单、Vim、状态栏和设置面板。
+- 在编辑体验上靠近 VS Code：文件树、标签页、快速打开与命令面板、Vim、状态栏和设置面板。

@@ -11,6 +11,7 @@ import {
   IMAGE_FORMAT_STORAGE_KEY,
   IMAGE_QUALITY_STORAGE_KEY,
   IMAGE_TEMPLATE_STORAGE_KEY,
+  QUICK_OPEN_IMAGES_STORAGE_KEY,
   RESTORE_SESSION_STORAGE_KEY,
   VIM_MAPPINGS_STORAGE_KEY,
   VIM_STORAGE_KEY,
@@ -131,6 +132,18 @@ describe('preferences', () => {
       mappings,
     );
     expect(readPreferences().vimMappings).toBe(mappings);
+  });
+
+  it('defaults quick open images off and persists the choice', () => {
+    expect(normalizePreferences({}).quickOpenIncludeImages).toBe(false);
+
+    savePreferences(
+      normalizePreferences({ quickOpenIncludeImages: true }),
+    );
+    expect(window.localStorage.getItem(QUICK_OPEN_IMAGES_STORAGE_KEY)).toBe(
+      'true',
+    );
+    expect(readPreferences().quickOpenIncludeImages).toBe(true);
   });
 
   it('defaults image preferences', () => {

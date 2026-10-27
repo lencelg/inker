@@ -140,6 +140,21 @@ describe('settings schema', () => {
     expect(quality?.max).toBe(1);
   });
 
+  it('exposes the quick open images setting', () => {
+    const schema = createSettingsSchema(
+      normalizePreferences({ quickOpenIncludeImages: true }),
+    );
+    const item = schema.find(
+      (setting) => setting.id === 'workbench.quickOpenImages',
+    );
+
+    expect(item?.category).toBe('common');
+    expect(item?.controlType).toBe('checkbox');
+    expect(item?.value).toBe(true);
+    expect(item?.defaultValue).toBe(false);
+    expect(item?.preference).toBe('quickOpenIncludeImages');
+  });
+
   it('exposes configurable Vim mappings', () => {
     const schema = createSettingsSchema(normalizePreferences({}));
     const item = schema.find(

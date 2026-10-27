@@ -29,6 +29,7 @@ import InkerMark from './components/InkerMark.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
 import PreviewPane from './components/PreviewPane.vue';
 import PromptDialog from './components/PromptDialog.vue';
+import QuickPalette from './components/QuickPalette.vue';
 import SearchPanel from './components/SearchPanel.vue';
 import SettingsOverlay from './components/SettingsOverlay.vue';
 import StatusBar from './components/StatusBar.vue';
@@ -67,8 +68,15 @@ import {
   type DraftEntry,
 } from './lib/drafts';
 import { isImagePath } from './lib/fileKinds';
-import { localizeError, t } from './lib/i18n';
-import { renderMarkdown } from './lib/markdown';
+import { localizeError, t, type TranslationKey } from './lib/i18n';
+import { renderMarkdown, extractMarkdownHeadings } from './lib/markdown';
+import {
+  buildFilePaletteItems,
+  type PaletteItem,
+} from './lib/palette';
+import { buildTableOfContents } from './lib/toc';
+import { allThemes } from './lib/themes';
+import { allCodeThemes } from './lib/codeThemes';
 import {
   ancestorDirs,
   basename,
@@ -157,6 +165,8 @@ const htmlExport = ref<{
   warnings: string[];
 } | null>(null);
 const settingsOpen = ref(false);
+type PaletteLevel = 'files' | 'commands' | 'themes' | 'codeThemes';
+const paletteLevel = ref<PaletteLevel | null>(null);
 const isMaximized = ref(false);
 const appWindow = getCurrentWindow();
 let unlistenWindow: UnlistenFn | null = null;
@@ -201,6 +211,7 @@ const editorPane = ref<{
     defaultName: string,
     extension?: string,
   ) => Promise<string | null>;
+  insertBlock: (text: string) => boolean;
 } | null>(null);
 
 const tabStates = new Map<string, EditorTabState>();
@@ -257,6 +268,217 @@ const saveState = computed<'saved' | 'saving' | 'dirty' | null>(() => {
   if (savingPaths.value.includes(tab.path)) return 'saving';
   return tab.content === tab.savedContent ? 'saved' : 'dirty';
 });
+const PALETTE_LABELS: Record<
+  PaletteLevel,
+  { placeholder: TranslationKey; empty: TranslationKey }
+> = {
+  files: {
+    placeholder: 'palette.placeholder.files',
+    empty: 'palette.empty.files',
+  },
+  commands: {
+    placeholder: 'palette.placeholder.commands',
+    empty: 'palette.empty.commands',
+  },
+  themes: {
+    placeholder: 'palette.placeholder.themes',
+    empty: 'palette.empty.themes',
+  },
+  codeThemes: {
+    placeholder: 'palette.placeholder.codeThemes',
+    empty: 'palette.empty.codeThemes',
+  },
+};
+const paletteItems = computed<PaletteItem[]>(() => {
+  const level = paletteLevel.value;
+  if (level === null) return [];
+  if (level === 'files') {
+    return buildFilePaletteItems(
+      entries.value,
+      preferences.value.quickOpenIncludeImages,
+    );
+  }
+  if (level === 'themes') return themePaletteItems();
+  if (level === 'codeThemes') return codeThemePaletteItems();
+  return commandPaletteItems();
+});
+const palettePlaceholder = computed(() =>
+  paletteLevel.value === null
+    ? ''
+    : t(PALETTE_LABELS[paletteLevel.value].placeholder),
+);
+const paletteEmptyLabel = computed(() =>
+  paletteLevel.value === null
+    ? ''
+    : t(PALETTE_LABELS[paletteLevel.value].empty),
+);
+
+function themePaletteItems(): PaletteItem[] {
+  return [
+    { id: '__back', label: t('palette.back'), kind: 'back' },
+    ...allThemes().map((theme) => ({
+      id: theme.id,
+      label: theme.label,
+      detail:
+        theme.id === preferences.value.theme
+          ? t('palette.current')
+          : undefined,
+      kind: 'theme' as const,
+    })),
+  ];
+}
+
+function codeThemePaletteItems(): PaletteItem[] {
+  return [
+    { id: '__back', label: t('palette.back'), kind: 'back' },
+    ...allCodeThemes().map((theme) => ({
+      id: theme.id,
+      label: theme.label,
+      detail:
+        theme.id === preferences.value.codeTheme
+          ? t('palette.current')
+          : undefined,
+      kind: 'theme' as const,
+    })),
+  ];
+}
+
+function toggleDetail(value: boolean): string {
+  return t(value ? 'palette.on' : 'palette.off');
+}
+
+function commandPaletteItems(): PaletteItem[] {
+  const canEdit =
+    activeTab.value !== null && !isImagePath(activeTab.value.path);
+  const command = (
+    id: string,
+    label: string,
+    keywords: string[],
+    extra: Partial<PaletteItem> = {},
+  ): PaletteItem => ({
+    id,
+    label,
+    keywords,
+    kind: 'command',
+    ...extra,
+  });
+
+  return [
+    command('preferences.colorTheme', t('command.preferences.colorTheme'), [
+      'theme',
+      'color',
+      'appearance',
+      '主题',
+      '界面',
+      '外观',
+    ]),
+    command('preferences.codeTheme', t('command.preferences.codeTheme'), [
+      'theme',
+      'code',
+      'syntax',
+      'highlight',
+      '代码',
+      '主题',
+      '高亮',
+    ]),
+    command(
+      'preferences.openSettings',
+      t('command.preferences.openSettings'),
+      ['settings', 'preferences', '设置', '首选项', '配置'],
+    ),
+    command(
+      'preferences.toggleVim',
+      t('command.preferences.toggleVim'),
+      ['vim', 'keymap', 'editor', '模式', '快捷键'],
+      { detail: toggleDetail(preferences.value.vimEnabled) },
+    ),
+    command(
+      'preferences.toggleZen',
+      t('command.preferences.toggleZen'),
+      ['zen', 'immersive', 'focus', '沉浸', '专注'],
+      { detail: toggleDetail(preferences.value.immersive) },
+    ),
+    command(
+      'preferences.toggleAutoSave',
+      t('command.preferences.toggleAutoSave'),
+      ['autosave', 'save', '自动保存', '保存'],
+      { detail: toggleDetail(preferences.value.autoSave) },
+    ),
+    command(
+      'preferences.toggleQuickOpenImages',
+      t('command.preferences.toggleQuickOpenImages'),
+      ['quick open', 'image', 'ctrl+p', '快速打开', '图片', '文件'],
+      { detail: toggleDetail(preferences.value.quickOpenIncludeImages) },
+    ),
+    command('view.source', t('command.view.source'), [
+      'source',
+      'edit',
+      'mode',
+      '源码',
+      '编辑',
+      '模式',
+    ]),
+    command('view.wysiwyg', t('command.view.wysiwyg'), [
+      'wysiwyg',
+      'live',
+      'preview',
+      '实时',
+      '所见即所得',
+    ]),
+    command('view.preview', t('command.view.preview'), [
+      'preview',
+      'read',
+      '预览',
+      '阅读',
+    ]),
+    command('view.side', t('command.view.side'), [
+      'side',
+      'split',
+      'side by side',
+      '分屏',
+      '并排',
+      '预览',
+    ]),
+    command(
+      'view.togglePreview',
+      t('command.view.togglePreview'),
+      [
+        'toggle',
+        'switch',
+        'live',
+        'wysiwyg',
+        'side',
+        'split',
+        '实时',
+        '侧边',
+        '并排',
+        '切换',
+        '预览',
+      ],
+    ),
+    command(
+      'view.toggleSidebar',
+      t('command.view.toggleSidebar'),
+      ['sidebar', 'panel', '侧边栏', '侧栏'],
+      { detail: toggleDetail(sidebarVisible.value) },
+    ),
+    command('file.save', t('command.file.save'), ['save', '保存'], {
+      detail: 'Ctrl/Cmd+S',
+      disabled: !canEdit,
+    }),
+    command(
+      'file.chooseFolder',
+      t('command.file.chooseFolder'),
+      ['folder', 'workspace', 'open', '文件夹', '笔记库', '工作区'],
+    ),
+    command(
+      'markdown.createToc',
+      t('command.markdown.createToc'),
+      ['toc', 'table of contents', 'outline', '目录', '大纲'],
+      { disabled: !canEdit },
+    ),
+  ];
+}
 
 interface ConfirmOptions {
   title: string;
@@ -1006,6 +1228,178 @@ async function setViewMode(mode: ViewMode): Promise<void> {
   scheduleSessionPersist();
 }
 
+function openPalette(level: 'files' | 'commands'): void {
+  if (
+    prompt.value ||
+    confirmation.value ||
+    imagePaste.value ||
+    exportPreview.value ||
+    htmlExport.value
+  ) {
+    return;
+  }
+  clearFeedback();
+  paletteLevel.value = level;
+}
+
+function closePalette(): void {
+  paletteLevel.value = null;
+}
+
+async function dismissPalette(): Promise<void> {
+  closePalette();
+  await nextTick();
+  restorePaletteFocus();
+}
+
+function restorePaletteFocus(): void {
+  if (settingsOpen.value || viewMode.value === 'preview') return;
+  focusActiveEditor();
+}
+
+async function openPaletteFile(path: string): Promise<void> {
+  closePalette();
+  settingsOpen.value = false;
+  await nextTick();
+  if (isImagePath(path)) {
+    await selectNote(path);
+    return;
+  }
+  if (viewMode.value !== 'source') {
+    await setViewMode('source');
+  }
+  await selectNote(path);
+  restorePaletteFocus();
+}
+
+async function handlePaletteSelect(item: PaletteItem): Promise<void> {
+  const level = paletteLevel.value;
+  if (level === null) return;
+
+  if (item.kind === 'back') {
+    paletteLevel.value = 'commands';
+    return;
+  }
+
+  if (level === 'files') {
+    await openPaletteFile(item.id);
+    return;
+  }
+
+  if (level === 'themes') {
+    updatePreferences({ theme: item.id as Preferences['theme'] });
+    closePalette();
+    await nextTick();
+    restorePaletteFocus();
+    return;
+  }
+
+  if (level === 'codeThemes') {
+    updatePreferences({
+      codeTheme: item.id as Preferences['codeTheme'],
+    });
+    closePalette();
+    await nextTick();
+    restorePaletteFocus();
+    return;
+  }
+
+  await runPaletteCommand(item.id);
+}
+
+async function runPaletteCommand(id: string): Promise<void> {
+  if (id === 'preferences.colorTheme') {
+    paletteLevel.value = 'themes';
+    return;
+  }
+  if (id === 'preferences.codeTheme') {
+    paletteLevel.value = 'codeThemes';
+    return;
+  }
+
+  closePalette();
+  if (id !== 'preferences.openSettings') {
+    settingsOpen.value = false;
+  }
+  await nextTick();
+
+  switch (id) {
+    case 'preferences.openSettings':
+      openSettings();
+      return;
+    case 'preferences.toggleVim':
+      toggleVim();
+      break;
+    case 'preferences.toggleZen':
+      toggleImmersive();
+      break;
+    case 'preferences.toggleAutoSave':
+      updatePreferences({ autoSave: !preferences.value.autoSave });
+      break;
+    case 'preferences.toggleQuickOpenImages':
+      updatePreferences({
+        quickOpenIncludeImages:
+          !preferences.value.quickOpenIncludeImages,
+      });
+      break;
+    case 'view.source':
+    case 'view.wysiwyg':
+    case 'view.preview':
+    case 'view.side':
+      await setViewMode(id.slice('view.'.length) as ViewMode);
+      restorePaletteFocus();
+      return;
+    case 'view.togglePreview': {
+      const next: ViewMode =
+        viewMode.value === 'side' ? 'wysiwyg' : 'side';
+      await setViewMode(next);
+      restorePaletteFocus();
+      return;
+    }
+    case 'view.toggleSidebar':
+      sidebarVisible.value = !sidebarVisible.value;
+      break;
+    case 'file.save':
+      await saveCurrentNote();
+      restorePaletteFocus();
+      return;
+    case 'file.chooseFolder':
+      await chooseFolder();
+      restorePaletteFocus();
+      return;
+    case 'markdown.createToc':
+      await createTableOfContents();
+      return;
+    default:
+      return;
+  }
+
+  restorePaletteFocus();
+}
+
+async function createTableOfContents(): Promise<void> {
+  clearFeedback();
+  const tab = activeTab.value;
+  if (!tab || isImagePath(tab.path)) return;
+
+  if (viewMode.value !== 'source' && viewMode.value !== 'side') {
+    warning.value = t('command.toc.sourceOnly');
+    return;
+  }
+
+  const toc = buildTableOfContents(
+    extractMarkdownHeadings(tab.content),
+  );
+  if (!toc) {
+    warning.value = t('command.toc.empty');
+    return;
+  }
+
+  if (!editorPane.value?.insertBlock(toc)) {
+    warning.value = t('command.toc.readOnly');
+  }
+}
+
 function openSettings(): void {
   settingsOpen.value = true;
 }
@@ -1644,6 +2038,13 @@ function handlePreviewScroll(line: number): void {
 function handleGlobalKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return;
   const modifier = event.ctrlKey || event.metaKey;
+
+  if (modifier && !event.altKey && event.key.toLowerCase() === 'p') {
+    event.preventDefault();
+    event.stopPropagation();
+    openPalette(event.shiftKey ? 'commands' : 'files');
+    return;
+  }
 
   if (modifier && event.shiftKey && event.key.toLowerCase() === 'm') {
     event.preventDefault();
@@ -2505,6 +2906,16 @@ watch(
       @close="settingsOpen = false"
       @minimize="minimizeWindow"
       @maximize="toggleMaximizeWindow"
+    />
+
+    <QuickPalette
+      v-if="paletteLevel"
+      :key="paletteLevel"
+      :items="paletteItems"
+      :placeholder="palettePlaceholder"
+      :empty-label="paletteEmptyLabel"
+      @select="handlePaletteSelect"
+      @close="dismissPalette"
     />
 
     <StatusBar

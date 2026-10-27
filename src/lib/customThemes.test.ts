@@ -20,6 +20,18 @@ import {
 } from './themes';
 import { createSettingsSchema } from './settingsSchema';
 
+const SOURCE_SYNTAX_VARS = [
+  '--code-syntax-keyword',
+  '--code-syntax-number',
+  '--code-syntax-string',
+  '--code-syntax-comment',
+  '--code-syntax-type',
+  '--code-syntax-function',
+  '--code-syntax-variable',
+  '--code-syntax-operator',
+  '--code-syntax-tag',
+];
+
 afterEach(() => {
   for (const theme of [...customUiThemes.value]) {
     removeCustomUiTheme(theme.id);
@@ -33,6 +45,9 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-custom-theme');
   document.documentElement.style.removeProperty('--code-bg');
   document.documentElement.style.removeProperty('--code-fg');
+  for (const name of SOURCE_SYNTAX_VARS) {
+    document.documentElement.style.removeProperty(name);
+  }
 });
 
 describe('custom themes', () => {
@@ -100,6 +115,57 @@ describe('custom themes', () => {
     )?.options;
     expect(options?.some((option) => option.value === theme.id)).toBe(
       true,
+    );
+  });
+
+  it('derives source editor token colors from the code theme CSS', () => {
+    const theme = addCustomCodeTheme({
+      name: 'Source Colors',
+      background: '#101010',
+      foreground: '#eeeeee',
+      css: `
+        .hljs { color: #eeeeee; background: #101010; }
+        .hljs-keyword { color: #ff5555; }
+        .hljs-string { color: #50fa7b; }
+        .hljs-comment { color: #6272a4; }
+        .hljs-title.function_ { color: #8be9fd; }
+        .hljs-title.class_ { color: #f1fa8c; }
+        .hljs-number { color: #bd93f9; }
+        .hljs-variable { color: #ffb86c; }
+        .hljs-operator { color: #f8f8f2; }
+        .hljs-name { color: #ff79c6; }
+      `,
+    });
+
+    applyCodeTheme(theme.id);
+    const style = document.documentElement.style;
+
+    expect(style.getPropertyValue('--code-syntax-keyword')).toBe(
+      'rgb(255, 85, 85)',
+    );
+    expect(style.getPropertyValue('--code-syntax-string')).toBe(
+      'rgb(80, 250, 123)',
+    );
+    expect(style.getPropertyValue('--code-syntax-comment')).toBe(
+      'rgb(98, 114, 164)',
+    );
+    expect(style.getPropertyValue('--code-syntax-function')).toBe(
+      'rgb(139, 233, 253)',
+    );
+    expect(style.getPropertyValue('--code-syntax-type')).toBe(
+      'rgb(241, 250, 140)',
+    );
+    expect(style.getPropertyValue('--code-syntax-number')).toBe(
+      'rgb(189, 147, 249)',
+    );
+    expect(style.getPropertyValue('--code-syntax-variable')).toBe(
+      'rgb(255, 184, 108)',
+    );
+    expect(style.getPropertyValue('--code-syntax-operator')).toBe(
+      'rgb(248, 248, 242)',
+    );
+    expect(style.getPropertyValue('--code-syntax-tag')).toBe(
+      'rgb(255, 121, 198)',
     );
   });
 

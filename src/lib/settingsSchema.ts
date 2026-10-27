@@ -278,6 +278,26 @@ function settingTemplates(): SettingTemplate[] {
       },
     },
     {
+      id: 'workbench.quickOpenImages',
+      category: 'common',
+      title: 'Workbench: Quick Open Images',
+      description: t('settings.quickOpenImages.description'),
+      controlType: 'checkbox',
+      defaultValue: false,
+      keywords: [
+        '快速打开',
+        '图片',
+        '文件',
+        'quick open',
+        'image',
+        'ctrl+p',
+      ],
+      preference: 'quickOpenIncludeImages',
+      hint: {
+        text: t('settings.quickOpenImages.hint'),
+      },
+    },
+    {
       id: 'editor.fontFamily',
       category: 'editor',
       title: 'Editor: Font Family',

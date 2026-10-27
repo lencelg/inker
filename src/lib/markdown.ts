@@ -28,6 +28,33 @@ function inlineText(token: Token | undefined): string {
     .join('');
 }
 
+export interface MarkdownHeading {
+  level: number;
+  text: string;
+  id: string;
+}
+
+export function extractMarkdownHeadings(
+  source: string,
+): MarkdownHeading[] {
+  const tokens = markdown.parse(source, {});
+  const headings: MarkdownHeading[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.type !== 'heading_open') continue;
+    const level = Number(token.tag.slice(1));
+    if (!Number.isInteger(level) || level < 1 || level > 6) continue;
+    headings.push({
+      level,
+      text: inlineText(tokens[index + 1])
+        .replace(/<[^>]*>/g, '')
+        .trim(),
+      id: String(token.attrGet('id') ?? ''),
+    });
+  }
+  return headings;
+}
+
 function addHeadingIds(state: StateCore): void {
   const used = new Map<string, number>();
   for (let index = 0; index < state.tokens.length; index += 1) {

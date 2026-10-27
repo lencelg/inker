@@ -30,6 +30,8 @@ function keydown(key: string, code: string, keyCode: number): KeyboardEvent {
 
 function mountEditor(
   options: {
+    initialContent?: string;
+    sourceHighlight?: boolean;
     vimEnabled?: boolean;
     vimMappings?: string;
     requestImageSave?: ImageSaveHandler;
@@ -38,11 +40,12 @@ function mountEditor(
   return mount(EditorPane, {
     attachTo: document.body,
     props: {
-      initialContent: '# Title\n\nHello world',
+      initialContent:
+        options.initialContent ?? '# Title\n\nHello world',
       vimEnabled: options.vimEnabled ?? false,
       readOnly: false,
       immersive: false,
-      sourceHighlight: true,
+      sourceHighlight: options.sourceHighlight ?? true,
       requestImageSave: options.requestImageSave ?? (async () => null),
       vimMappings:
         options.vimMappings ?? 'normal <Space>p pasteimage',
@@ -77,6 +80,55 @@ describe('EditorPane', () => {
 
     expect(wrapper.find('.cm-content').exists()).toBe(true);
     expect(wrapper.find('.cm-content').text()).toContain('Hello world');
+
+    wrapper.unmount();
+  });
+
+  it('marks fenced code lines for the code theme in source mode', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      initialContent: '```js\nconst value = 1;\n```',
+    });
+    await nextTick();
+
+    expect(
+      wrapper.findAll('.cm-codeblock-themed').length,
+    ).toBeGreaterThan(0);
+
+    wrapper.unmount();
+  });
+
+  it('leaves code blocks unthemed when source highlighting is off', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      initialContent: '```js\nconst value = 1;\n```',
+      sourceHighlight: false,
+    });
+    await nextTick();
+
+    expect(wrapper.findAll('.cm-codeblock-themed')).toHaveLength(0);
+    expect(
+      wrapper.findAll('.cm-codeblock-plain').length,
+    ).toBeGreaterThan(0);
+
+    wrapper.unmount();
+  });
+
+  it('inserts a block at the current cursor', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor();
+    await nextTick();
+
+    const instance = wrapper.vm as unknown as {
+      insertBlock: (text: string) => boolean;
+    };
+    expect(instance.insertBlock('- [A](#a)')).toBe(true);
+    await nextTick();
+
+    expect(wrapper.find('.cm-content').text()).toContain('- [A](#a)');
+    expect(wrapper.emitted('change')?.at(-1)?.[0]).toContain(
+      '- [A](#a)',
+    );
 
     wrapper.unmount();
   });

@@ -49,6 +49,7 @@ export const IMAGE_FORMAT_STORAGE_KEY = 'inker-image-format';
 export const IMAGE_FOLDER_STORAGE_KEY = 'inker-image-folder';
 export const IMAGE_QUALITY_STORAGE_KEY = 'inker-image-quality';
 export const VIM_MAPPINGS_STORAGE_KEY = 'inker-vim-mappings';
+export const QUICK_OPEN_IMAGES_STORAGE_KEY = 'inker-quick-open-images';
 export const FONT_SIZE_STORAGE_KEY = 'inker-font-size';
 export const FONT_FAMILY_STORAGE_KEY = 'inker-font-family';
 export const VIM_STORAGE_KEY = 'inker-vim';
@@ -90,6 +91,7 @@ export interface Preferences {
   imageFolder: string;
   imageQuality: number;
   vimMappings: string;
+  quickOpenIncludeImages: boolean;
 }
 
 export function normalizeImageFolder(value: string): string {
@@ -160,6 +162,7 @@ export function normalizePreferences(value: unknown): Preferences {
       typeof source.vimMappings === 'string'
         ? source.vimMappings
         : DEFAULT_VIM_MAPPINGS,
+    quickOpenIncludeImages: source.quickOpenIncludeImages === true,
   };
 }
 
@@ -209,6 +212,9 @@ export function readPreferences(): Preferences {
     );
     const rawVimMappings = window.localStorage.getItem(
       VIM_MAPPINGS_STORAGE_KEY,
+    );
+    const rawQuickOpenImages = window.localStorage.getItem(
+      QUICK_OPEN_IMAGES_STORAGE_KEY,
     );
     const preferences = normalizePreferences({
       theme: read(THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY),
@@ -262,6 +268,10 @@ export function readPreferences(): Preferences {
         rawImageQuality === null ? undefined : Number(rawImageQuality),
       vimMappings:
         rawVimMappings === null ? undefined : rawVimMappings,
+      quickOpenIncludeImages:
+        rawQuickOpenImages === null
+          ? undefined
+          : rawQuickOpenImages === 'true',
     });
 
     if (usedLegacyKeys) savePreferences(preferences);
@@ -353,6 +363,10 @@ export function savePreferences(preferences: Preferences): void {
     window.localStorage.setItem(
       VIM_MAPPINGS_STORAGE_KEY,
       preferences.vimMappings,
+    );
+    window.localStorage.setItem(
+      QUICK_OPEN_IMAGES_STORAGE_KEY,
+      String(preferences.quickOpenIncludeImages),
     );
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);

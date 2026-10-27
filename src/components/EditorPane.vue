@@ -35,6 +35,7 @@ import {
   type HeadingItem,
 } from '../lib/headings';
 import { language, t } from '../lib/i18n';
+import { withBlockSpacing } from '../lib/blockInsertion';
 import { readClipboardImageFile } from '../lib/clipboardImage';
 import {
   imageFilesFrom,
@@ -211,37 +212,48 @@ function attachVimStatus(): void {
   emit('vimMode', formatVimMode({ mode: cm.state.vim?.mode ?? 'normal' }));
 }
 
+function codeSyntaxColor(name: string): string {
+  return `var(--code-syntax-${name}, var(--syntax-${name}))`;
+}
+
 const syntaxTheme = HighlightStyle.define([
-  { tag: tags.keyword, color: 'var(--syntax-keyword)' },
+  { tag: tags.keyword, color: codeSyntaxColor('keyword') },
   {
     tag: [tags.atom, tags.bool, tags.number, tags.integer, tags.float],
-    color: 'var(--syntax-number)',
+    color: codeSyntaxColor('number'),
   },
-  { tag: [tags.string, tags.character], color: 'var(--syntax-string)' },
-  { tag: [tags.comment, tags.meta], color: 'var(--syntax-comment)' },
+  {
+    tag: [tags.string, tags.character],
+    color: codeSyntaxColor('string'),
+  },
+  {
+    tag: [tags.comment, tags.meta],
+    color: codeSyntaxColor('comment'),
+  },
   {
     tag: [tags.typeName, tags.className, tags.namespace],
-    color: 'var(--syntax-type)',
+    color: codeSyntaxColor('type'),
   },
   {
     tag: [tags.function(tags.variableName), tags.function(tags.propertyName)],
-    color: 'var(--syntax-function)',
+    color: codeSyntaxColor('function'),
   },
   {
     tag: [tags.variableName, tags.propertyName, tags.attributeName],
-    color: 'var(--syntax-variable)',
+    color: codeSyntaxColor('variable'),
   },
   {
-    tag: [
-      tags.operator,
-      tags.operatorKeyword,
-      tags.punctuation,
-      tags.separator,
-      tags.bracket,
-    ],
+    tag: [tags.operator, tags.operatorKeyword],
+    color: codeSyntaxColor('operator'),
+  },
+  {
+    tag: [tags.punctuation, tags.separator, tags.bracket],
     color: 'var(--syntax-operator)',
   },
-  { tag: [tags.tagName, tags.angleBracket], color: 'var(--syntax-tag)' },
+  {
+    tag: [tags.tagName, tags.angleBracket],
+    color: codeSyntaxColor('tag'),
+  },
   {
     tag: [
       tags.heading,
@@ -275,8 +287,9 @@ const plainCodeBlockTheme = EditorView.theme({
   },
 });
 
-function buildPlainCodeBlockDecorations(
+function buildCodeBlockDecorations(
   view: EditorView,
+  className: string,
 ): DecorationSet {
   const lines = new Set<number>();
   const decorations: Range<Decoration>[] = [];
@@ -303,9 +316,7 @@ function buildPlainCodeBlockDecorations(
           if (lines.has(line.from)) continue;
           lines.add(line.from);
           decorations.push(
-            Decoration.line({ class: 'cm-codeblock-plain' }).range(
-              line.from,
-            ),
+            Decoration.line({ class: className }).range(line.from),
           );
         }
         return false;
@@ -316,30 +327,36 @@ function buildPlainCodeBlockDecorations(
   return Decoration.set(decorations, true);
 }
 
-const plainCodeBlocks = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
+function codeBlockLinePlugin(className: string) {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
 
-    constructor(view: EditorView) {
-      this.decorations = buildPlainCodeBlockDecorations(view);
-    }
-
-    update(update: ViewUpdate): void {
-      if (update.docChanged || update.viewportChanged) {
-        this.decorations = buildPlainCodeBlockDecorations(
-          update.view,
-        );
+      constructor(view: EditorView) {
+        this.decorations = buildCodeBlockDecorations(view, className);
       }
-    }
-  },
-  {
-    decorations: (plugin) => plugin.decorations,
-  },
-);
+
+      update(update: ViewUpdate): void {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = buildCodeBlockDecorations(
+            update.view,
+            className,
+          );
+        }
+      }
+    },
+    {
+      decorations: (plugin) => plugin.decorations,
+    },
+  );
+}
+
+const plainCodeBlocks = codeBlockLinePlugin('cm-codeblock-plain');
+const themedCodeBlocks = codeBlockLinePlugin('cm-codeblock-themed');
 
 function sourceHighlightExtension(enabled: boolean) {
   return enabled
-    ? []
+    ? [themedCodeBlocks]
     : [plainCodeBlocks, plainCodeBlockTheme];
 }
 
@@ -360,6 +377,10 @@ const theme = EditorView.theme({
     padding: '14px 18px',
     caretColor: 'var(--editor-caret, var(--ink))',
     color: 'var(--ink)',
+  },
+  '.cm-codeblock-themed': {
+    backgroundColor: 'var(--code-bg)',
+    color: 'var(--code-fg)',
   },
   '.cm-cursor, .cm-dropCursor': {
     borderLeftColor: 'var(--editor-caret, var(--ink))',
@@ -1082,6 +1103,24 @@ function promptImageName(
   });
 }
 
+function insertBlock(text: string): boolean {
+  if (!view || props.readOnly) return false;
+  const { from, to } = view.state.selection.main;
+  const insertion = withBlockSpacing(
+    view.state.doc.toString(),
+    from,
+    to,
+    text,
+  );
+  view.dispatch({
+    changes: { from, to, insert: insertion.text },
+    selection: { anchor: insertion.cursor },
+    scrollIntoView: true,
+  });
+  view.focus();
+  return true;
+}
+
 function refresh(): void {
   if (!view) return;
   view.requestMeasure();
@@ -1095,6 +1134,7 @@ defineExpose({
   captureState,
   restoreState,
   promptImageName,
+  insertBlock,
 });
 </script>
 
