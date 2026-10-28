@@ -299,6 +299,12 @@ describe('App integration', () => {
         ),
     ).toBe(true);
 
+    await wrapper.find('.palette-input input').setValue('');
+    await wrapper.find('.palette-input input').trigger('keydown', {
+      key: 'Backspace',
+    });
+    await settle();
+    expect(wrapper.findAll('.palette-item')[0].text()).toContain('b.md');
   });
 
   it('runs a view mode command from the command palette', async () => {

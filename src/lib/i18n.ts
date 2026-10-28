@@ -404,6 +404,7 @@ const zh = {
   'command.view.toggleSidebar': '视图: 切换侧边栏',
   'command.file.save': '文件: 保存',
   'command.file.chooseFolder': '文件: 切换笔记文件夹',
+  'command.file.clearRecentFiles': '文件: 清除最近打开记录',
   'command.markdown.createToc': 'Markdown: 创建目录 (Table Of Contents)',
   'command.toc.empty': '当前笔记没有可生成的标题。',
   'command.toc.sourceOnly': '请切换到源码或侧边预览模式后再生成目录。',
@@ -823,6 +824,7 @@ const en: Record<TranslationKey, string> = {
   'command.view.toggleSidebar': 'View: Toggle Sidebar',
   'command.file.save': 'File: Save',
   'command.file.chooseFolder': 'File: Change Notes Folder',
+  'command.file.clearRecentFiles': 'File: Clear Recent Files',
   'command.markdown.createToc': 'Markdown: Create Table Of Contents',
   'command.toc.empty': 'This note has no headings to include.',
   'command.toc.sourceOnly':

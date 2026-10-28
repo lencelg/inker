@@ -13,6 +13,7 @@ const state = {
   autoSave: true,
   quickOpenIncludeImages: false,
   sidebarVisible: true,
+  hasRecentFiles: true,
 };
 
 describe('palette command items', () => {
@@ -29,6 +30,7 @@ describe('palette command items', () => {
       t('palette.off'),
     );
     expect(byId.get('file.save')?.disabled).toBe(false);
+    expect(byId.get('file.clearRecentFiles')?.disabled).toBe(false);
   });
 
   it('disables editing commands when no editable note is open', () => {

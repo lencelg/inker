@@ -183,6 +183,7 @@ const settingsOpen = ref(false);
 type PaletteLevel = 'files' | 'commands' | 'themes' | 'codeThemes';
 const paletteLevel = ref<PaletteLevel | null>(null);
 const paletteSeed = ref('');
+const paletteCommandFromPrefix = ref(false);
 let palettePreviousFocus: HTMLElement | null = null;
 const recentFiles = useRecentFiles();
 const isMaximized = ref(false);
@@ -333,6 +334,7 @@ const paletteItems = computed<PaletteItem[]>(() => {
     quickOpenIncludeImages:
       preferences.value.quickOpenIncludeImages,
     sidebarVisible: sidebarVisible.value,
+    hasRecentFiles: recentFiles.files.value.length > 0,
   });
 });
 const palettePlaceholder = computed(() =>
@@ -1074,6 +1076,7 @@ function openPalette(level: 'files' | 'commands'): void {
         : null;
   }
   paletteSeed.value = '';
+  paletteCommandFromPrefix.value = false;
   clearFeedback();
   paletteLevel.value = level;
 }
@@ -1085,7 +1088,15 @@ function closePalette(): void {
 function handlePaletteSwitchCommand(query: string): void {
   if (paletteLevel.value !== 'files') return;
   paletteSeed.value = query;
+  paletteCommandFromPrefix.value = true;
   paletteLevel.value = 'commands';
+}
+
+function handlePaletteSwitchFiles(): void {
+  if (paletteLevel.value !== 'commands') return;
+  paletteSeed.value = '';
+  paletteCommandFromPrefix.value = false;
+  paletteLevel.value = 'files';
 }
 
 async function dismissPalette(): Promise<void> {
@@ -1224,6 +1235,10 @@ async function runPaletteCommand(id: string): Promise<void> {
       return;
     case 'file.chooseFolder':
       await chooseFolder();
+      restorePaletteFocus();
+      return;
+    case 'file.clearRecentFiles':
+      recentFiles.clear(notesDir.value);
       restorePaletteFocus();
       return;
     case 'markdown.createToc':
@@ -1563,6 +1578,12 @@ function rememberRecentFile(path: string): void {
 function applyState(state: NotesState): void {
   notesDir.value = state.notesDir;
   entries.value = state.entries;
+  recentFiles.prune(
+    state.notesDir,
+    state.entries
+      .filter((entry) => !entry.isDir)
+      .map((entry) => entry.path),
+  );
   recentFiles.sync(state.notesDir);
   updateWatcherError(state.watcherError);
   pruneExpandedPaths();
@@ -2423,6 +2444,12 @@ async function refreshWorkspaceFromDisk(
     }
     notesDir.value = state.notesDir;
     entries.value = state.entries;
+    recentFiles.prune(
+      state.notesDir,
+      state.entries
+        .filter((entry) => !entry.isDir)
+        .map((entry) => entry.path),
+    );
     updateWatcherError(state.watcherError);
     pruneExpandedPaths();
   }
@@ -3064,8 +3091,12 @@ watch(
       :empty-label="paletteEmptyLabel"
       :initial-query="paletteSeed"
       :allow-command-prefix="paletteLevel === 'files'"
+      :allow-file-switch="
+        paletteLevel === 'commands' && paletteCommandFromPrefix
+      "
       @select="handlePaletteSelect"
       @switch-command="handlePaletteSwitchCommand"
+      @switch-files="handlePaletteSwitchFiles"
       @close="dismissPalette"
     />
 

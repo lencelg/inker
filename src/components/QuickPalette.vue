@@ -20,12 +20,14 @@ const props = defineProps<{
   emptyLabel: string;
   initialQuery?: string;
   allowCommandPrefix?: boolean;
+  allowFileSwitch?: boolean;
 }>();
 
 const emit = defineEmits<{
   select: [item: PaletteItem];
   close: [];
   'switch-command': [query: string];
+  'switch-files': [];
 }>();
 
 const MAX_RESULTS = 100;
@@ -97,6 +99,18 @@ function onEscape(event: KeyboardEvent): void {
   emit('close');
 }
 
+function onBackspace(event: KeyboardEvent): void {
+  if (
+    !props.allowFileSwitch ||
+    query.value !== '' ||
+    isImeComposing(event)
+  ) {
+    return;
+  }
+  event.preventDefault();
+  emit('switch-files');
+}
+
 watch(query, (value) => {
   active.value = 0;
   if (props.allowCommandPrefix && value.startsWith('>')) {
@@ -152,6 +166,7 @@ onMounted(async () => {
           @keydown.home.prevent="jumpTo(0)"
           @keydown.end.prevent="jumpTo(filtered.length - 1)"
           @keydown.enter="onEnter"
+          @keydown.backspace="onBackspace"
           @keydown.tab.prevent
           @keydown.esc="onEscape"
         />

@@ -1,5 +1,7 @@
 import { ref } from 'vue';
 import {
+  clearRecentFiles,
+  pruneRecentFiles,
   readRecentFilesMap,
   recentFilesForWorkspace,
   recordRecentFile,
@@ -23,5 +25,24 @@ export function useRecentFiles() {
     writeRecentFilesMap(map);
   }
 
-  return { files, sync, record };
+  function clear(notesDir: string | null): void {
+    const next = clearRecentFiles(map, notesDir);
+    if (next === map) return;
+    map = next;
+    files.value = recentFilesForWorkspace(map, notesDir);
+    writeRecentFilesMap(map);
+  }
+
+  function prune(
+    notesDir: string | null,
+    validPaths: Iterable<string>,
+  ): void {
+    const next = pruneRecentFiles(map, notesDir, validPaths);
+    if (next === map) return;
+    map = next;
+    files.value = recentFilesForWorkspace(map, notesDir);
+    writeRecentFilesMap(map);
+  }
+
+  return { files, sync, record, clear, prune };
 }

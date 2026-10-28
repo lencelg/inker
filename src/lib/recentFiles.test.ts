@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  clearRecentFiles,
   MAX_RECENT_FILES,
   MAX_RECENT_WORKSPACES,
   normalizeRecentFiles,
+  pruneRecentFiles,
   recentFilesForWorkspace,
   recordRecentFile,
   RECENT_FILES_STORAGE_KEY,
@@ -63,6 +65,32 @@ describe('recent files', () => {
       '/notes': ['a.md', 'b.md'],
       '/empty': [],
     });
+  });
+
+  it('clears recent files for one workspace', () => {
+    let map = recordRecentFile({}, '/notes', 'a.md');
+    map = recordRecentFile(map, '/other', 'b.md');
+
+    map = clearRecentFiles(map, '/notes');
+
+    expect(recentFilesForWorkspace(map, '/notes')).toEqual([]);
+    expect(recentFilesForWorkspace(map, '/other')).toEqual(['b.md']);
+  });
+
+  it('prunes recent files that no longer exist', () => {
+    let map = recordRecentFile({}, '/notes', 'a.md');
+    map = recordRecentFile(map, '/notes', 'b.md');
+    map = recordRecentFile(map, '/notes', 'c.md');
+
+    map = pruneRecentFiles(map, '/notes', ['a.md', 'c.md']);
+
+    expect(recentFilesForWorkspace(map, '/notes')).toEqual([
+      'c.md',
+      'a.md',
+    ]);
+
+    map = pruneRecentFiles(map, '/notes', ['c.md']);
+    expect(recentFilesForWorkspace(map, '/notes')).toEqual(['c.md']);
   });
 
   it('reads and writes the storage map', () => {

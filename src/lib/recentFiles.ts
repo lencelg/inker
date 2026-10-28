@@ -45,6 +45,37 @@ export function recentFilesForWorkspace(
   return map[workspace] ?? [];
 }
 
+export function clearRecentFiles(
+  map: RecentFilesMap,
+  notesDir: string | null,
+): RecentFilesMap {
+  const workspace = notesDir?.trim();
+  if (!workspace || !(workspace in map)) return map;
+  const next = { ...map };
+  delete next[workspace];
+  return next;
+}
+
+export function pruneRecentFiles(
+  map: RecentFilesMap,
+  notesDir: string | null,
+  validPaths: Iterable<string>,
+): RecentFilesMap {
+  const workspace = notesDir?.trim();
+  if (!workspace || !(workspace in map)) return map;
+  const valid = new Set(validPaths);
+  const files = (map[workspace] ?? []).filter((path) =>
+    valid.has(path),
+  );
+  if (files.length === map[workspace].length) return map;
+  if (files.length === 0) {
+    const next = { ...map };
+    delete next[workspace];
+    return next;
+  }
+  return { ...map, [workspace]: files };
+}
+
 export function recordRecentFile(
   map: RecentFilesMap,
   notesDir: string | null,

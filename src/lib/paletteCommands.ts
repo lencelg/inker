@@ -10,6 +10,7 @@ export interface CommandPaletteState {
   autoSave: boolean;
   quickOpenIncludeImages: boolean;
   sidebarVisible: boolean;
+  hasRecentFiles: boolean;
 }
 
 export function themePaletteItems(
@@ -171,6 +172,12 @@ export function commandPaletteItems(
       'file.chooseFolder',
       t('command.file.chooseFolder'),
       ['folder', 'workspace', 'open', '文件夹', '笔记库', '工作区'],
+    ),
+    command(
+      'file.clearRecentFiles',
+      t('command.file.clearRecentFiles'),
+      ['recent', 'clear', 'history', '最近', '清除', '清空'],
+      { disabled: !state.hasRecentFiles },
     ),
     command(
       'markdown.createToc',

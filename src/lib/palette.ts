@@ -113,6 +113,7 @@ const SETTINGS_PERSISTENT_COMMANDS = new Set([
   'preferences.toggleAutoSave',
   'preferences.toggleQuickOpenImages',
   'file.save',
+  'file.clearRecentFiles',
 ]);
 
 export function commandKeepsSettingsOpen(commandId: string): boolean {

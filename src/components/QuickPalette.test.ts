@@ -15,6 +15,7 @@ function mountPalette(
   options: {
     initialQuery?: string;
     allowCommandPrefix?: boolean;
+    allowFileSwitch?: boolean;
   } = {},
 ) {
   return mount(QuickPalette, {
@@ -25,6 +26,7 @@ function mountPalette(
       emptyLabel: 'No matching files',
       initialQuery: options.initialQuery,
       allowCommandPrefix: options.allowCommandPrefix,
+      allowFileSwitch: options.allowFileSwitch,
     },
   });
 }
@@ -78,6 +80,40 @@ describe('QuickPalette', () => {
     expect(wrapper.emitted('switch-command')).toBeUndefined();
 
     wrapper.unmount();
+  });
+
+  it('switches back to files on Backspace with an empty query', async () => {
+    const wrapper = mountPalette({ allowFileSwitch: true });
+    await nextTick();
+
+    await wrapper.find('input').trigger('keydown', {
+      key: 'Backspace',
+    });
+
+    expect(wrapper.emitted('switch-files')).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+
+  it('does not switch files with a query or when disabled', async () => {
+    const withQuery = mountPalette({
+      allowFileSwitch: true,
+      initialQuery: 'mon',
+    });
+    await nextTick();
+    await withQuery.find('input').trigger('keydown', {
+      key: 'Backspace',
+    });
+    expect(withQuery.emitted('switch-files')).toBeUndefined();
+    withQuery.unmount();
+
+    const disabled = mountPalette();
+    await nextTick();
+    await disabled.find('input').trigger('keydown', {
+      key: 'Backspace',
+    });
+    expect(disabled.emitted('switch-files')).toBeUndefined();
+    disabled.unmount();
   });
 
   it('moves the active item with arrow keys and selects with Enter', async () => {
