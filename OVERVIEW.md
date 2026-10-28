@@ -1,14 +1,16 @@
-# Inker
+# Inker 技术概览
 
 一个基于 **Tauri 2 + Vue 3** 的本地优先 Markdown 笔记桌面应用。
 
 Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` 文件保存在用户选择的文件夹中。应用提供文件树、全文搜索、多标签页、源码编辑、实时预览、快速打开与命令面板、Mermaid、KaTeX、图片、Vim、主题和多格式导出等能力。
 
+> 本文档面向开发和维护者，记录架构、实现细节、已知限制与开发约定。产品介绍、安装方式和功能概览见 [README.md](README.md)。
+
 - 当前版本：`0.1.0`
 - 应用标识：`com.lencelg.markdownnotes`（为兼容已有配置保持不变）
 - 界面语言：简体中文 / English（默认跟随系统）
 - 主要开发环境：Linux / Wayland / niri
-- 发布包：Debian `.deb`（编译产物约 8.6 MiB）
+- 发布包：Debian `.deb`（GitHub Release 附件约 8.7 MiB）
 
 ---
 
@@ -466,6 +468,7 @@ tempfile                     测试临时目录
 | 快速打开（Ctrl/Cmd+P） | ✅ 已完成 |
 | 最近打开文件排序 | ✅ 按工作区保存 |
 | 快速打开 `>` 命令模式 | ✅ 已完成 |
+| 快速打开 `@` 标题搜索 | ✅ 跳转到对应行 |
 | 命令面板（Ctrl/Cmd+Shift+P） | ✅ 已完成 |
 | 生成目录（TOC） | ✅ 源码 / 侧边预览 |
 | 笔记加密 | ❌ 未实现 |
@@ -478,9 +481,15 @@ tempfile                     测试临时目录
 ### 4.1 目录结构
 
 ```text
-markdown-note-taking/
+inker/
+├── README.md                      # 产品介绍、安装与功能
+├── OVERVIEW.md                    # 本文档：架构与实现说明
+├── LICENSE                        # MIT 许可证
+├── Cargo.toml                     # Cargo workspace
+├── Cargo.lock
 ├── index.html
 ├── package.json
+├── package-lock.json
 ├── vite.config.ts
 ├── tsconfig.json
 ├── assets/
@@ -859,6 +868,8 @@ Markdown 图片路径
 
 设置文案通过 `src/lib/i18n.ts` 的 `t()` 获取；切换语言时 Schema 会重新计算，因此分类、描述、提示和下拉选项会同步更新。`i18n.ts` 同时负责系统语言检测（中文系统使用简体中文，其他系统使用 English）以及后端错误的英文映射。
 
+工作区范围复用同一份 Schema，但只保留 `WORKSPACE_OVERRIDE_KEYS` 白名单中的偏好，并把每项的 `defaultValue` 替换为用户级偏好值。因此“已修改”表示该笔记库存在覆盖；重置通过 `resetWorkspace` 移除覆盖键，回落到用户设置，而不是写入默认值。
+
 ### 5.6 导出
 
 `src/lib/exportContent.ts`：
@@ -882,7 +893,6 @@ Markdown 图片路径
 - 草稿只在标签仍脏时写入（2s 空闲，最长 15s），保存成功、关闭标签、删除或重命名时同步清理或迁移。
 - 启动时草稿自动载入为脏标签，并在工作区顶部显示恢复提示；不会立即写回磁盘。
 - 工作区偏好（`src/lib/workspaceSettings.ts`）只保存被覆盖的键，按 `notesDir` 分区，最多保留最近更新的 20 个笔记库；读取时与用户偏好合并并重新归一化，再由同一套 `applyPreferences` 应用到编辑器、主题和 Vim。
-- 设置面板的工作区范围以用户偏好作为“默认值”，因此“已修改”准确表示该库存在覆盖；重置会删除对应键并回落到用户设置，而不是写入默认值。
 
 ---
 
@@ -1065,7 +1075,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 崩溃草稿组合式刷新：脏标签写入、干净标签清理、抑制状态与图片跳过
 - 命令面板/主题候选定义、开关状态、禁用条件与当前主题标记
 - 外部变更组合式同步：事件累积、防抖、阻塞恢复、回调重试与销毁
-- App 级集成：启动、监听失败提示、快速打开最近排序、`>` 命令切换、视图命令、无关文件忽略、外部重载、冲突保留/重载/另存副本、图片刷新与外部删除
+- App 级集成：启动、监听失败提示、快速打开最近排序、`>` 命令切换、视图命令、工作区偏好应用、无关文件忽略、外部重载、冲突保留/重载/另存副本、图片刷新与外部删除
 - 设置浮层在命令面板打开时的键盘暂停，以及模态关闭后的焦点恢复
 - Markdown 标题提取与列表式目录生成（层级、范围、转义、重复标题）
 - Rust 图片保存目录、嵌套笔记相对路径、目录穿越与符号链接拒绝
@@ -1093,6 +1103,8 @@ cargo tauri build
 ```text
 target/release/bundle/deb/Inker_0.1.0_amd64.deb
 ```
+
+已发布 `v0.1.0`：<https://github.com/lencelg/inker/releases/tag/v0.1.0>。Release 附件中的 `.deb` 约 8.7 MiB，仅支持 Linux x86_64；仓库当前为私有，下载需要相应 GitHub 权限。
 
 构建时可能出现 Vite 的 chunk 体积警告，但不影响构建结果。
 
