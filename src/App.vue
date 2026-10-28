@@ -16,7 +16,9 @@ import {
 } from '@tauri-apps/api/window';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
+import { useAutoSave } from './composables/useAutoSave';
 import { useRecentFiles } from './composables/useRecentFiles';
+import { useSessionPersistence } from './composables/useSessionPersistence';
 import ActivityRail from './components/ActivityRail.vue';
 import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -234,11 +236,8 @@ const editorPane = ref<{
 } | null>(null);
 
 const tabStates = new Map<string, EditorTabState>();
-const autoSaveTimers = new Map<string, number>();
 let draftTimer = 0;
 let lastDraftFlushAt = 0;
-let lastSessionPersistAt = 0;
-let sessionTimer = 0;
 let sessionHydrating = false;
 let closeApproved = false;
 let closeInProgress = false;
@@ -958,11 +957,20 @@ async function requestImageSave(
   }
 }
 
+const sessionPersistence = useSessionPersistence({
+  enabled: () => preferences.value.restoreSession,
+  isHydrating: () => sessionHydrating,
+  build: buildWorkspaceSession,
+  write: (session) => {
+    const dir = notesDir.value;
+    if (dir) writeWorkspaceSession(dir, session);
+  },
+  debounceMs: SESSION_DEBOUNCE_MS,
+  maxIntervalMs: SESSION_MAX_INTERVAL_MS,
+});
+
 function clearSessionTimer(): void {
-  if (sessionTimer) {
-    window.clearTimeout(sessionTimer);
-    sessionTimer = 0;
-  }
+  sessionPersistence.clearTimer();
 }
 
 function captureTabState(path: string | null = activePath.value): void {
@@ -1023,39 +1031,37 @@ function buildWorkspaceSession(): WorkspaceSession | null {
 }
 
 function persistSessionNow(): void {
-  clearSessionTimer();
-  if (sessionHydrating || !notesDir.value) return;
-  const session = buildWorkspaceSession();
-  if (!session) return;
-  writeWorkspaceSession(notesDir.value, session);
-  lastSessionPersistAt = Date.now();
+  sessionPersistence.persistNow();
 }
 
 function scheduleSessionPersist(): void {
-  if (!preferences.value.restoreSession || sessionHydrating) return;
-  if (Date.now() - lastSessionPersistAt >= SESSION_MAX_INTERVAL_MS) {
-    persistSessionNow();
-    return;
-  }
-  clearSessionTimer();
-  sessionTimer = window.setTimeout(() => {
-    sessionTimer = 0;
-    persistSessionNow();
-  }, SESSION_DEBOUNCE_MS);
+  sessionPersistence.schedule();
 }
 
+const autoSave = useAutoSave({
+  enabled: () => preferences.value.autoSave,
+  delay: () => preferences.value.autoSaveDelay,
+  getTab: (path) => tabs.value.find((tab) => tab.path === path),
+  isImage: isImagePath,
+  isBlocked: () =>
+    Boolean(
+      prompt.value ||
+        confirmation.value ||
+        externalConflict.value ||
+        busy.value,
+    ),
+  save: async (path) => {
+    const tab = tabs.value.find((item) => item.path === path);
+    return tab ? saveTab(tab) : false;
+  },
+});
+
 function cancelAutoSave(path: string): void {
-  const timer = autoSaveTimers.get(path);
-  if (timer === undefined) return;
-  window.clearTimeout(timer);
-  autoSaveTimers.delete(path);
+  autoSave.cancel(path);
 }
 
 function cancelAllAutoSaveTimers(): void {
-  for (const timer of autoSaveTimers.values()) {
-    window.clearTimeout(timer);
-  }
-  autoSaveTimers.clear();
+  autoSave.cancelAll();
 }
 
 function forgetTab(path: string): void {
@@ -1067,45 +1073,15 @@ function forgetTab(path: string): void {
 }
 
 function scheduleAutoSave(path: string): void {
-  if (!preferences.value.autoSave) return;
-  cancelAutoSave(path);
-  autoSaveTimers.set(
-    path,
-    window.setTimeout(() => {
-      autoSaveTimers.delete(path);
-      void runAutoSave(path);
-    }, preferences.value.autoSaveDelay),
-  );
+  autoSave.schedule(path);
 }
 
 function scheduleAutoSaveForDirtyTabs(): void {
-  if (!preferences.value.autoSave) return;
-  for (const tab of tabs.value) {
-    if (tab.content !== tab.savedContent) {
-      scheduleAutoSave(tab.path);
-    }
-  }
-}
-
-async function runAutoSave(path: string): Promise<void> {
-  if (!preferences.value.autoSave) return;
-  const tab = tabs.value.find((item) => item.path === path);
-  if (!tab || isImagePath(tab.path) || tab.content === tab.savedContent) {
-    return;
-  }
-  if (prompt.value || confirmation.value || busy.value) {
-    scheduleAutoSave(path);
-    return;
-  }
-
-  const saved = await saveTab(tab);
-  if (
-    saved &&
-    tab.content !== tab.savedContent &&
-    preferences.value.autoSave
-  ) {
-    scheduleAutoSave(path);
-  }
+  autoSave.scheduleDirty(
+    tabs.value
+      .filter((tab) => tab.content !== tab.savedContent)
+      .map((tab) => tab.path),
+  );
 }
 
 async function flushAutoSave(): Promise<void> {

@@ -486,7 +486,9 @@ markdown-note-taking/
 │   ├── types.ts                   # 前端共享类型
 │   ├── style.css                  # 全局样式、主题变量、布局
 │   ├── composables/
-│   │   └── useRecentFiles.ts      # 最近文件状态与持久化
+│   │   ├── useAutoSave.ts         # 自动保存计时器与重试
+│   │   ├── useRecentFiles.ts      # 最近文件状态与持久化
+│   │   └── useSessionPersistence.ts # 会话防抖与最大间隔持久化
 │   ├── components/
 │   │   ├── ActivityRail.vue       # 左侧活动栏
 │   │   ├── NoteSidebar.vue        # 文件树与右键菜单
@@ -589,7 +591,7 @@ markdown-note-taking/
 
 `EditorTabs`、`NoteSidebar`、`StatusBar` 等组件通过 props 接收状态，通过事件把用户操作交回 `App.vue`。
 
-可独立的状态逐步迁移到 `src/composables/`（目前为最近文件），并新增 App 级集成测试覆盖启动、快捷面板、外部变更与冲突流程。
+可独立的状态逐步迁移到 `src/composables/`（目前为最近文件、自动保存计时器与会话持久化），并新增 App 级集成测试覆盖启动、快捷面板、外部变更与冲突流程。
 
 ### 4.3 前端数据流
 
@@ -999,7 +1001,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：49 个测试文件，274 个测试通过
+- 前端：51 个测试文件，284 个测试通过
 - Rust：26 个测试通过
 
 覆盖范围包括：
@@ -1029,6 +1031,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 最近文件去重、容量限制、工作区隔离与 localStorage 往返
 - 快速面板筛选、键盘导航、空状态、关闭、输入法组合键、`>` 命令前缀与结果数量上限
 - 最近文件组合式状态与持久化
+- 自动保存组合式计时器：延迟保存、取消、模态阻塞重试与保存期间继续编辑
+- 会话组合式持久化：防抖、最大间隔、恢复期间跳过与定时器取消
 - App 级集成：启动、监听失败提示、快速打开最近排序、`>` 命令切换、视图命令、无关文件忽略、外部重载、冲突保留/重载/另存副本、图片刷新与外部删除
 - 设置浮层在命令面板打开时的键盘暂停，以及模态关闭后的焦点恢复
 - Markdown 标题提取与列表式目录生成（层级、范围、转义、重复标题）
