@@ -25,6 +25,7 @@ import {
 } from './composables/useExternalChangeSync';
 import { useRecentFiles } from './composables/useRecentFiles';
 import { useSessionPersistence } from './composables/useSessionPersistence';
+import { useWorkspaceLifecycle } from './composables/useWorkspaceLifecycle';
 import ActivityRail from './components/ActivityRail.vue';
 import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -612,7 +613,7 @@ onMounted(() => {
       }
     })
     .catch(() => undefined);
-  void bootstrap();
+  void workspaceLifecycle.bootstrap();
 });
 
 onBeforeUnmount(() => {
@@ -634,29 +635,29 @@ onBeforeUnmount(() => {
   unlistenClose?.();
 });
 
-async function bootstrap(): Promise<void> {
-  sessionHydrating = true;
-  try {
-    const state = await api.getState();
-    applyState(state);
-    let restored = false;
-    try {
-      restored = await restoreWorkspaceSession(state);
-    } catch {
-      restored = false;
-    }
-    if (restored) return;
-    const first = firstNotePath(state.entries);
-    if (first) {
-      await openNote(first);
-    }
-  } catch (err) {
-    setError(err);
-  } finally {
-    sessionHydrating = false;
-    scheduleSessionPersist();
-  }
-}
+const workspaceLifecycle = useWorkspaceLifecycle({
+  getState: () => api.getState(),
+  pickNotesDir: () => api.pickNotesDir(),
+  chooseNotesDir: (path) => api.chooseNotesDir(path),
+  applyState,
+  restoreSession: restoreWorkspaceSession,
+  firstNotePath,
+  openNote,
+  saveAllDirtyTabs,
+  captureActiveState: () => captureTabState(activePath.value),
+  persistSession: persistSessionNow,
+  resetTabs,
+  clearFeedback,
+  setError,
+  isBusy: () => busy.value,
+  setSwitching: (value) => {
+    switching.value = value;
+  },
+  setHydrating: (value) => {
+    sessionHydrating = value;
+  },
+  scheduleSessionPersist,
+});
 
 function updatePreferences(patch: Partial<Preferences>): void {
   const next = normalizePreferences({ ...preferences.value, ...patch });
@@ -1234,7 +1235,7 @@ async function runPaletteCommand(id: string): Promise<void> {
       restorePaletteFocus();
       return;
     case 'file.chooseFolder':
-      await chooseFolder();
+      await workspaceLifecycle.chooseFolder();
       restorePaletteFocus();
       return;
     case 'file.clearRecentFiles':
@@ -2096,54 +2097,6 @@ function pinPreview(path: string): void {
   if (previewPath.value === path) previewPath.value = null;
 }
 
-async function chooseFolder(): Promise<void> {
-  if (busy.value) return;
-
-  try {
-    const path = await api.pickNotesDir();
-    if (!path) return;
-
-    switching.value = true;
-    try {
-      clearFeedback();
-      if (!(await saveAllDirtyTabs())) return;
-    } finally {
-      switching.value = false;
-    }
-
-    captureTabState(activePath.value);
-    persistSessionNow();
-
-    sessionHydrating = true;
-    switching.value = true;
-    try {
-      const state = await api.chooseNotesDir(path);
-      resetTabs();
-      expandedPaths.value = [];
-      applyState(state);
-
-      let restored = false;
-      try {
-        restored = await restoreWorkspaceSession(state);
-      } catch {
-        restored = false;
-      }
-      if (!restored) {
-        const first = firstNotePath(state.entries);
-        if (first) {
-          await openNote(first);
-        }
-      }
-    } finally {
-      sessionHydrating = false;
-      switching.value = false;
-      scheduleSessionPersist();
-    }
-  } catch (err) {
-    setError(err);
-  }
-}
-
 function resetTabs(): void {
   cancelImagePasteName();
   cancelAllAutoSaveTimers();
@@ -2153,6 +2106,7 @@ function resetTabs(): void {
   tabs.value = [];
   activePath.value = null;
   previewPath.value = null;
+  expandedPaths.value = [];
   editorSession.value += 1;
   editorScrollRatio.value = 0;
   previewFocusLine.value = 1;
@@ -2874,7 +2828,7 @@ watch(
       @select="selectNote"
       @pin="pinNote"
       @toggle-folder="toggleFolder"
-      @choose-folder="chooseFolder"
+      @choose-folder="workspaceLifecycle.chooseFolder"
       @create-file="requestCreateFile"
       @create-folder="requestCreateFolder"
       @rename="requestRename"
@@ -2910,7 +2864,7 @@ watch(
         <span class="welcome-icon"><InkerMark /></span>
         <h1>Inker</h1>
         <p>{{ t('app.welcome.description') }}</p>
-        <button class="btn primary" type="button" @click="chooseFolder">
+        <button class="btn primary" type="button" @click="workspaceLifecycle.chooseFolder">
           {{ t('app.welcome.chooseFolder') }}
         </button>
         <p v-if="error" class="welcome-error">{{ error }}</p>
