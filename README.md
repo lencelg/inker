@@ -558,7 +558,8 @@ markdown-note-taking/
 │       ├── toc.ts                 # Markdown 列表式目录生成
 │       ├── viewModes.ts           # 编辑模式定义
 │       ├── vimMappings.ts         # 自定义 Vim 键位映射解析
-│       └── vimMode.ts             # Vim 模式名称格式化
+│       ├── vimMode.ts             # Vim 模式名称格式化
+│       └── workspaceRestore.ts    # 会话恢复计划与草稿合并
 └── src-tauri/
     ├── Cargo.toml
     ├── tauri.conf.json
@@ -1004,7 +1005,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：54 个测试文件，299 个测试通过
+- 前端：55 个测试文件，307 个测试通过
 - Rust：26 个测试通过
 
 覆盖范围包括：
@@ -1036,6 +1037,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 最近文件组合式状态与持久化
 - 自动保存组合式计时器：延迟保存、取消、模态阻塞重试与保存期间继续编辑
 - 会话组合式持久化：防抖、最大间隔、恢复期间跳过与定时器取消
+- 会话恢复计划：标签/预览回退、草稿覆盖与清理、孤儿草稿、布局与光标状态
 - 崩溃草稿组合式刷新：脏标签写入、干净标签清理、抑制状态与图片跳过
 - 命令面板/主题候选定义、开关状态、禁用条件与当前主题标记
 - 外部变更组合式同步：事件累积、防抖、阻塞恢复、回调重试与销毁

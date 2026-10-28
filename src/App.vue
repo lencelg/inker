@@ -112,6 +112,7 @@ import {
   writeWorkspaceSession,
   type WorkspaceSession,
 } from './lib/session';
+import { buildRestorePlan } from './lib/workspaceRestore';
 import type { ViewMode } from './lib/viewModes';
 import { applySlowWheel } from './lib/wheelScroll';
 import type { FileEntry, NotesState, SearchMatch } from './types';
@@ -1715,93 +1716,36 @@ async function restoreWorkspaceSession(state: NotesState): Promise<boolean> {
   const results = await Promise.allSettled(
     notePaths.map((path) => api.readNote(path)),
   );
-  const contents = new Map<string, string>();
+  const contents: Record<string, string> = {};
   results.forEach((result, index) => {
     if (result.status === 'fulfilled') {
-      contents.set(notePaths[index], result.value.content);
+      contents[notePaths[index]] = result.value.content;
     }
   });
 
-  let recovered = 0;
-  const restoredTabs: NoteTab[] = [];
-  for (const tab of sessionTabs) {
-    const image = isImagePath(tab.path);
-    const diskContent = image ? '' : contents.get(tab.path);
-    if (!image && diskContent === undefined) continue;
-    let content = diskContent ?? '';
-    if (!image) {
-      const draft = drafts.get(tab.path);
-      if (draft) {
-        if (draft.content === diskContent) {
-          removeDraft(dir, tab.path);
-        } else {
-          content = draft.content;
-          recovered += 1;
-        }
-      }
-    }
-    restoredTabs.push({
-      path: tab.path,
-      content,
-      savedContent: diskContent ?? '',
-    });
+  const plan = buildRestorePlan({
+    snapshot: pruned,
+    drafts: [...drafts.values()],
+    diskContents: contents,
+    isImage: isImagePath,
+  });
+  if (!plan) return false;
+
+  for (const path of plan.staleDraftPaths) {
+    removeDraft(dir, path);
   }
 
-  for (const path of orphanPaths) {
-    const diskContent = contents.get(path);
-    const draft = drafts.get(path);
-    if (diskContent === undefined || !draft) continue;
-    if (draft.content === diskContent) {
-      removeDraft(dir, path);
-      continue;
-    }
-    restoredTabs.push({
-      path,
-      content: draft.content,
-      savedContent: diskContent,
-    });
-    recovered += 1;
-  }
-  if (restoredTabs.length === 0) return false;
-
-  const paths = new Set(restoredTabs.map((tab) => tab.path));
-  const dirtyPaths = new Set(
-    restoredTabs
-      .filter((tab) => tab.content !== tab.savedContent)
-      .map((tab) => tab.path),
-  );
-  const active =
-    pruned?.activePath && paths.has(pruned.activePath)
-      ? pruned.activePath
-      : restoredTabs[0].path;
-  const preview =
-    pruned?.previewPath &&
-    paths.has(pruned.previewPath) &&
-    !dirtyPaths.has(pruned.previewPath)
-      ? pruned.previewPath
-      : null;
-
-  tabs.value = restoredTabs;
-  activePath.value = active;
-  previewPath.value = preview;
-  viewMode.value = pruned?.viewMode ?? 'source';
-  expandedPaths.value = [
-    ...new Set([...(pruned?.expandedPaths ?? []), ...ancestorDirs(active)]),
-  ];
-  activeView.value = pruned?.activeView ?? 'explorer';
-  sidebarVisible.value = pruned?.sidebarVisible ?? true;
+  tabs.value = plan.tabs;
+  activePath.value = plan.activePath;
+  previewPath.value = plan.previewPath;
+  viewMode.value = plan.viewMode;
+  expandedPaths.value = plan.expandedPaths;
+  activeView.value = plan.activeView;
+  sidebarVisible.value = plan.sidebarVisible;
 
   tabStates.clear();
-  for (const tab of restoredTabs) {
-    if (isImagePath(tab.path)) continue;
-    const saved = sessionTabs.find((item) => item.path === tab.path);
-    if (saved) {
-      tabStates.set(tab.path, {
-        line: saved.line,
-        column: saved.column,
-        scrollTop: saved.scrollTop,
-      });
-    }
+  for (const [path, state] of Object.entries(plan.tabStates)) {
+    tabStates.set(path, state);
   }
 
   editorSession.value += 1;
@@ -1809,13 +1753,15 @@ async function restoreWorkspaceSession(state: NotesState): Promise<boolean> {
   previewFocusLine.value = 1;
   cursorLine.value = null;
   cursorColumn.value = null;
-  revealPath(active);
+  revealPath(plan.activePath);
 
   await nextTick();
-  await restoreTabState(active);
+  await restoreTabState(plan.activePath);
 
-  if (recovered > 0) {
-    warning.value = t('draft.recovered', { count: recovered });
+  if (plan.recovered > 0) {
+    warning.value = t('draft.recovered', {
+      count: plan.recovered,
+    });
   }
   return true;
 }
