@@ -17,6 +17,11 @@ import {
 import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
 import { useAutoSave } from './composables/useAutoSave';
+import {
+  useExternalChangeSync,
+  type ExternalChangeDefer,
+  type ExternalChangePayload,
+} from './composables/useExternalChangeSync';
 import { useRecentFiles } from './composables/useRecentFiles';
 import { useSessionPersistence } from './composables/useSessionPersistence';
 import ActivityRail from './components/ActivityRail.vue';
@@ -179,10 +184,6 @@ const htmlExport = ref<{
   warnings: string[];
 } | null>(null);
 const settingsOpen = ref(false);
-interface NotesChangedPayload {
-  kind: string;
-  paths: string[];
-}
 type PaletteLevel = 'files' | 'commands' | 'themes' | 'codeThemes';
 const paletteLevel = ref<PaletteLevel | null>(null);
 const paletteSeed = ref('');
@@ -248,11 +249,6 @@ let suppressDrafts = false;
 let restoringTabPath: string | null = null;
 let unlistenClose: UnlistenFn | null = null;
 let unlistenNotesChanged: UnlistenFn | null = null;
-let externalRefreshTimer = 0;
-let externalRefreshRunning = false;
-let externalRefreshPending = false;
-let externalChangedPaths = new Set<string>();
-let externalNeedsFullRefresh = false;
 let appDisposed = false;
 
 applyPreferences(preferences.value);
@@ -609,8 +605,8 @@ onMounted(() => {
       unlistenWindow = unlisten;
     })
     .catch(() => undefined);
-  void listen<NotesChangedPayload>('notes-changed', (event) =>
-    handleNotesChanged(event.payload),
+  void listen<ExternalChangePayload>('notes-changed', (event) =>
+    externalSync.handlePayload(event.payload),
   )
     .then((unlisten) => {
       if (appDisposed) {
@@ -635,10 +631,7 @@ onBeforeUnmount(() => {
   cancelAllAutoSaveTimers();
   clearDraftTimer();
   clearSessionTimer();
-  if (externalRefreshTimer) {
-    window.clearTimeout(externalRefreshTimer);
-    externalRefreshTimer = 0;
-  }
+  externalSync.dispose();
   unlistenNotesChanged?.();
   unlistenNotesChanged = null;
   unlistenWindow?.();
@@ -2480,46 +2473,6 @@ async function requestCloseTab(path: string): Promise<void> {
   scheduleSessionPersist();
 }
 
-function handleNotesChanged(
-  payload: NotesChangedPayload | string[] | null | undefined,
-): void {
-  if (Array.isArray(payload)) {
-    externalNeedsFullRefresh = true;
-    for (const path of payload) {
-      if (typeof path === 'string' && path) {
-        externalChangedPaths.add(path);
-      }
-    }
-  } else if (
-    !payload ||
-    !Array.isArray(payload.paths) ||
-    payload.paths.length === 0
-  ) {
-    externalNeedsFullRefresh = true;
-  } else {
-    for (const path of payload.paths) {
-      if (typeof path === 'string' && path) {
-        externalChangedPaths.add(path);
-      }
-    }
-    if (payload.kind !== 'modify') {
-      externalNeedsFullRefresh = true;
-    }
-  }
-  scheduleExternalRefresh();
-}
-
-function scheduleExternalRefresh(): void {
-  if (appDisposed) return;
-  if (externalRefreshTimer) {
-    window.clearTimeout(externalRefreshTimer);
-  }
-  externalRefreshTimer = window.setTimeout(() => {
-    externalRefreshTimer = 0;
-    void refreshAfterExternalChange();
-  }, EXTERNAL_REFRESH_DEBOUNCE_MS);
-}
-
 function workspaceModalsOpen(): boolean {
   return (
     settingsOpen.value ||
@@ -2533,48 +2486,22 @@ function workspaceModalsOpen(): boolean {
   );
 }
 
-async function refreshAfterExternalChange(): Promise<void> {
-  if (appDisposed) return;
-  if (externalRefreshRunning) {
-    externalRefreshPending = true;
-    return;
-  }
-  if (externalChangedPaths.size === 0 && !externalNeedsFullRefresh) {
-    return;
-  }
-  if (
-    switching.value ||
-    mutating.value ||
-    closeInProgress ||
-    closeApproved ||
-    workspaceModalsOpen()
-  ) {
-    externalRefreshPending = true;
-    return;
-  }
-
-  const paths = [...externalChangedPaths];
-  const fullRefresh = externalNeedsFullRefresh;
-  externalChangedPaths = new Set();
-  externalNeedsFullRefresh = false;
-
-  externalRefreshRunning = true;
-  try {
-    await refreshWorkspaceFromDisk(paths, fullRefresh);
-  } catch (err) {
-    setError(err);
-  } finally {
-    externalRefreshRunning = false;
-    if (externalRefreshPending && !appDisposed) {
-      externalRefreshPending = false;
-      scheduleExternalRefresh();
-    }
-  }
-}
+const externalSync = useExternalChangeSync({
+  canRefresh: () =>
+    !switching.value &&
+    !mutating.value &&
+    !closeInProgress &&
+    !closeApproved &&
+    !workspaceModalsOpen(),
+  onRefresh: refreshWorkspaceFromDisk,
+  onError: setError,
+  debounceMs: EXTERNAL_REFRESH_DEBOUNCE_MS,
+});
 
 async function refreshWorkspaceFromDisk(
   paths: string[],
   fullRefresh: boolean,
+  defer: ExternalChangeDefer,
 ): Promise<void> {
   const knownFiles = new Set(
     entries.value
@@ -2644,7 +2571,7 @@ async function refreshWorkspaceFromDisk(
       saving,
     });
     if (action === 'ignore') {
-      if (saving) externalRefreshPending = true;
+      if (saving) defer([tab.path], false);
       continue;
     }
 
@@ -2661,9 +2588,7 @@ async function refreshWorkspaceFromDisk(
     }
 
     if (workspaceModalsOpen()) {
-      for (const path of paths) externalChangedPaths.add(path);
-      if (fullRefresh) externalNeedsFullRefresh = true;
-      externalRefreshPending = true;
+      defer(paths, fullRefresh);
       break;
     }
 
@@ -2887,15 +2812,7 @@ watch(
     busy.value,
   ],
   () => {
-    if (
-      externalRefreshPending &&
-      !externalRefreshRunning &&
-      !workspaceModalsOpen() &&
-      !busy.value
-    ) {
-      externalRefreshPending = false;
-      scheduleExternalRefresh();
-    }
+    externalSync.resume();
   },
 );
 
