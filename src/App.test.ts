@@ -18,16 +18,20 @@ const mocks = vi.hoisted(() => {
         payload: { kind: string; paths: string[] };
       }) => void)
     | null = null;
+  let watchErrorHandler:
+    | ((event: { payload: string }) => void)
+    | null = null;
 
   const listen = vi.fn(
     async (
       event: string,
-      handler: (event: {
-        payload: { kind: string; paths: string[] };
-      }) => void,
+      handler: (event: { payload: unknown }) => void,
     ) => {
       if (event === 'notes-changed') {
-        notesChangedHandler = handler;
+        notesChangedHandler = handler as typeof notesChangedHandler;
+      }
+      if (event === 'notes-watch-error') {
+        watchErrorHandler = handler as typeof watchErrorHandler;
       }
       return () => undefined;
     },
@@ -69,8 +73,10 @@ const mocks = vi.hoisted(() => {
     windowMock,
     apiMock,
     getNotesChangedHandler: () => notesChangedHandler,
+    getWatchErrorHandler: () => watchErrorHandler,
     resetNotesChangedHandler: () => {
       notesChangedHandler = null;
+      watchErrorHandler = null;
     },
   };
 });
@@ -258,6 +264,20 @@ describe('App integration', () => {
     await settle();
 
     expect(wrapper.find('.banner').text()).toContain('watch failed');
+  });
+
+  it('shows runtime watcher errors', async () => {
+    const wrapper = mountApp();
+    await settle();
+
+    const handler = mocks.getWatchErrorHandler();
+    expect(handler).toBeTypeOf('function');
+    handler!({ payload: 'runtime watch failed' });
+    await settle();
+
+    expect(wrapper.find('.banner').text()).toContain(
+      'runtime watch failed',
+    );
   });
 
   it('opens recent files first and switches to commands with >', async () => {

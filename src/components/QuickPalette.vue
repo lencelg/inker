@@ -21,6 +21,7 @@ const props = defineProps<{
   initialQuery?: string;
   allowCommandPrefix?: boolean;
   allowFileSwitch?: boolean;
+  recentIds?: readonly string[];
 }>();
 
 const emit = defineEmits<{
@@ -37,7 +38,11 @@ const input = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
 
 const filtered = computed(() =>
-  filterPaletteItems(props.items, query.value).slice(0, MAX_RESULTS),
+  filterPaletteItems(
+    props.items,
+    query.value,
+    props.recentIds,
+  ).slice(0, MAX_RESULTS),
 );
 
 function iconFor(kind: PaletteItemKind | undefined): Component | null {

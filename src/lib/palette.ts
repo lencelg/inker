@@ -85,15 +85,27 @@ function scoreItem(item: PaletteItem, query: string): number | null {
 export function filterPaletteItems(
   items: readonly PaletteItem[],
   query: string,
+  recentPaths: readonly string[] = [],
 ): PaletteItem[] {
   if (query.trim() === '') return [...items];
 
+  const recentRank = new Map(
+    recentPaths.map((path, index) => [path, index]),
+  );
+
   return items
-    .map((item, index) => ({
-      item,
-      index,
-      score: scoreItem(item, query),
-    }))
+    .map((item, index) => {
+      const score = scoreItem(item, query);
+      if (score === null) {
+        return { item, index, score: null };
+      }
+      const rank = recentRank.get(item.id);
+      const boost =
+        rank !== undefined && (item.kind === 'note' || item.kind === 'image')
+          ? Math.max(10, 120 - rank * 5)
+          : 0;
+      return { item, index, score: score + boost };
+    })
     .filter(
       (
         entry,

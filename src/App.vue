@@ -245,6 +245,7 @@ let suppressDrafts = false;
 let restoringTabPath: string | null = null;
 let unlistenClose: UnlistenFn | null = null;
 let unlistenNotesChanged: UnlistenFn | null = null;
+let unlistenWatchError: UnlistenFn | null = null;
 let appDisposed = false;
 
 applyPreferences(preferences.value);
@@ -613,6 +614,17 @@ onMounted(() => {
       }
     })
     .catch(() => undefined);
+  void listen<string>('notes-watch-error', (event) =>
+    updateWatcherError(event.payload),
+  )
+    .then((unlisten) => {
+      if (appDisposed) {
+        unlisten();
+      } else {
+        unlistenWatchError = unlisten;
+      }
+    })
+    .catch(() => undefined);
   void workspaceLifecycle.bootstrap();
 });
 
@@ -631,6 +643,8 @@ onBeforeUnmount(() => {
   externalSync.dispose();
   unlistenNotesChanged?.();
   unlistenNotesChanged = null;
+  unlistenWatchError?.();
+  unlistenWatchError = null;
   unlistenWindow?.();
   unlistenClose?.();
 });
@@ -3047,6 +3061,9 @@ watch(
       :allow-command-prefix="paletteLevel === 'files'"
       :allow-file-switch="
         paletteLevel === 'commands' && paletteCommandFromPrefix
+      "
+      :recent-ids="
+        paletteLevel === 'files' ? recentFiles.files.value : []
       "
       @select="handlePaletteSelect"
       @switch-command="handlePaletteSwitchCommand"

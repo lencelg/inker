@@ -110,6 +110,17 @@ describe('buildFilePaletteItems', () => {
     ]);
   });
 
+  it('boosts recent files in fuzzy search results', () => {
+    const same: PaletteItem[] = [
+      { id: 'a.md', label: 'Same', kind: 'note' },
+      { id: 'b.md', label: 'Same', kind: 'note' },
+    ];
+
+    expect(
+      filterPaletteItems(same, 'same', ['b.md']).map((item) => item.id),
+    ).toEqual(['b.md', 'a.md']);
+  });
+
   it('orders recently opened files first', () => {
     const palette = buildFilePaletteItems(entries, false, [
       'docs/plan.md',

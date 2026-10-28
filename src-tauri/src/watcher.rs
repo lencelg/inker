@@ -2,11 +2,12 @@ use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use tauri::{AppHandle, Emitter, Manager};
 
 pub const NOTES_CHANGED_EVENT: &str = "notes-changed";
+pub const NOTES_WATCH_ERROR_EVENT: &str = "notes-watch-error";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,7 +19,7 @@ pub struct NotesChangedEvent {
 #[derive(Default)]
 pub struct NotesWatcher {
     inner: Mutex<Option<WatchedDir>>,
-    last_error: Mutex<Option<String>>,
+    last_error: Arc<Mutex<Option<String>>>,
 }
 
 struct WatchedDir {
@@ -38,18 +39,21 @@ pub fn last_error(app: &AppHandle) -> Option<String> {
         .and_then(|error| error.clone())
 }
 
-fn build_watcher<F>(mut handler: F) -> Result<RecommendedWatcher, String>
+fn build_watcher<F, E>(mut handler: F, mut on_error: E) -> Result<RecommendedWatcher, String>
 where
     F: FnMut(notify::Event) + Send + 'static,
+    E: FnMut(String) + Send + 'static,
 {
-    notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
-        let Ok(event) = result else {
-            return;
-        };
-        if matches!(event.kind, EventKind::Access(_)) {
-            return;
+    notify::recommended_watcher(move |result: notify::Result<notify::Event>| match result {
+        Ok(event) => {
+            if matches!(event.kind, EventKind::Access(_)) {
+                return;
+            }
+            handler(event);
         }
-        handler(event);
+        Err(error) => {
+            on_error(format!("文件监听错误：{error}"));
+        }
     })
     .map_err(|error| format!("监听文件变化失败：{error}"))
 }
@@ -124,11 +128,26 @@ impl NotesWatcher {
         }
 
         let root = path.to_path_buf();
-        let mut watcher = match build_watcher(move |event| {
-            if let Some(payload) = notes_changed_payload(&root, &event) {
-                let _ = app.emit(NOTES_CHANGED_EVENT, payload);
-            }
-        }) {
+        let event_error = Arc::clone(&self.last_error);
+        let runtime_error = Arc::clone(&self.last_error);
+        let event_app = app.clone();
+        let error_app = app.clone();
+        let mut watcher = match build_watcher(
+            move |event| {
+                if let Ok(mut last_error) = event_error.lock() {
+                    *last_error = None;
+                }
+                if let Some(payload) = notes_changed_payload(&root, &event) {
+                    let _ = event_app.emit(NOTES_CHANGED_EVENT, payload);
+                }
+            },
+            move |error| {
+                if let Ok(mut last_error) = runtime_error.lock() {
+                    *last_error = Some(error.clone());
+                }
+                let _ = error_app.emit(NOTES_WATCH_ERROR_EVENT, error);
+            },
+        ) {
             Ok(watcher) => watcher,
             Err(error) => {
                 *guard = None;
@@ -183,9 +202,12 @@ mod tests {
     fn reports_non_access_file_changes() {
         let directory = tempfile::tempdir().unwrap();
         let (sender, receiver) = mpsc::channel();
-        let mut watcher = build_watcher(move |_| {
-            let _ = sender.send(());
-        })
+        let mut watcher = build_watcher(
+            move |_| {
+                let _ = sender.send(());
+            },
+            |_| {},
+        )
         .unwrap();
 
         watcher
