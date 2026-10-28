@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Check } from '@lucide/vue';
+import { Check, RotateCcw } from '@lucide/vue';
 import SettingsSelect from './SettingsSelect.vue';
 import ThemeImportControl from './ThemeImportControl.vue';
 import {
@@ -11,6 +11,7 @@ import { t } from '../../lib/i18n';
 
 const props = defineProps<{
   setting: SettingDefinition;
+  showReset?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -52,6 +53,16 @@ function onCheckboxChange(event: Event): void {
         <span v-if="modified" class="modified-badge">{{
           t('setting.modified')
         }}</span>
+        <button
+          v-if="showReset && modified"
+          type="button"
+          class="reset-override"
+          :aria-label="t('setting.resetWorkspace')"
+          :title="t('setting.resetWorkspace')"
+          @click="emit('reset')"
+        >
+          <RotateCcw :size="13" aria-hidden="true" />
+        </button>
       </div>
       <p class="setting-description">{{ setting.description }}</p>
 
@@ -132,7 +143,7 @@ function onCheckboxChange(event: Event): void {
       <p v-if="setting.hint" class="setting-hint">
         {{ setting.hint.text }}
         <button
-          v-if="setting.hint.linkLabel"
+          v-if="setting.hint.linkLabel && !showReset"
           type="button"
           class="hint-link"
           @click="emit('reset')"
@@ -197,6 +208,24 @@ function onCheckboxChange(event: Event): void {
   color: var(--accent-strong);
   font-size: 9.5px;
   line-height: 1.4;
+}
+
+.reset-override {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.reset-override:hover {
+  background: var(--hover-strong);
+  color: var(--ink);
 }
 
 .setting-description {

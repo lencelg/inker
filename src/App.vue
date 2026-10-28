@@ -2,7 +2,6 @@
 import {
   computed,
   defineAsyncComponent,
-  markRaw,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -11,9 +10,10 @@ import {
 } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
 import { useAutoSave } from './composables/useAutoSave';
+import { useClosePreparation } from './composables/useClosePreparation';
+import { useDocumentExport } from './composables/useDocumentExport';
 import { useDraftPersistence } from './composables/useDraftPersistence';
 import {
   useExternalChangeSync,
@@ -42,15 +42,6 @@ import QuickPalette from './components/QuickPalette.vue';
 import SearchPanel from './components/SearchPanel.vue';
 import SettingsOverlay from './components/SettingsOverlay.vue';
 import StatusBar from './components/StatusBar.vue';
-import {
-  buildDocxBase64,
-  buildDocxPreviewDocument,
-  prepareExport,
-  saveDocxBase64,
-  saveHtmlExport,
-  type PreparedExport,
-  type SaveDocxOptions,
-} from './lib/exportContent';
 import {
   blobToBase64,
   buildImageFileName,
@@ -85,6 +76,7 @@ import {
   commandKeepsSettingsOpen,
   type PaletteItem,
 } from './lib/palette';
+import { buildHeadingPaletteItems } from './lib/paletteHeadings';
 import {
   codeThemePaletteItems,
   commandPaletteItems,
@@ -105,6 +97,13 @@ import {
   savePreferences,
   type Preferences,
 } from './lib/preferences';
+import {
+  readWorkspaceSettingsMap,
+  removeWorkspaceOverride,
+  setWorkspaceOverrides,
+  workspaceOverridesFor,
+  writeWorkspaceSettingsMap,
+} from './lib/workspaceSettings';
 import {
   pruneWorkspaceSession,
   readWorkspaceSession,
@@ -160,26 +159,13 @@ const previewOpenTasks = new Map<string, Promise<void>>();
 const switching = ref(false);
 const mutating = ref(false);
 const savingPaths = ref<string[]>([]);
-const exporting = ref(false);
-const exportPreview = ref<{
-  format: 'pdf' | 'docx';
-  title: string;
-  html: string;
-  warnings: string[];
-  docxPrepared?: PreparedExport;
-  docxOptions?: SaveDocxOptions;
-  docxBase64?: string;
-} | null>(null);
-const htmlExport = ref<{
-  title: string;
-  embedded: PreparedExport;
-  linked: PreparedExport;
-  embeddedBytes: number;
-  linkedBytes: number;
-  warnings: string[];
-} | null>(null);
 const settingsOpen = ref(false);
-type PaletteLevel = 'files' | 'commands' | 'themes' | 'codeThemes';
+type PaletteLevel =
+  | 'files'
+  | 'commands'
+  | 'headings'
+  | 'themes'
+  | 'codeThemes';
 const paletteLevel = ref<PaletteLevel | null>(null);
 const paletteSeed = ref('');
 const paletteCommandFromPrefix = ref(false);
@@ -192,7 +178,15 @@ const error = ref('');
 const warning = ref('');
 const watcherError = ref('');
 let dismissedWatcherError = '';
-const preferences = ref<Preferences>(readPreferences());
+const basePreferences = ref<Preferences>(readPreferences());
+const workspaceOverrides = ref<Partial<Preferences>>({});
+let workspaceSettingsMap = readWorkspaceSettingsMap();
+const preferences = computed<Preferences>(() =>
+  normalizePreferences({
+    ...basePreferences.value,
+    ...workspaceOverrides.value,
+  }),
+);
 const vimMode = ref<string | null>('NORMAL');
 const activeView = ref<'explorer' | 'search'>('explorer');
 const sidebarVisible = ref(true);
@@ -297,6 +291,10 @@ const PALETTE_LABELS: Record<
     placeholder: 'palette.placeholder.commands',
     empty: 'palette.empty.commands',
   },
+  headings: {
+    placeholder: 'palette.placeholder.headings',
+    empty: 'palette.empty.headings',
+  },
   themes: {
     placeholder: 'palette.placeholder.themes',
     empty: 'palette.empty.themes',
@@ -314,6 +312,11 @@ const paletteItems = computed<PaletteItem[]>(() => {
       entries.value,
       preferences.value.quickOpenIncludeImages,
       recentFiles.files.value,
+    );
+  }
+  if (level === 'headings') {
+    return buildHeadingPaletteItems(
+      activeTab.value?.content ?? '',
     );
   }
   if (level === 'themes') {
@@ -670,10 +673,47 @@ const workspaceLifecycle = useWorkspaceLifecycle({
 });
 
 function updatePreferences(patch: Partial<Preferences>): void {
-  const next = normalizePreferences({ ...preferences.value, ...patch });
-  preferences.value = next;
+  const next = normalizePreferences({
+    ...basePreferences.value,
+    ...patch,
+  });
+  basePreferences.value = next;
   savePreferences(next);
-  applyPreferences(next);
+  applyPreferences(preferences.value);
+}
+
+function updateWorkspacePreferences(
+  patch: Partial<Preferences>,
+): void {
+  const dir = notesDir.value;
+  if (!dir) return;
+  workspaceSettingsMap = setWorkspaceOverrides(
+    workspaceSettingsMap,
+    dir,
+    patch,
+  );
+  workspaceOverrides.value = workspaceOverridesFor(
+    workspaceSettingsMap,
+    dir,
+  );
+  writeWorkspaceSettingsMap(workspaceSettingsMap);
+  applyPreferences(preferences.value);
+}
+
+function resetWorkspacePreference(key: keyof Preferences): void {
+  const dir = notesDir.value;
+  if (!dir) return;
+  workspaceSettingsMap = removeWorkspaceOverride(
+    workspaceSettingsMap,
+    dir,
+    key,
+  );
+  workspaceOverrides.value = workspaceOverridesFor(
+    workspaceSettingsMap,
+    dir,
+  );
+  writeWorkspaceSettingsMap(workspaceSettingsMap);
+  applyPreferences(preferences.value);
 }
 
 function requestImagePasteName(
@@ -912,6 +952,38 @@ const autoSave = useAutoSave({
   },
 });
 
+const closePreparation = useClosePreparation({
+  getDirtyCount: () =>
+    tabs.value.filter(
+      (tab) =>
+        !isImagePath(tab.path) &&
+        tab.content !== tab.savedContent,
+    ).length,
+  autoSaveEnabled: () => preferences.value.autoSave,
+  confirmUnsaved: (count) =>
+    askConfirmation({
+      title: t('close.windowUnsavedTitle'),
+      message: t('close.windowUnsavedMessage', { count }),
+      confirmLabel: t('close.saveAndClose'),
+      danger: false,
+    }),
+  saveAllDirtyTabs,
+  hasAnyDialog: () =>
+    Boolean(confirmation.value || prompt.value || imagePaste.value),
+  confirmSaveFailed: () =>
+    askConfirmation({
+      title: t('close.saveFailedTitle'),
+      message: t('close.saveFailedMessage'),
+      confirmLabel: t('close.closeAnyway'),
+    }),
+  discardDrafts: () => {
+    if (notesDir.value) {
+      clearWorkspaceDrafts(notesDir.value);
+    }
+    suppressDrafts = true;
+  },
+});
+
 const windowClose = useWindowClose({
   isBlocked: () =>
     Boolean(confirmation.value || prompt.value || busy.value),
@@ -925,7 +997,7 @@ const windowClose = useWindowClose({
   waitForPendingSaves: async () => {
     await Promise.allSettled([...saveTasks.values()]);
   },
-  prepareClose: prepareForClose,
+  prepareClose: closePreparation.prepare,
   scheduleAutoSaveForDirty: scheduleAutoSaveForDirtyTabs,
   flushDrafts,
   setSuppressDrafts: (value) => {
@@ -934,6 +1006,26 @@ const windowClose = useWindowClose({
   closeWindow: () => appWindow.close(),
   setError,
 });
+
+const documentExport = useDocumentExport({
+  getTab: () => {
+    const tab = activeTab.value;
+    return tab && !isImagePath(tab.path)
+      ? { path: tab.path, content: tab.content }
+      : null;
+  },
+  getPreferences: () => preferences.value,
+  getNotesDir: () => notesDir.value,
+  setError,
+});
+const {
+  exporting,
+  exportPreview,
+  htmlExport,
+  exportDocument,
+  saveDocx: savePreviewDocx,
+  saveHtml,
+} = documentExport;
 
 function cancelAutoSave(path: string): void {
   autoSave.cancel(path);
@@ -1132,11 +1224,35 @@ function handlePaletteSwitchCommand(query: string): void {
   paletteLevel.value = 'commands';
 }
 
+function handlePaletteSwitchHeadings(query: string): void {
+  if (paletteLevel.value !== 'files') return;
+  paletteSeed.value = query;
+  paletteLevel.value = 'headings';
+}
+
 function handlePaletteSwitchFiles(): void {
-  if (paletteLevel.value !== 'commands') return;
+  if (
+    paletteLevel.value !== 'commands' &&
+    paletteLevel.value !== 'headings'
+  ) {
+    return;
+  }
   paletteSeed.value = '';
   paletteCommandFromPrefix.value = false;
   paletteLevel.value = 'files';
+}
+
+async function openHeading(item: PaletteItem): Promise<void> {
+  closePalette();
+  if (!item.line) return;
+
+  settingsOpen.value = false;
+  if (viewMode.value !== 'source' && viewMode.value !== 'side') {
+    await setViewMode('source');
+  }
+  await nextTick();
+  editorPane.value?.revealLine(item.line, item.column ?? 1);
+  scheduleSessionPersist();
 }
 
 async function dismissPalette(): Promise<void> {
@@ -1184,6 +1300,11 @@ async function handlePaletteSelect(item: PaletteItem): Promise<void> {
 
   if (level === 'files') {
     await openPaletteFile(item.id);
+    return;
+  }
+
+  if (level === 'headings') {
+    await openHeading(item);
     return;
   }
 
@@ -1336,40 +1457,6 @@ async function toggleMaximizeWindow(): Promise<void> {
   }
 }
 
-async function prepareForClose(): Promise<boolean> {
-  const dirtyTabs = tabs.value.filter(
-    (tab) => !isImagePath(tab.path) && tab.content !== tab.savedContent,
-  );
-  if (dirtyTabs.length === 0) return true;
-
-  const shouldSave = preferences.value.autoSave
-    ? true
-    : await askConfirmation({
-        title: t('close.windowUnsavedTitle'),
-        message: t('close.windowUnsavedMessage', {
-          count: dirtyTabs.length,
-        }),
-        confirmLabel: t('close.saveAndClose'),
-        danger: false,
-      });
-  if (!shouldSave) return false;
-
-  if (await saveAllDirtyTabs()) return true;
-  if (await saveAllDirtyTabs()) return true;
-  if (confirmation.value || prompt.value || imagePaste.value) return false;
-
-  const closeAnyway = await askConfirmation({
-    title: t('close.saveFailedTitle'),
-    message: t('close.saveFailedMessage'),
-    confirmLabel: t('close.closeAnyway'),
-  });
-  if (closeAnyway && notesDir.value) {
-    clearWorkspaceDrafts(notesDir.value);
-    suppressDrafts = true;
-  }
-  return closeAnyway;
-}
-
 function isTitlebarInteractive(target: EventTarget | null): boolean {
   return (
     target instanceof Element &&
@@ -1387,160 +1474,6 @@ function onTitlebarPointerDown(event: PointerEvent): void {
 function onTitlebarDoubleClick(event: MouseEvent): void {
   if (isTitlebarInteractive(event.target)) return;
   void toggleMaximizeWindow();
-}
-
-async function handleExport(
-  format: 'pdf' | 'html' | 'docx',
-): Promise<void> {
-  const tab = activeTab.value;
-  if (!tab || isImagePath(tab.path) || exporting.value) return;
-
-  exporting.value = true;
-  clearFeedback();
-  try {
-    const preferencesValue = preferences.value;
-    const commonOptions = {
-      codeHighlight: preferencesValue.codeHighlight,
-      codeTheme: preferencesValue.codeTheme,
-    };
-    if (format === 'pdf') {
-      const prepared = await prepareExport(tab.path, tab.content, {
-        ...commonOptions,
-        embedImages: true,
-        includeToc: preferencesValue.exportIncludeToc,
-      });
-      exportPreview.value = {
-        format: 'pdf',
-        title: prepared.title,
-        html: prepared.documentHtml,
-        warnings: prepared.warnings,
-      };
-      return;
-    }
-    if (format === 'html') {
-      const [embedded, linked] = await Promise.all([
-        prepareExport(tab.path, tab.content, {
-          ...commonOptions,
-          embedImages: true,
-          includeToc: preferencesValue.exportIncludeToc,
-        }),
-        prepareExport(tab.path, tab.content, {
-          ...commonOptions,
-          embedImages: false,
-          includeToc: preferencesValue.exportIncludeToc,
-        }),
-      ]);
-      htmlExport.value = {
-        title: embedded.title,
-        embedded,
-        linked,
-        embeddedBytes: new TextEncoder().encode(
-          embedded.documentHtml,
-        ).length,
-        linkedBytes: new TextEncoder().encode(
-          linked.documentHtml,
-        ).length,
-        warnings: [...new Set(embedded.warnings)],
-      };
-      return;
-    }
-
-    const prepared = await prepareExport(tab.path, tab.content, {
-      ...commonOptions,
-      embedImages: true,
-      includeToc: false,
-    });
-    exportPreview.value = {
-      format: 'docx',
-      title: prepared.title,
-      html: buildDocxPreviewDocument(
-        prepared,
-        preferencesValue.exportIncludeToc,
-        preferencesValue.codeTheme,
-      ),
-      warnings: prepared.warnings,
-      docxPrepared: markRaw(prepared),
-      docxOptions: {
-        codeTheme: preferencesValue.codeTheme,
-        includeToc: preferencesValue.exportIncludeToc,
-      },
-    };
-  } catch (err) {
-    setError(err);
-  } finally {
-    exporting.value = false;
-  }
-}
-
-async function savePreviewDocx(): Promise<void> {
-  const current = exportPreview.value;
-  if (
-    !current ||
-    current.format !== 'docx' ||
-    !current.docxPrepared ||
-    !current.docxOptions ||
-    exporting.value
-  ) {
-    return;
-  }
-
-  exporting.value = true;
-  try {
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve());
-    });
-    const base64 =
-      current.docxBase64 ??
-      (await buildDocxBase64(
-        current.docxPrepared,
-        current.docxOptions,
-      ));
-    if (!base64) return;
-    current.docxBase64 = base64;
-    const path = await saveDocxBase64(current.title, base64);
-    if (!path) return;
-    exportPreview.value = null;
-    if (preferences.value.exportOpenAfter) {
-      await openExportedFile(path);
-    }
-  } catch (err) {
-    setError(err);
-  } finally {
-    exporting.value = false;
-  }
-}
-
-async function saveHtml(
-  embedded: boolean,
-): Promise<void> {
-  const current = htmlExport.value;
-  if (!current || exporting.value) return;
-
-  exporting.value = true;
-  try {
-    const prepared = embedded ? current.embedded : current.linked;
-    const path = await saveHtmlExport(prepared, {
-      defaultDirectory:
-        embedded ? undefined : notesDir.value ?? undefined,
-    });
-    if (!path) return;
-    htmlExport.value = null;
-    if (preferences.value.exportOpenAfter) {
-      await openExportedFile(path);
-    }
-  } catch (err) {
-    setError(err);
-  } finally {
-    exporting.value = false;
-  }
-}
-
-async function openExportedFile(path: string): Promise<void> {
-  try {
-    await openPath(path);
-  } catch (err) {
-    setError(err);
-  }
 }
 
 async function openSearchResult(match: SearchMatch): Promise<void> {
@@ -1569,6 +1502,11 @@ function rememberRecentFile(path: string): void {
 function applyState(state: NotesState): void {
   notesDir.value = state.notesDir;
   entries.value = state.entries;
+  workspaceOverrides.value = workspaceOverridesFor(
+    workspaceSettingsMap,
+    state.notesDir,
+  );
+  applyPreferences(preferences.value);
   recentFiles.prune(
     state.notesDir,
     state.entries
@@ -2085,6 +2023,24 @@ async function pinNote(path: string): Promise<void> {
 
 function pinPreview(path: string): void {
   if (previewPath.value === path) previewPath.value = null;
+}
+
+function reorderTabs(from: string, to: string): void {
+  const fromIndex = tabs.value.findIndex((tab) => tab.path === from);
+  const toIndex = tabs.value.findIndex((tab) => tab.path === to);
+  if (
+    fromIndex === -1 ||
+    toIndex === -1 ||
+    fromIndex === toIndex
+  ) {
+    return;
+  }
+
+  const next = [...tabs.value];
+  const [tab] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, tab);
+  tabs.value = next;
+  scheduleSessionPersist();
 }
 
 function resetTabs(): void {
@@ -2743,6 +2699,7 @@ watch(
           @select="activateTab"
           @pin="pinPreview"
           @close="requestCloseTab"
+          @reorder="reorderTabs"
         />
 
         <div class="titlebar-actions">
@@ -2751,7 +2708,7 @@ watch(
           :vim-enabled="vimEnabled"
           :exporting="exporting"
           @mode-change="setViewMode"
-          @export="handleExport"
+          @export="exportDocument"
           @toggle-vim="toggleVim"
           @open-settings="openSettings"
         />
@@ -3018,10 +2975,14 @@ watch(
 
     <SettingsOverlay
       v-if="settingsOpen"
-      :preferences="preferences"
+      :preferences="basePreferences"
+      :workspace-preferences="preferences"
+      :workspace-available="notesDir !== null"
       :maximized="isMaximized"
       :suspended="paletteLevel !== null"
       @update="updatePreferences"
+      @update-workspace="updateWorkspacePreferences"
+      @reset-workspace="resetWorkspacePreference"
       @close="settingsOpen = false"
       @minimize="minimizeWindow"
       @maximize="toggleMaximizeWindow"
@@ -3035,14 +2996,17 @@ watch(
       :empty-label="paletteEmptyLabel"
       :initial-query="paletteSeed"
       :allow-command-prefix="paletteLevel === 'files'"
+      :allow-heading-prefix="paletteLevel === 'files'"
       :allow-file-switch="
-        paletteLevel === 'commands' && paletteCommandFromPrefix
+        paletteLevel === 'headings' ||
+        (paletteLevel === 'commands' && paletteCommandFromPrefix)
       "
       :recent-ids="
         paletteLevel === 'files' ? recentFiles.files.value : []
       "
       @select="handlePaletteSelect"
       @switch-command="handlePaletteSwitchCommand"
+      @switch-headings="handlePaletteSwitchHeadings"
       @switch-files="handlePaletteSwitchFiles"
       @close="dismissPalette"
     />

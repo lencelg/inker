@@ -59,8 +59,8 @@ describe('extractMarkdownHeadings', () => {
     expect(
       extractMarkdownHeadings(['Title', '=====', 'Sub', '---'].join('\n')),
     ).toEqual([
-      { level: 1, text: 'Title', id: 'title' },
-      { level: 2, text: 'Sub', id: 'sub' },
+      { level: 1, text: 'Title', id: 'title', line: 1, column: 1 },
+      { level: 2, text: 'Sub', id: 'sub', line: 3, column: 1 },
     ]);
   });
 

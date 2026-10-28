@@ -57,6 +57,8 @@ export interface MarkdownHeading {
   level: number;
   text: string;
   id: string;
+  line?: number;
+  column?: number;
 }
 
 export function extractMarkdownHeadings(
@@ -75,6 +77,8 @@ export function extractMarkdownHeadings(
         .replace(/\r?\n/g, ' ')
         .trim(),
       id: String(token.attrGet('id') ?? ''),
+      line: token.map ? token.map[0] + 1 : 1,
+      column: 1,
     });
   }
   return headings;

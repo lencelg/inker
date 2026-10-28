@@ -4,6 +4,7 @@ import SettingsContent from './settings/SettingsContent.vue';
 import SettingsHeader from './settings/SettingsHeader.vue';
 import SettingsSidebar from './settings/SettingsSidebar.vue';
 import type { Preferences } from '../lib/preferences';
+import { isWorkspaceOverrideKey } from '../lib/workspaceSettings';
 import {
   createSettingsSchema,
   isSettingModified,
@@ -18,11 +19,15 @@ import {
 
 const props = defineProps<{
   preferences: Preferences;
+  workspacePreferences?: Preferences;
+  workspaceAvailable?: boolean;
   maximized: boolean;
 }>();
 
 const emit = defineEmits<{
   update: [patch: Partial<Preferences>];
+  updateWorkspace: [patch: Partial<Preferences>];
+  resetWorkspace: [key: keyof Preferences];
   close: [];
   minimize: [];
   maximize: [];
@@ -43,10 +48,35 @@ const contentRef = ref<{
 } | null>(null);
 
 const categories = computed(() => settingsCategories());
-
-const settings = computed(() =>
-  createSettingsSchema(props.preferences, localValues.value),
+const workspaceAvailable = computed(
+  () => props.workspaceAvailable === true,
 );
+const activePreferences = computed(() =>
+  scope.value === 'workspace'
+    ? props.workspacePreferences ?? props.preferences
+    : props.preferences,
+);
+
+const settings = computed(() => {
+  const schema = createSettingsSchema(
+    activePreferences.value,
+    localValues.value,
+  );
+  if (scope.value === 'user') return schema;
+
+  return schema
+    .filter(
+      (setting) =>
+        workspaceAvailable.value &&
+        setting.preference !== undefined &&
+        isWorkspaceOverrideKey(setting.preference),
+    )
+    .map((setting) => ({
+      ...setting,
+      // In workspace scope "modified" means "overrides the user value".
+      defaultValue: props.preferences[setting.preference!],
+    }));
+});
 const normalizedQuery = computed(() => query.value.trim());
 const searching = computed(() => normalizedQuery.value.length > 0);
 const filtering = computed(() => searching.value || modifiedOnly.value);
@@ -99,7 +129,9 @@ const modifiedCount = computed(
 const totalCount = computed(() => settings.value.length);
 
 watch([normalizedQuery, modifiedOnly], async () => {
-  if (scope.value !== 'user') return;
+  if (scope.value === 'workspace' && !workspaceAvailable.value) {
+    return;
+  }
   await nextTick();
   const first = sections.value[0];
   activeCategory.value = first?.id ?? categories.value[0].id;
@@ -111,11 +143,8 @@ function changeScope(next: SettingsScope): void {
   scope.value = next;
   query.value = '';
   modifiedOnly.value = false;
-
-  if (next === 'user') {
-    activeCategory.value = categories.value[0].id;
-    void nextTick(() => contentRef.value?.scrollToTop());
-  }
+  activeCategory.value = categories.value[0].id;
+  void nextTick(() => contentRef.value?.scrollToTop());
 }
 
 function updateQuery(value: string): void {
@@ -143,7 +172,7 @@ function toggleCategory(category: SettingsCategoryId): void {
 }
 
 function selectCategory(category: SettingsCategoryId): void {
-  if (scope.value !== 'user') return;
+  if (scope.value === 'workspace' && !workspaceAvailable.value) return;
   activeCategory.value = category;
   void contentRef.value?.scrollToCategory(category);
 }
@@ -158,15 +187,27 @@ function updateSetting(
   value: SettingsValue,
 ): void {
   if (setting.preference) {
-    emit('update', {
+    const patch = {
       [setting.preference]: value,
-    } as Partial<Preferences>);
+    } as Partial<Preferences>;
+    if (scope.value === 'workspace') {
+      emit('updateWorkspace', patch);
+    } else {
+      emit('update', patch);
+    }
     return;
   }
+  if (scope.value === 'workspace') return;
   localValues.value = { ...localValues.value, [setting.id]: value };
 }
 
 function resetSetting(setting: SettingDefinition): void {
+  if (scope.value === 'workspace') {
+    if (setting.preference) {
+      emit('resetWorkspace', setting.preference);
+    }
+    return;
+  }
   updateSetting(setting, setting.defaultValue);
 }
 
@@ -180,7 +221,7 @@ function onActiveChange(category: SettingsCategoryId): void {
     <SettingsHeader
       :query="query"
       :filter-active="modifiedOnly"
-      :search-disabled="scope === 'workspace'"
+      :search-disabled="scope === 'workspace' && !workspaceAvailable"
       :maximized="maximized"
       @update:query="updateQuery"
       @clear-search="clearSearch"
@@ -200,6 +241,7 @@ function onActiveChange(category: SettingsCategoryId): void {
         :match-counts="matchCounts"
         :matched-ids="matchedIds"
         :filtering="filtering"
+        :workspace-available="workspaceAvailable"
         @change-scope="changeScope"
         @select-category="selectCategory"
         @toggle-category="toggleCategory"
@@ -216,6 +258,7 @@ function onActiveChange(category: SettingsCategoryId): void {
         :modified-only="modifiedOnly"
         :modified-count="modifiedCount"
         :total-count="totalCount"
+        :workspace-available="workspaceAvailable"
         @update-setting="updateSetting"
         @reset-setting="resetSetting"
         @active-change="onActiveChange"

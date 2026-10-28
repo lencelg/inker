@@ -2,6 +2,7 @@
 import {
   ArrowLeft,
   FileText,
+  Hash,
   Image as ImageIcon,
   Search,
 } from '@lucide/vue';
@@ -21,6 +22,7 @@ const props = defineProps<{
   initialQuery?: string;
   allowCommandPrefix?: boolean;
   allowFileSwitch?: boolean;
+  allowHeadingPrefix?: boolean;
   recentIds?: readonly string[];
 }>();
 
@@ -28,6 +30,7 @@ const emit = defineEmits<{
   select: [item: PaletteItem];
   close: [];
   'switch-command': [query: string];
+  'switch-headings': [query: string];
   'switch-files': [];
 }>();
 
@@ -48,6 +51,7 @@ const filtered = computed(() =>
 function iconFor(kind: PaletteItemKind | undefined): Component | null {
   if (kind === 'note') return FileText;
   if (kind === 'image') return ImageIcon;
+  if (kind === 'heading') return Hash;
   if (kind === 'back') return ArrowLeft;
   return null;
 }
@@ -120,6 +124,8 @@ watch(query, (value) => {
   active.value = 0;
   if (props.allowCommandPrefix && value.startsWith('>')) {
     emit('switch-command', value.slice(1));
+  } else if (props.allowHeadingPrefix && value.startsWith('@')) {
+    emit('switch-headings', value.slice(1));
   }
   void scrollActiveIntoView();
 });

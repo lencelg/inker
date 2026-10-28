@@ -25,6 +25,7 @@ const props = defineProps<{
   modifiedOnly: boolean;
   modifiedCount: number;
   totalCount: number;
+  workspaceAvailable?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -101,7 +102,12 @@ function setSectionElement(
 
 function onScroll(): void {
   const scroll = scrollElement.value;
-  if (!scroll || props.scope !== 'user') return;
+  if (
+    !scroll ||
+    (props.scope === 'workspace' && !props.workspaceAvailable)
+  ) {
+    return;
+  }
 
   const marker = scroll.scrollTop + 26;
   let current: SettingsCategoryId | null = null;
@@ -194,7 +200,10 @@ defineExpose({
       tabindex="-1"
       @scroll.passive="onScroll"
     >
-      <div v-if="scope === 'workspace'" class="content-empty workspace">
+      <div
+        v-if="scope === 'workspace' && !workspaceAvailable"
+        class="content-empty workspace"
+      >
         <span class="empty-icon"><FolderCog :size="25" aria-hidden="true" /></span>
         <h3>{{ t('settings.workspaceEmptyHeading') }}</h3>
         <p>
@@ -241,6 +250,7 @@ defineExpose({
               v-for="setting in section.items"
               :key="setting.id"
               :setting="setting"
+              :show-reset="scope === 'workspace'"
               @update="emit('updateSetting', setting, $event)"
               @reset="emit('resetSetting', setting)"
             />

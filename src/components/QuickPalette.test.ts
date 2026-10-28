@@ -16,6 +16,7 @@ function mountPalette(
     initialQuery?: string;
     allowCommandPrefix?: boolean;
     allowFileSwitch?: boolean;
+    allowHeadingPrefix?: boolean;
   } = {},
 ) {
   return mount(QuickPalette, {
@@ -27,6 +28,7 @@ function mountPalette(
       initialQuery: options.initialQuery,
       allowCommandPrefix: options.allowCommandPrefix,
       allowFileSwitch: options.allowFileSwitch,
+      allowHeadingPrefix: options.allowHeadingPrefix,
     },
   });
 }
@@ -67,6 +69,17 @@ describe('QuickPalette', () => {
     await wrapper.find('input').setValue('>theme');
 
     expect(wrapper.emitted('switch-command')?.[0]).toEqual(['theme']);
+
+    wrapper.unmount();
+  });
+
+  it('switches to heading mode when the query starts with @', async () => {
+    const wrapper = mountPalette({ allowHeadingPrefix: true });
+    await nextTick();
+
+    await wrapper.find('input').setValue('@intro');
+
+    expect(wrapper.emitted('switch-headings')?.[0]).toEqual(['intro']);
 
     wrapper.unmount();
   });

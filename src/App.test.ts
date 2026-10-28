@@ -92,6 +92,8 @@ vi.mock('@tauri-apps/plugin-opener', () => ({
   openPath: vi.fn(async () => undefined),
 }));
 
+let revealCalls: Array<[number, number]> = [];
+
 const EditorPaneStub = defineComponent({
   name: 'EditorPane',
   props: {
@@ -107,7 +109,9 @@ const EditorPaneStub = defineComponent({
   template: '<div class="editor-stub">{{ initialContent }}</div>',
   methods: {
     refresh() {},
-    revealLine() {},
+    revealLine(line: number, column = 1) {
+      revealCalls.push([line, column]);
+    },
     scrollToLine() {},
     captureState() {
       return null;
@@ -222,6 +226,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.resetNotesChangedHandler();
   imageMounts = 0;
+  revealCalls = [];
 
   contents = new Map([
     ['a.md', '# A'],
@@ -280,6 +285,22 @@ describe('App integration', () => {
     );
   });
 
+  it('applies workspace preference overrides when a workspace opens', async () => {
+    window.localStorage.setItem(
+      'inker-workspace-settings-v1',
+      JSON.stringify({ '/notes': { fontSize: 20 } }),
+    );
+    const wrapper = mountApp();
+    await settle();
+
+    expect(
+      document.documentElement.style.getPropertyValue(
+        '--content-font-size',
+      ),
+    ).toBe('20px');
+    wrapper.unmount();
+  });
+
   it('opens recent files first and switches to commands with >', async () => {
     const wrapper = mountApp();
     await settle();
@@ -325,6 +346,27 @@ describe('App integration', () => {
     });
     await settle();
     expect(wrapper.findAll('.palette-item')[0].text()).toContain('b.md');
+  });
+
+  it('searches and jumps to headings with @', async () => {
+    contents.set('a.md', '# A\n\n## Intro\n\n### Details');
+    const wrapper = mountApp();
+    await settle();
+
+    pressShortcut({ key: 'p' });
+    await settle();
+    await wrapper.find('.palette-input input').setValue('@Intro');
+    await settle();
+
+    const heading = wrapper
+      .findAll('.palette-item')
+      .find((item) => item.text().includes('Intro'));
+    expect(heading).toBeTruthy();
+    await heading!.trigger('click');
+    await settle();
+
+    expect(wrapper.find('.quick-palette').exists()).toBe(false);
+    expect(revealCalls.at(-1)).toEqual([3, 1]);
   });
 
   it('runs a view mode command from the command palette', async () => {

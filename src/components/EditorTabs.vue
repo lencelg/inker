@@ -20,9 +20,12 @@ const emit = defineEmits<{
   select: [path: string];
   close: [path: string];
   pin: [path: string];
+  reorder: [from: string, to: string];
 }>();
 
 const tabElements = ref(new Map<string, HTMLElement>());
+const draggingPath = ref<string | null>(null);
+const dragOverPath = ref<string | null>(null);
 
 function setTabRef(
   path: string,
@@ -45,6 +48,56 @@ function onAuxClick(event: MouseEvent, path: string): void {
     event.preventDefault();
     emit('close', path);
   }
+}
+
+function onDragStart(event: DragEvent, path: string): void {
+  draggingPath.value = path;
+  dragOverPath.value = null;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', path);
+  }
+}
+
+function onDragOver(event: DragEvent, path: string): void {
+  if (!draggingPath.value) return;
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+  if (dragOverPath.value !== path) {
+    dragOverPath.value = path;
+  }
+}
+
+function onDragLeave(event: DragEvent, path: string): void {
+  const target = event.currentTarget;
+  const related = event.relatedTarget;
+  if (
+    target instanceof Node &&
+    related instanceof Node &&
+    target.contains(related)
+  ) {
+    return;
+  }
+  if (dragOverPath.value === path) {
+    dragOverPath.value = null;
+  }
+}
+
+function onDrop(event: DragEvent, path: string): void {
+  event.preventDefault();
+  const from = draggingPath.value;
+  draggingPath.value = null;
+  dragOverPath.value = null;
+  if (from && from !== path) {
+    emit('reorder', from, path);
+  }
+}
+
+function onDragEnd(): void {
+  draggingPath.value = null;
+  dragOverPath.value = null;
 }
 
 watch(
@@ -70,7 +123,11 @@ watch(
         active: tab.path === activePath,
         dirty: tab.dirty,
         preview: tab.path === previewPath,
+        dragging: tab.path === draggingPath,
+        'drag-over':
+          tab.path === dragOverPath && tab.path !== draggingPath,
       }"
+      draggable="true"
       role="tab"
       :aria-selected="tab.path === activePath"
       :tabindex="tab.path === activePath ? 0 : -1"
@@ -84,6 +141,11 @@ watch(
       @keydown.enter.prevent="emit('select', tab.path)"
       @keydown.space.prevent="emit('select', tab.path)"
       @auxclick="onAuxClick($event, tab.path)"
+      @dragstart="onDragStart($event, tab.path)"
+      @dragover="onDragOver($event, tab.path)"
+      @dragleave="onDragLeave($event, tab.path)"
+      @drop="onDrop($event, tab.path)"
+      @dragend="onDragEnd"
     >
       <svg
         v-if="tab.kind === 'image'"
@@ -164,6 +226,16 @@ watch(
 .tab:hover {
   background: var(--hover);
   color: var(--ink);
+}
+
+.tab.dragging {
+  opacity: 0.45;
+}
+
+.tab.drag-over {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  background: var(--hover-strong);
 }
 
 .tab.active {

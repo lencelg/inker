@@ -28,6 +28,7 @@ const props = defineProps<{
   matchCounts: Record<SettingsCategoryId, number>;
   matchedIds: string[];
   filtering: boolean;
+  workspaceAvailable?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -95,7 +96,11 @@ function isSettingMatch(setting: SettingDefinition): boolean {
       </button>
     </div>
 
-    <nav v-if="scope === 'user'" class="settings-tree" :aria-label="t('settings.categories')">
+    <nav
+      v-if="scope === 'user' || workspaceAvailable"
+      class="settings-tree"
+      :aria-label="t('settings.categories')"
+    >
       <div
         v-for="category in userCategories"
         :key="category.id"

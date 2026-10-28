@@ -5,12 +5,16 @@ import SettingsPanel from './SettingsPanel.vue';
 import { setLanguage } from '../lib/i18n';
 import { normalizePreferences } from '../lib/preferences';
 
-function mountPanel(overrides = {}) {
+function mountPanel(
+  overrides = {},
+  extraProps: Record<string, unknown> = {},
+) {
   return mount(SettingsPanel, {
     attachTo: document.body,
     props: {
       preferences: normalizePreferences(overrides),
       maximized: false,
+      ...extraProps,
     },
   });
 }
@@ -108,6 +112,54 @@ describe('SettingsPanel', () => {
     expect(
       wrapper.find('.search-input').attributes('disabled'),
     ).toBeDefined();
+  });
+
+  it('shows workspace overrides relative to the user values', async () => {
+    const wrapper = mountPanel(
+      {},
+      {
+        workspacePreferences: normalizePreferences({ theme: 'dark' }),
+        workspaceAvailable: true,
+      },
+    );
+    await wrapper.findAll('.scope-tab')[1].trigger('click');
+
+    const themeItem = wrapper.find(
+      '[data-setting-id="workbench.colorTheme"]',
+    );
+    expect(themeItem.classes()).toContain('modified');
+    expect(wrapper.find('[data-setting-id="workbench.language"]').exists()).toBe(
+      false,
+    );
+    expect(
+      wrapper.find('[data-setting-id="workbench.restoreSession"]').exists(),
+    ).toBe(false);
+
+    await themeItem.find('.reset-override').trigger('click');
+    expect(wrapper.emitted('resetWorkspace')?.at(-1)).toEqual(['theme']);
+    wrapper.unmount();
+  });
+
+  it('edits workspace preferences while the workspace scope is active', async () => {
+    const wrapper = mountPanel(
+      {},
+      {
+        workspacePreferences: normalizePreferences({ autoSave: true }),
+        workspaceAvailable: true,
+      },
+    );
+    await wrapper.findAll('.scope-tab')[1].trigger('click');
+
+    const checkbox = wrapper.find(
+      '[data-setting-id="files.autoSave"] input[type="checkbox"]',
+    );
+    await checkbox.setValue(false);
+
+    expect(wrapper.emitted('updateWorkspace')?.at(-1)).toEqual([
+      { autoSave: false },
+    ]);
+    expect(wrapper.emitted('update')).toBeUndefined();
+    wrapper.unmount();
   });
 
   it('changes the display language from settings', async () => {

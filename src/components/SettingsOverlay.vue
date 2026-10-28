@@ -10,12 +10,16 @@ import { t } from '../lib/i18n';
 import type { Preferences } from '../lib/preferences';
 const props = defineProps<{
   preferences: Preferences;
+  workspacePreferences?: Preferences;
+  workspaceAvailable?: boolean;
   maximized: boolean;
   suspended?: boolean;
 }>();
 
 const emit = defineEmits<{
   update: [patch: Partial<Preferences>];
+  updateWorkspace: [patch: Partial<Preferences>];
+  resetWorkspace: [key: keyof Preferences];
   close: [];
   minimize: [];
   maximize: [];
@@ -208,8 +212,12 @@ onBeforeUnmount(() => {
     >
       <SettingsPanel
         :preferences="preferences"
+        :workspace-preferences="workspacePreferences"
+        :workspace-available="workspaceAvailable"
         :maximized="maximized"
         @update="emit('update', $event)"
+        @update-workspace="emit('updateWorkspace', $event)"
+        @reset-workspace="emit('resetWorkspace', $event)"
         @close="emit('close')"
         @minimize="emit('minimize')"
         @maximize="emit('maximize')"

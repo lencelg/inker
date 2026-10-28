@@ -7,6 +7,7 @@ export type PaletteItemKind =
   | 'image'
   | 'command'
   | 'theme'
+  | 'heading'
   | 'back';
 
 export interface PaletteItem {
@@ -16,6 +17,8 @@ export interface PaletteItem {
   keywords?: string[];
   kind?: PaletteItemKind;
   disabled?: boolean;
+  line?: number;
+  column?: number;
 }
 
 export function fuzzyScore(query: string, text: string): number | null {
