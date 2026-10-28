@@ -191,9 +191,7 @@ async function settle(): Promise<void> {
 }
 
 async function waitForExternalRefresh(): Promise<void> {
-  await new Promise<void>((resolve) => {
-    window.setTimeout(resolve, 350);
-  });
+  await vi.advanceTimersByTimeAsync(350);
   await settle();
 }
 
@@ -213,6 +211,7 @@ function pressShortcut(options: {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   window.localStorage.clear();
   vi.clearAllMocks();
   mocks.resetNotesChangedHandler();
@@ -242,7 +241,10 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const wrapper of mountedWrappers.splice(0)) {
+    wrapper.unmount();
   }
+  vi.clearAllTimers();
+  vi.useRealTimers();
   document.body.replaceChildren();
 });
 
