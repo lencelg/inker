@@ -18,15 +18,18 @@ const props = defineProps<{
   items: readonly PaletteItem[];
   placeholder: string;
   emptyLabel: string;
+  initialQuery?: string;
+  allowCommandPrefix?: boolean;
 }>();
 
 const emit = defineEmits<{
   select: [item: PaletteItem];
   close: [];
+  'switch-command': [query: string];
 }>();
 
 const MAX_RESULTS = 100;
-const query = ref('');
+const query = ref(props.initialQuery ?? '');
 const active = ref(0);
 const input = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
@@ -94,8 +97,11 @@ function onEscape(event: KeyboardEvent): void {
   emit('close');
 }
 
-watch(query, () => {
+watch(query, (value) => {
   active.value = 0;
+  if (props.allowCommandPrefix && value.startsWith('>')) {
+    emit('switch-command', value.slice(1));
+  }
   void scrollActiveIntoView();
 });
 
@@ -107,7 +113,12 @@ watch(filtered, () => {
 
 onMounted(async () => {
   await nextTick();
-  input.value?.focus();
+  const element = input.value;
+  element?.focus();
+  element?.setSelectionRange(
+    element.value.length,
+    element.value.length,
+  );
 });
 </script>
 

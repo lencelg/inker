@@ -7,6 +7,7 @@ export interface FileEntry {
 export interface NotesState {
   notesDir: string | null;
   entries: FileEntry[];
+  watcherError?: string | null;
 }
 
 export interface NoteDetail {
@@ -41,6 +42,10 @@ export interface NotesApi {
   refresh(): Promise<NotesState>;
   readNote(path: string): Promise<NoteDetail>;
   saveNote(path: string, content: string): Promise<void>;
+  saveCopy(
+    defaultPath: string,
+    content: string,
+  ): Promise<string | null>;
   saveImage(
     notePath: string,
     folder: string,

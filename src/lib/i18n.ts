@@ -61,6 +61,8 @@ const zh = {
   'app.welcome.description': '选择一个文件夹，笔记会以 .md 文件保存在其中。',
   'app.welcome.chooseFolder': '选择笔记文件夹',
   'app.error.dismiss': '关闭错误提示',
+  'app.watcherError':
+    '文件监听不可用，外部修改不会自动检测：{error}',
   'app.empty.title': '还没有打开笔记',
   'app.empty.description': '在左侧文件树中打开或新建一个 Markdown 文件。',
   'app.status.image': '图片',
@@ -145,6 +147,15 @@ const zh = {
   'close.unsavedTitle': '关闭未保存的标签页？',
   'close.unsavedMessage': '“{name}”有未保存的修改，关闭后将丢失。',
   'close.discard': '不保存并关闭',
+  'externalChange.title': '文件已在磁盘上修改',
+  'externalChange.message':
+    '“{name}”在磁盘上被其他程序修改。重新加载会丢弃当前未保存的修改。',
+  'externalChange.reload': '重新加载',
+  'externalChange.keep': '保留我的修改',
+  'externalChange.saveCopy': '另存副本…',
+  'externalChange.copySaved': '副本已保存。',
+  'externalChange.deleted':
+    '“{name}”已从磁盘删除；未保存的内容仍保留在标签页中。',
   'close.windowUnsavedTitle': '关闭窗口？',
   'close.windowUnsavedMessage': '有 {count} 个标签页尚未保存。保存并关闭吗？',
   'close.saveAndClose': '保存并关闭',
@@ -419,6 +430,8 @@ const en: Record<TranslationKey, string> = {
     'Choose a folder. Your notes will be saved there as .md files.',
   'app.welcome.chooseFolder': 'Choose Notes Folder',
   'app.error.dismiss': 'Dismiss error',
+  'app.watcherError':
+    'File watching is unavailable; external changes will not be detected automatically: {error}',
   'app.empty.title': 'No note open',
   'app.empty.description':
     'Open or create a Markdown file in the file tree on the left.',
@@ -511,6 +524,15 @@ const en: Record<TranslationKey, string> = {
   'close.unsavedMessage':
     '“{name}” has unsaved changes that will be lost when closed.',
   'close.discard': 'Close Without Saving',
+  'externalChange.title': 'File changed on disk',
+  'externalChange.message':
+    '“{name}” was changed by another program. Reloading will discard your unsaved changes.',
+  'externalChange.reload': 'Reload',
+  'externalChange.keep': 'Keep My Changes',
+  'externalChange.saveCopy': 'Save a Copy…',
+  'externalChange.copySaved': 'Copy saved.',
+  'externalChange.deleted':
+    '“{name}” was deleted on disk; its unsaved content is kept in the tab.',
   'close.windowUnsavedTitle': 'Close window?',
   'close.windowUnsavedMessage':
     '{count} tab(s) have unsaved changes. Save and close?',

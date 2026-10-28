@@ -9,17 +9,19 @@ import {
   ref,
   watch,
 } from 'vue';
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   getCurrentWindow,
   type CloseRequestedEvent,
 } from '@tauri-apps/api/window';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
+import { useRecentFiles } from './composables/useRecentFiles';
 import ActivityRail from './components/ActivityRail.vue';
 import AppMenu from './components/AppMenu.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
+import ExternalChangeDialog from './components/ExternalChangeDialog.vue';
 import EditorTabs from './components/EditorTabs.vue';
 import ExportPreviewDialog from './components/ExportPreviewDialog.vue';
 import HtmlExportDialog from './components/HtmlExportDialog.vue';
@@ -67,6 +69,10 @@ import {
   writeDraftList,
   type DraftEntry,
 } from './lib/drafts';
+import {
+  classifyExternalChange,
+  conflictedCopyPath,
+} from './lib/externalChange';
 import { isImagePath } from './lib/fileKinds';
 import { restoreSettingsFocus } from './lib/focus';
 import { localizeError, t, type TranslationKey } from './lib/i18n';
@@ -131,6 +137,7 @@ const SESSION_DEBOUNCE_MS = 400;
 const SESSION_MAX_INTERVAL_MS = 5000;
 const DRAFT_IDLE_MS = 2000;
 const DRAFT_MAX_INTERVAL_MS = 15000;
+const EXTERNAL_REFRESH_DEBOUNCE_MS = 300;
 const SPLIT_STORAGE_KEY = 'inker-split-ratio';
 const LEGACY_SPLIT_STORAGE_KEY = 'markleaf-split-ratio';
 const SIDEBAR_WIDTH_STORAGE_KEY = 'inker-sidebar-width';
@@ -167,14 +174,22 @@ const htmlExport = ref<{
   warnings: string[];
 } | null>(null);
 const settingsOpen = ref(false);
+interface NotesChangedPayload {
+  kind: string;
+  paths: string[];
+}
 type PaletteLevel = 'files' | 'commands' | 'themes' | 'codeThemes';
 const paletteLevel = ref<PaletteLevel | null>(null);
+const paletteSeed = ref('');
 let palettePreviousFocus: HTMLElement | null = null;
+const recentFiles = useRecentFiles();
 const isMaximized = ref(false);
 const appWindow = getCurrentWindow();
 let unlistenWindow: UnlistenFn | null = null;
 const error = ref('');
 const warning = ref('');
+const watcherError = ref('');
+let dismissedWatcherError = '';
 const preferences = ref<Preferences>(readPreferences());
 const vimMode = ref<string | null>('NORMAL');
 const activeView = ref<'explorer' | 'search'>('explorer');
@@ -186,6 +201,7 @@ const splitRatio = ref(readSplitRatio());
 const resizing = ref(false);
 const expandedPaths = ref<string[]>([]);
 const editorSession = ref(0);
+const imageSession = ref(0);
 const editorScrollRatio = ref(0);
 const previewFocusLine = ref(1);
 const cursorLine = ref<number | null>(null);
@@ -229,6 +245,13 @@ let closeInProgress = false;
 let suppressDrafts = false;
 let restoringTabPath: string | null = null;
 let unlistenClose: UnlistenFn | null = null;
+let unlistenNotesChanged: UnlistenFn | null = null;
+let externalRefreshTimer = 0;
+let externalRefreshRunning = false;
+let externalRefreshPending = false;
+let externalChangedPaths = new Set<string>();
+let externalNeedsFullRefresh = false;
+let appDisposed = false;
 
 applyPreferences(preferences.value);
 
@@ -299,6 +322,7 @@ const paletteItems = computed<PaletteItem[]>(() => {
     return buildFilePaletteItems(
       entries.value,
       preferences.value.quickOpenIncludeImages,
+      recentFiles.files.value,
     );
   }
   if (level === 'themes') return themePaletteItems();
@@ -487,6 +511,7 @@ interface ConfirmOptions {
   title: string;
   message: string;
   confirmLabel: string;
+  cancelLabel?: string;
   danger?: boolean;
 }
 
@@ -494,6 +519,7 @@ interface PendingConfirmation {
   title: string;
   message: string;
   confirmLabel: string;
+  cancelLabel?: string;
   danger: boolean;
   resolve: (confirmed: boolean) => void;
 }
@@ -509,7 +535,14 @@ interface PromptState {
   submit: (value: string) => Promise<void>;
 }
 
+type ExternalConflictChoice = 'reload' | 'keep' | 'copy';
+
 const confirmation = ref<PendingConfirmation | null>(null);
+const externalConflict = ref<{
+  name: string;
+  resolve: (choice: ExternalConflictChoice) => void;
+} | null>(null);
+const deletedDirtyTabs = ref<string[]>([]);
 const prompt = ref<PromptState | null>(null);
 const imagePaste = ref<PendingImagePaste | null>(null);
 const wysiwygPane = ref<{ focus: () => void } | null>(null);
@@ -727,10 +760,22 @@ onMounted(() => {
       unlistenWindow = unlisten;
     })
     .catch(() => undefined);
+  void listen<NotesChangedPayload>('notes-changed', (event) =>
+    handleNotesChanged(event.payload),
+  )
+    .then((unlisten) => {
+      if (appDisposed) {
+        unlisten();
+      } else {
+        unlistenNotesChanged = unlisten;
+      }
+    })
+    .catch(() => undefined);
   void bootstrap();
 });
 
 onBeforeUnmount(() => {
+  appDisposed = true;
   window.removeEventListener('keydown', handleGlobalKeydown, true);
   window.removeEventListener('wheel', handleGlobalWheel, true);
   window.removeEventListener('wheel', handleSlowScrollWheel, true);
@@ -741,6 +786,12 @@ onBeforeUnmount(() => {
   cancelAllAutoSaveTimers();
   clearDraftTimer();
   clearSessionTimer();
+  if (externalRefreshTimer) {
+    window.clearTimeout(externalRefreshTimer);
+    externalRefreshTimer = 0;
+  }
+  unlistenNotesChanged?.();
+  unlistenNotesChanged = null;
   unlistenWindow?.();
   unlistenClose?.();
 });
@@ -1247,12 +1298,19 @@ function openPalette(level: 'files' | 'commands'): void {
         ? document.activeElement
         : null;
   }
+  paletteSeed.value = '';
   clearFeedback();
   paletteLevel.value = level;
 }
 
 function closePalette(): void {
   paletteLevel.value = null;
+}
+
+function handlePaletteSwitchCommand(query: string): void {
+  if (paletteLevel.value !== 'files') return;
+  paletteSeed.value = query;
+  paletteLevel.value = 'commands';
 }
 
 async function dismissPalette(): Promise<void> {
@@ -1293,6 +1351,7 @@ async function handlePaletteSelect(item: PaletteItem): Promise<void> {
   if (level === null) return;
 
   if (item.kind === 'back') {
+    paletteSeed.value = '';
     paletteLevel.value = 'commands';
     return;
   }
@@ -1325,10 +1384,12 @@ async function handlePaletteSelect(item: PaletteItem): Promise<void> {
 
 async function runPaletteCommand(id: string): Promise<void> {
   if (id === 'preferences.colorTheme') {
+    paletteSeed.value = '';
     paletteLevel.value = 'themes';
     return;
   }
   if (id === 'preferences.codeTheme') {
+    paletteSeed.value = '';
     paletteLevel.value = 'codeThemes';
     return;
   }
@@ -1720,9 +1781,15 @@ async function openSearchResult(match: SearchMatch): Promise<void> {
   editorPane.value?.revealLine(match.line, match.column);
 }
 
+function rememberRecentFile(path: string): void {
+  recentFiles.record(notesDir.value, path);
+}
+
 function applyState(state: NotesState): void {
   notesDir.value = state.notesDir;
   entries.value = state.entries;
+  recentFiles.sync(state.notesDir);
+  updateWatcherError(state.watcherError);
   pruneExpandedPaths();
   pruneTabs();
 }
@@ -1734,11 +1801,25 @@ function pruneExpandedPaths(): void {
   expandedPaths.value = expandedPaths.value.filter((path) => directories.has(path));
 }
 
-function pruneTabs(): void {
+function pruneTabs(options: { keepDirtyMissing?: boolean } = {}): void {
   const files = new Set(
     entries.value.filter((entry) => !entry.isDir).map((entry) => entry.path),
   );
-  const stale = tabs.value.filter((tab) => !files.has(tab.path));
+  const kept = new Set<string>();
+  if (options.keepDirtyMissing) {
+    for (const tab of tabs.value) {
+      if (
+        !files.has(tab.path) &&
+        !isImagePath(tab.path) &&
+        tab.content !== tab.savedContent
+      ) {
+        kept.add(tab.path);
+      }
+    }
+  }
+  const stale = tabs.value.filter(
+    (tab) => !files.has(tab.path) && !kept.has(tab.path),
+  );
   if (stale.length === 0) return;
 
   for (const tab of stale) {
@@ -1748,7 +1829,9 @@ function pruneTabs(): void {
   const activeIndex = tabs.value.findIndex((tab) => tab.path === activePath.value);
   const activeRemoved =
     activeIndex >= 0 && stale.some((tab) => tab.path === activePath.value);
-  tabs.value = tabs.value.filter((tab) => files.has(tab.path));
+  tabs.value = tabs.value.filter(
+    (tab) => files.has(tab.path) || kept.has(tab.path),
+  );
   if (
     previewPath.value !== null &&
     !tabs.value.some((tab) => tab.path === previewPath.value)
@@ -2003,6 +2086,7 @@ function openImagePinned(path: string): void {
 
 async function activateTab(path: string): Promise<void> {
   if (!tabs.value.some((tab) => tab.path === path)) return;
+  rememberRecentFile(path);
   if (activePath.value === path) {
     revealPath(path);
     return;
@@ -2207,7 +2291,11 @@ async function openPreviewNote(path: string): Promise<void> {
 }
 
 async function selectNote(path: string): Promise<void> {
-  if (busy.value || path === activePath.value) return;
+  if (busy.value) return;
+  if (path === activePath.value) {
+    rememberRecentFile(path);
+    return;
+  }
 
   if (isImagePath(path)) {
     openImagePreview(path);
@@ -2566,6 +2654,264 @@ async function requestCloseTab(path: string): Promise<void> {
   scheduleSessionPersist();
 }
 
+function handleNotesChanged(
+  payload: NotesChangedPayload | string[] | null | undefined,
+): void {
+  if (Array.isArray(payload)) {
+    externalNeedsFullRefresh = true;
+    for (const path of payload) {
+      if (typeof path === 'string' && path) {
+        externalChangedPaths.add(path);
+      }
+    }
+  } else if (
+    !payload ||
+    !Array.isArray(payload.paths) ||
+    payload.paths.length === 0
+  ) {
+    externalNeedsFullRefresh = true;
+  } else {
+    for (const path of payload.paths) {
+      if (typeof path === 'string' && path) {
+        externalChangedPaths.add(path);
+      }
+    }
+    if (payload.kind !== 'modify') {
+      externalNeedsFullRefresh = true;
+    }
+  }
+  scheduleExternalRefresh();
+}
+
+function scheduleExternalRefresh(): void {
+  if (appDisposed) return;
+  if (externalRefreshTimer) {
+    window.clearTimeout(externalRefreshTimer);
+  }
+  externalRefreshTimer = window.setTimeout(() => {
+    externalRefreshTimer = 0;
+    void refreshAfterExternalChange();
+  }, EXTERNAL_REFRESH_DEBOUNCE_MS);
+}
+
+function workspaceModalsOpen(): boolean {
+  return (
+    settingsOpen.value ||
+    paletteLevel.value !== null ||
+    prompt.value !== null ||
+    confirmation.value !== null ||
+    externalConflict.value !== null ||
+    imagePaste.value !== null ||
+    exportPreview.value !== null ||
+    htmlExport.value !== null
+  );
+}
+
+async function refreshAfterExternalChange(): Promise<void> {
+  if (appDisposed) return;
+  if (externalRefreshRunning) {
+    externalRefreshPending = true;
+    return;
+  }
+  if (externalChangedPaths.size === 0 && !externalNeedsFullRefresh) {
+    return;
+  }
+  if (
+    switching.value ||
+    mutating.value ||
+    closeInProgress ||
+    closeApproved ||
+    workspaceModalsOpen()
+  ) {
+    externalRefreshPending = true;
+    return;
+  }
+
+  const paths = [...externalChangedPaths];
+  const fullRefresh = externalNeedsFullRefresh;
+  externalChangedPaths = new Set();
+  externalNeedsFullRefresh = false;
+
+  externalRefreshRunning = true;
+  try {
+    await refreshWorkspaceFromDisk(paths, fullRefresh);
+  } catch (err) {
+    setError(err);
+  } finally {
+    externalRefreshRunning = false;
+    if (externalRefreshPending && !appDisposed) {
+      externalRefreshPending = false;
+      scheduleExternalRefresh();
+    }
+  }
+}
+
+async function refreshWorkspaceFromDisk(
+  paths: string[],
+  fullRefresh: boolean,
+): Promise<void> {
+  const knownFiles = new Set(
+    entries.value
+      .filter((entry) => !entry.isDir)
+      .map((entry) => entry.path),
+  );
+  const needsTreeRefresh =
+    fullRefresh || paths.some((path) => !knownFiles.has(path));
+
+  if (needsTreeRefresh) {
+    const state = await api.refresh();
+    if (
+      appDisposed ||
+      !state.notesDir ||
+      state.notesDir !== notesDir.value
+    ) {
+      return;
+    }
+    notesDir.value = state.notesDir;
+    entries.value = state.entries;
+    updateWatcherError(state.watcherError);
+    pruneExpandedPaths();
+  }
+
+  const files = new Set(
+    entries.value
+      .filter((entry) => !entry.isDir)
+      .map((entry) => entry.path),
+  );
+  const openNotePaths = new Set(
+    tabs.value
+      .filter((tab) => !isImagePath(tab.path))
+      .map((tab) => tab.path),
+  );
+  const pathsToRead =
+    paths.length > 0
+      ? [...new Set(paths)].filter(
+          (path) => files.has(path) && openNotePaths.has(path),
+        )
+      : fullRefresh
+        ? [...openNotePaths].filter((path) => files.has(path))
+        : [];
+
+  const diskContents = new Map<string, string>();
+  await Promise.all(
+    pathsToRead.map(async (path) => {
+      try {
+        const detail = await api.readNote(path);
+        diskContents.set(path, detail.content);
+      } catch {
+        // The file may have changed again; the next event will retry.
+      }
+    }),
+  );
+
+  for (const tab of [...tabs.value]) {
+    if (isImagePath(tab.path) || !tabs.value.includes(tab)) continue;
+    const diskContent = diskContents.get(tab.path);
+    if (diskContent === undefined) continue;
+
+    const saving =
+      savingPaths.value.includes(tab.path) || saveTasks.has(tab.path);
+    const action = classifyExternalChange({
+      content: tab.content,
+      savedContent: tab.savedContent,
+      diskContent,
+      saving,
+    });
+    if (action === 'ignore') {
+      if (saving) externalRefreshPending = true;
+      continue;
+    }
+
+    if (action === 'adopt') {
+      tab.savedContent = diskContent;
+      cancelAutoSave(tab.path);
+      if (notesDir.value) removeDraft(notesDir.value, tab.path);
+      continue;
+    }
+
+    if (action === 'reload') {
+      await reloadTabFromDisk(tab, diskContent);
+      continue;
+    }
+
+    if (workspaceModalsOpen()) {
+      for (const path of paths) externalChangedPaths.add(path);
+      if (fullRefresh) externalNeedsFullRefresh = true;
+      externalRefreshPending = true;
+      break;
+    }
+
+    cancelAutoSave(tab.path);
+    const choice = await askExternalConflict(basename(tab.path));
+    if (choice === 'reload') {
+      await reloadTabFromDisk(tab, diskContent);
+    } else if (choice === 'copy') {
+      await saveExternalCopy(tab.content, tab.path);
+    } else {
+      scheduleAutoSave(tab.path);
+    }
+  }
+
+  const imagePathsToRefresh =
+    paths.length > 0
+      ? paths
+      : fullRefresh && activeImagePath.value
+        ? [activeImagePath.value]
+        : [];
+  if (
+    activeImagePath.value &&
+    imagePathsToRefresh.includes(activeImagePath.value)
+  ) {
+    imageSession.value += 1;
+  }
+
+  const missingDirty = tabs.value.filter(
+    (tab) =>
+      !isImagePath(tab.path) &&
+      !files.has(tab.path) &&
+      tab.content !== tab.savedContent,
+  );
+  deletedDirtyTabs.value = missingDirty.map((tab) => tab.path);
+  if (missingDirty.length > 0) {
+    for (const tab of missingDirty) {
+      cancelAutoSave(tab.path);
+    }
+  }
+
+  pruneTabs({ keepDirtyMissing: true });
+  scheduleSessionPersist();
+}
+
+async function reloadTabFromDisk(
+  tab: NoteTab,
+  content: string,
+): Promise<void> {
+  const active = activePath.value === tab.path;
+  if (active) captureTabState(tab.path);
+
+  tab.content = content;
+  tab.savedContent = content;
+  cancelAutoSave(tab.path);
+  if (notesDir.value) removeDraft(notesDir.value, tab.path);
+
+  if (!active) {
+    scheduleSessionPersist();
+    return;
+  }
+
+  editorSession.value += 1;
+  previewFocusLine.value = 1;
+  if (viewMode.value === 'wysiwyg') {
+    cursorLine.value = null;
+    cursorColumn.value = null;
+  }
+  await nextTick();
+  if (viewMode.value !== 'wysiwyg') {
+    await restoreTabState(tab.path);
+  }
+  scheduleSessionPersist();
+}
+
 async function refreshEntries(): Promise<void> {
   const state = await api.refresh();
   applyState(state);
@@ -2610,6 +2956,54 @@ function resolveConfirmation(confirmed: boolean): void {
   current?.resolve(confirmed);
 }
 
+function askExternalConflict(
+  name: string,
+): Promise<ExternalConflictChoice> {
+  return new Promise((resolve) => {
+    externalConflict.value = { name, resolve };
+  });
+}
+
+function resolveExternalConflict(
+  choice: ExternalConflictChoice,
+): void {
+  const current = externalConflict.value;
+  externalConflict.value = null;
+  current?.resolve(choice);
+}
+
+async function saveExternalCopy(
+  content: string,
+  notePath: string,
+): Promise<boolean> {
+  try {
+    const selected = await api.saveCopy(
+      conflictedCopyPath(notesDir.value, notePath),
+      content,
+    );
+    if (!selected) return false;
+    warning.value = t('externalChange.copySaved');
+    return true;
+  } catch (err) {
+    setError(err);
+    return false;
+  }
+}
+
+async function saveDeletedCopy(): Promise<void> {
+  const path = deletedDirtyTabs.value[0];
+  if (!path) return;
+  const tab = tabs.value.find((item) => item.path === path);
+  if (!tab) {
+    deletedDirtyTabs.value = deletedDirtyTabs.value.slice(1);
+    return;
+  }
+  const saved = await saveExternalCopy(tab.content, tab.path);
+  if (saved) {
+    deletedDirtyTabs.value = deletedDirtyTabs.value.slice(1);
+  }
+}
+
 function clearFeedback(): void {
   error.value = '';
   warning.value = '';
@@ -2624,6 +3018,23 @@ function errorMessage(err: unknown): string {
   return localizeError(message);
 }
 
+function updateWatcherError(message?: string | null): void {
+  const value = message ?? '';
+  if (!value) {
+    dismissedWatcherError = '';
+    watcherError.value = '';
+    return;
+  }
+  const localized = localizeError(value);
+  watcherError.value =
+    localized === dismissedWatcherError ? '' : localized;
+}
+
+function dismissWatcherError(): void {
+  dismissedWatcherError = watcherError.value;
+  watcherError.value = '';
+}
+
 watch(
   () => [
     tabs.value.map((tab) => tab.path).join('\u0000'),
@@ -2635,6 +3046,31 @@ watch(
     sidebarVisible.value,
   ],
   () => scheduleSessionPersist(),
+);
+
+watch(
+  () => [
+    settingsOpen.value,
+    paletteLevel.value !== null,
+    prompt.value !== null,
+    confirmation.value !== null,
+    externalConflict.value !== null,
+    imagePaste.value !== null,
+    exportPreview.value !== null,
+    htmlExport.value !== null,
+    busy.value,
+  ],
+  () => {
+    if (
+      externalRefreshPending &&
+      !externalRefreshRunning &&
+      !workspaceModalsOpen() &&
+      !busy.value
+    ) {
+      externalRefreshPending = false;
+      scheduleExternalRefresh();
+    }
+  },
 );
 
 watch(
@@ -2832,10 +3268,53 @@ watch(
         </button>
       </div>
 
+      <div v-if="watcherError" class="banner" role="status">
+        <span>
+          {{ t('app.watcherError', { error: watcherError }) }}
+        </span>
+        <button
+          type="button"
+          :aria-label="t('app.error.dismiss')"
+          @click="dismissWatcherError"
+        >
+          ×
+        </button>
+      </div>
+
+      <div
+        v-if="deletedDirtyTabs.length"
+        class="banner warning"
+        role="status"
+      >
+        <span>
+          {{
+            t('externalChange.deleted', {
+              name: basename(deletedDirtyTabs[0]),
+            })
+          }}
+        </span>
+        <span class="banner-buttons">
+          <button
+            class="banner-action"
+            type="button"
+            @click="saveDeletedCopy"
+          >
+            {{ t('externalChange.saveCopy') }}
+          </button>
+          <button
+            type="button"
+            :aria-label="t('app.error.dismiss')"
+            @click="deletedDirtyTabs = []"
+          >
+            ×
+          </button>
+        </span>
+      </div>
+
       <template v-if="activeTab">
         <ImagePane
           v-if="activeImagePath"
-          :key="activeImagePath"
+          :key="`${activeImagePath}:${imageSession}`"
           :path="activeImagePath"
         />
 
@@ -2939,7 +3418,10 @@ watch(
       :items="paletteItems"
       :placeholder="palettePlaceholder"
       :empty-label="paletteEmptyLabel"
+      :initial-query="paletteSeed"
+      :allow-command-prefix="paletteLevel === 'files'"
       @select="handlePaletteSelect"
+      @switch-command="handlePaletteSwitchCommand"
       @close="dismissPalette"
     />
 
@@ -2981,9 +3463,24 @@ watch(
       :title="confirmation.title"
       :message="confirmation.message"
       :confirm-label="confirmation.confirmLabel"
+      :cancel-label="confirmation.cancelLabel"
       :danger="confirmation.danger"
       @confirm="resolveConfirmation(true)"
       @cancel="resolveConfirmation(false)"
+    />
+
+    <ExternalChangeDialog
+      v-if="externalConflict"
+      :title="t('externalChange.title')"
+      :message="
+        t('externalChange.message', { name: externalConflict.name })
+      "
+      :reload-label="t('externalChange.reload')"
+      :keep-label="t('externalChange.keep')"
+      :save-copy-label="t('externalChange.saveCopy')"
+      @reload="resolveExternalConflict('reload')"
+      @keep="resolveExternalConflict('keep')"
+      @save-copy="resolveExternalConflict('copy')"
     />
 
     <PromptDialog

@@ -110,6 +110,16 @@ describe('buildFilePaletteItems', () => {
     ]);
   });
 
+  it('orders recently opened files first', () => {
+    const palette = buildFilePaletteItems(entries, false, [
+      'docs/plan.md',
+    ]);
+    expect(palette.map((item) => item.id)).toEqual([
+      'docs/plan.md',
+      'notes.md',
+    ]);
+  });
+
   it('includes images when enabled', () => {
     const palette = buildFilePaletteItems(entries, true);
     expect(palette.map((item) => item.id)).toContain('assets/shot.png');

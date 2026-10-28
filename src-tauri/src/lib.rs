@@ -1,10 +1,26 @@
 mod commands;
 mod notes;
 mod settings;
+mod watcher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(watcher::NotesWatcher::default())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            if let Ok(settings) = settings::load_settings(&handle) {
+                if let Some(value) = settings.notes_dir {
+                    if let Ok(notes_dir) = notes::ensure_notes_dir(&value) {
+                        let _ = notes::cleanup_stale_temp_files(&notes_dir);
+                        if let Err(error) = watcher::watch_notes(&handle, &notes_dir) {
+                            eprintln!("{error}");
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())

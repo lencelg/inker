@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { t } from './lib/i18n';
 import type {
   NoteAsset,
@@ -28,6 +28,23 @@ export const api: NotesApi = {
   readNote: (path) => invoke<NoteDetail>('read_note', { path }),
 
   saveNote: (path, content) => invoke<void>('save_note', { path, content }),
+
+  saveCopy: async (defaultPath, content) => {
+    const selected = await save({
+      title: t('externalChange.saveCopy'),
+      defaultPath,
+      filters: [
+        { name: 'Markdown', extensions: ['md', 'markdown'] },
+      ],
+    });
+    if (!selected) return null;
+    await invoke<void>('save_export', {
+      path: selected,
+      data: content,
+      binary: false,
+    });
+    return selected;
+  },
 
   saveImage: (notePath, folder, fileName, data) =>
     invoke<string>('save_note_image', {

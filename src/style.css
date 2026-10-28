@@ -780,6 +780,20 @@ button:disabled {
   color: var(--warning);
 }
 
+.banner-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.banner .banner-action {
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .panes {
   flex: 1;
   min-height: 0;

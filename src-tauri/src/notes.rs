@@ -4,6 +4,8 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, SystemTime},
 };
 
 const MAX_DEPTH: usize = 32;
@@ -29,6 +31,7 @@ pub struct FileEntry {
 pub struct NotesState {
     pub notes_dir: Option<String>,
     pub entries: Vec<FileEntry>,
+    pub watcher_error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -151,9 +154,121 @@ pub fn read_note(notes_dir: &Path, relative: &str) -> Result<NoteDetail, String>
     })
 }
 
+static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn write_atomic(path: &Path, content: &str) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "无法确定笔记目录".to_string())?;
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "无法确定笔记文件名".to_string())?
+        .to_string_lossy();
+    let temp = parent.join(format!(
+        ".{}.inker-tmp-{}-{}",
+        file_name,
+        std::process::id(),
+        TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+
+    let result = (|| -> std::io::Result<()> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+
+        if let Ok(metadata) = fs::metadata(path) {
+            let _ = fs::set_permissions(&temp, metadata.permissions());
+        }
+
+        match fs::rename(&temp, path) {
+            Ok(()) => Ok(()),
+            Err(_) if path.exists() => {
+                fs::remove_file(path)?;
+                fs::rename(&temp, path)
+            }
+            Err(error) => Err(error),
+        }
+    })();
+
+    if let Err(error) = result {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("保存笔记失败：{error}"));
+    }
+    Ok(())
+}
+
 pub fn save_note(notes_dir: &Path, relative: &str, content: &str) -> Result<(), String> {
     let path = resolve_existing_file(notes_dir, relative)?;
-    fs::write(&path, content).map_err(|error| format!("保存笔记失败：{error}"))
+    write_atomic(&path, content)
+}
+
+const STALE_TEMP_AGE: Duration = Duration::from_secs(60 * 60);
+
+pub fn cleanup_stale_temp_files(notes_dir: &Path) -> Result<(), String> {
+    cleanup_temp_files(notes_dir, STALE_TEMP_AGE)
+}
+
+fn cleanup_temp_files(
+    notes_dir: &Path,
+    min_age: Duration,
+) -> Result<(), String> {
+    let root = canonical_dir(notes_dir)?;
+    cleanup_temp_files_in(&root, min_age, 0)
+}
+
+fn cleanup_temp_files_in(
+    directory: &Path,
+    min_age: Duration,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_DEPTH {
+        return Ok(());
+    }
+
+    let entries = fs::read_dir(directory)
+        .map_err(|error| format!("读取临时文件失败：{error}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("读取临时文件失败：{error}"))?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+
+        if name.contains(".inker-tmp-") {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !file_type.is_file() {
+                continue;
+            }
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            let Ok(modified) = metadata.modified() else {
+                continue;
+            };
+            let age = SystemTime::now()
+                .duration_since(modified)
+                .unwrap_or_default();
+            if age >= min_age {
+                let _ = fs::remove_file(entry.path());
+            }
+            continue;
+        }
+
+        if name.starts_with('.') {
+            continue;
+        }
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() && !file_type.is_symlink() {
+            cleanup_temp_files_in(&entry.path(), min_age, depth + 1)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn save_note_image(
@@ -909,6 +1024,63 @@ mod tests {
 
         save_note(&root, &path, "").unwrap();
         assert_eq!(read_note(&root, &path).unwrap().content, "");
+    }
+
+    #[test]
+    fn replaces_notes_without_leaving_temporary_files() {
+        let (_temp, root) = setup();
+        let path = create_file(&root, "", "Atomic").unwrap();
+        fs::write(root.join(&path), "old").unwrap();
+
+        save_note(&root, &path, "new content").unwrap();
+
+        assert_eq!(read_note(&root, &path).unwrap().content, "new content");
+        let leftovers = fs::read_dir(&root)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".inker-tmp-"))
+            .collect::<Vec<_>>();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+    }
+
+    #[test]
+    fn cleans_stale_atomic_write_temp_files() {
+        let (_temp, root) = setup();
+        fs::create_dir(root.join("sub")).unwrap();
+        fs::write(root.join("Note.md"), "note").unwrap();
+        fs::write(root.join(".Note.md.inker-tmp-1-1"), "partial").unwrap();
+        fs::write(
+            root.join("sub/.Nested.md.inker-tmp-1-2"),
+            "partial",
+        )
+        .unwrap();
+        fs::write(root.join("keep.tmp"), "keep").unwrap();
+
+        cleanup_temp_files(&root, Duration::ZERO).unwrap();
+
+        assert!(!root.join(".Note.md.inker-tmp-1-1").exists());
+        assert!(!root
+            .join("sub/.Nested.md.inker-tmp-1-2")
+            .exists());
+        assert!(root.join("Note.md").exists());
+        assert!(root.join("keep.tmp").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preserves_note_permissions_when_saving() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_temp, root) = setup();
+        let path = create_file(&root, "", "Permissions").unwrap();
+        let absolute = root.join(&path);
+        fs::set_permissions(&absolute, fs::Permissions::from_mode(0o600)).unwrap();
+
+        save_note(&root, &path, "updated").unwrap();
+
+        let mode = fs::metadata(&absolute).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 
     #[test]

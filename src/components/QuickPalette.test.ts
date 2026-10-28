@@ -11,13 +11,20 @@ const items: PaletteItem[] = [
   { id: 'back', label: 'Back', kind: 'back' },
 ];
 
-function mountPalette() {
+function mountPalette(
+  options: {
+    initialQuery?: string;
+    allowCommandPrefix?: boolean;
+  } = {},
+) {
   return mount(QuickPalette, {
     attachTo: document.body,
     props: {
       items,
       placeholder: 'Search files by name',
       emptyLabel: 'No matching files',
+      initialQuery: options.initialQuery,
+      allowCommandPrefix: options.allowCommandPrefix,
     },
   });
 }
@@ -35,6 +42,40 @@ describe('QuickPalette', () => {
     const filtered = wrapper.findAll('.palette-item');
     expect(filtered).toHaveLength(1);
     expect(filtered[0].text()).toContain('Monokai');
+
+    wrapper.unmount();
+  });
+
+  it('starts with the provided query', async () => {
+    const wrapper = mountPalette({ initialQuery: 'mon' });
+    await nextTick();
+
+    expect(
+      (wrapper.find('input').element as HTMLInputElement).value,
+    ).toBe('mon');
+    expect(wrapper.findAll('.palette-item')).toHaveLength(1);
+
+    wrapper.unmount();
+  });
+
+  it('switches to command mode when the query starts with >', async () => {
+    const wrapper = mountPalette({ allowCommandPrefix: true });
+    await nextTick();
+
+    await wrapper.find('input').setValue('>theme');
+
+    expect(wrapper.emitted('switch-command')?.[0]).toEqual(['theme']);
+
+    wrapper.unmount();
+  });
+
+  it('keeps > literal when command mode switching is disabled', async () => {
+    const wrapper = mountPalette();
+    await nextTick();
+
+    await wrapper.find('input').setValue('>theme');
+
+    expect(wrapper.emitted('switch-command')).toBeUndefined();
 
     wrapper.unmount();
   });

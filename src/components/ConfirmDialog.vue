@@ -6,6 +6,7 @@ defineProps<{
   title: string;
   message: string;
   confirmLabel: string;
+  cancelLabel?: string;
   danger: boolean;
 }>();
 
@@ -24,7 +25,7 @@ onMounted(() => {
       <p>{{ message }}</p>
       <div class="actions">
         <button class="btn ghost" type="button" @click="emit('cancel')">
-          {{ t('action.cancel') }}
+          {{ cancelLabel ?? t('action.cancel') }}
         </button>
         <button class="btn" :class="danger ? 'danger' : 'primary'" type="button" @click="emit('confirm')">
           {{ confirmLabel }}

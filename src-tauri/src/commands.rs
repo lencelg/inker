@@ -26,7 +26,11 @@ pub fn choose_notes_dir(app: AppHandle, path: String) -> Result<NotesState, Stri
             notes_dir: Some(notes_dir.display().to_string()),
         },
     )?;
-    state_for_dir(&notes_dir)
+    let _ = crate::notes::cleanup_stale_temp_files(&notes_dir);
+    if let Err(error) = crate::watcher::watch_notes(&app, &notes_dir) {
+        eprintln!("{error}");
+    }
+    state_for_dir(&notes_dir, crate::watcher::last_error(&app))
 }
 
 #[tauri::command]
@@ -132,19 +136,30 @@ fn current_state(app: &AppHandle) -> Result<NotesState, String> {
     match settings.notes_dir {
         Some(value) => {
             let notes_dir = ensure_notes_dir(&value)?;
-            state_for_dir(&notes_dir)
+            if let Err(error) = crate::watcher::watch_notes(app, &notes_dir) {
+                eprintln!("{error}");
+            }
+            state_for_dir(
+                &notes_dir,
+                crate::watcher::last_error(app),
+            )
         }
         None => Ok(NotesState {
             notes_dir: None,
             entries: Vec::new(),
+            watcher_error: None,
         }),
     }
 }
 
-fn state_for_dir(notes_dir: &Path) -> Result<NotesState, String> {
+fn state_for_dir(
+    notes_dir: &Path,
+    watcher_error: Option<String>,
+) -> Result<NotesState, String> {
     Ok(NotesState {
         notes_dir: Some(notes_dir.display().to_string()),
         entries: list_entries(notes_dir)?,
+        watcher_error,
     })
 }
 

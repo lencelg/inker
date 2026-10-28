@@ -122,11 +122,29 @@ export function commandKeepsSettingsOpen(commandId: string): boolean {
 export function buildFilePaletteItems(
   entries: readonly FileEntry[],
   includeImages: boolean,
+  recentPaths: readonly string[] = [],
 ): PaletteItem[] {
+  const recentOrder = new Map(
+    recentPaths.map((path, index) => [path, index]),
+  );
+
   return entries
-    .filter((entry) => !entry.isDir)
-    .filter((entry) => includeImages || !isImagePath(entry.path))
-    .map((entry) => ({
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => !entry.isDir)
+    .filter(
+      ({ entry }) => includeImages || !isImagePath(entry.path),
+    )
+    .sort((left, right) => {
+      const leftRecent = recentOrder.get(left.entry.path);
+      const rightRecent = recentOrder.get(right.entry.path);
+      if (leftRecent !== undefined || rightRecent !== undefined) {
+        if (leftRecent === undefined) return 1;
+        if (rightRecent === undefined) return -1;
+        if (leftRecent !== rightRecent) return leftRecent - rightRecent;
+      }
+      return left.index - right.index;
+    })
+    .map(({ entry }) => ({
       id: entry.path,
       label: entry.name,
       detail: dirname(entry.path),
