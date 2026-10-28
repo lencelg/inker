@@ -491,6 +491,7 @@ markdown-note-taking/
 │   │   ├── useExternalChangeSync.ts # 外部变更防抖、阻塞与重试
 │   │   ├── useRecentFiles.ts      # 最近文件状态与持久化
 │   │   ├── useSessionPersistence.ts # 会话防抖与最大间隔持久化
+│   │   ├── useWindowClose.ts      # 关闭窗口前的保存与放行流程
 │   │   └── useWorkspaceLifecycle.ts # 启动与切换笔记库编排
 │   ├── components/
 │   │   ├── ActivityRail.vue       # 左侧活动栏
@@ -596,7 +597,7 @@ markdown-note-taking/
 
 `EditorTabs`、`NoteSidebar`、`StatusBar` 等组件通过 props 接收状态，通过事件把用户操作交回 `App.vue`。
 
-可独立的状态逐步迁移到 `src/composables/`（目前为最近文件、自动保存、会话持久化、草稿刷新、外部变更同步与工作区生命周期），并新增 App 级集成测试覆盖启动、快捷面板、外部变更与冲突流程。
+可独立的状态逐步迁移到 `src/composables/`（目前为最近文件、自动保存、会话持久化、草稿刷新、外部变更同步、窗口关闭与工作区生命周期），并新增 App 级集成测试覆盖启动、快捷面板、外部变更与冲突流程。
 
 ### 4.3 前端数据流
 
@@ -1006,7 +1007,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：56 个测试文件，324 个测试通过
+- 前端：57 个测试文件，332 个测试通过
 - Rust：26 个测试通过
 
 覆盖范围包括：
@@ -1041,6 +1042,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 会话组合式持久化：防抖、最大间隔、恢复期间跳过与定时器取消
 - 会话恢复计划：标签/预览回退、草稿覆盖与清理、孤儿草稿、布局与光标状态
 - 工作区生命周期：启动恢复、切换前保存、取消切换与恢复失败回退
+- 窗口关闭流程：等待保存、取消/确认、错误恢复与重复关闭保护
 - 崩溃草稿组合式刷新：脏标签写入、干净标签清理、抑制状态与图片跳过
 - 命令面板/主题候选定义、开关状态、禁用条件与当前主题标记
 - 外部变更组合式同步：事件累积、防抖、阻塞恢复、回调重试与销毁

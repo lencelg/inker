@@ -10,10 +10,7 @@ import {
   watch,
 } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import {
-  getCurrentWindow,
-  type CloseRequestedEvent,
-} from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
 import { useAutoSave } from './composables/useAutoSave';
@@ -25,6 +22,7 @@ import {
 } from './composables/useExternalChangeSync';
 import { useRecentFiles } from './composables/useRecentFiles';
 import { useSessionPersistence } from './composables/useSessionPersistence';
+import { useWindowClose } from './composables/useWindowClose';
 import { useWorkspaceLifecycle } from './composables/useWorkspaceLifecycle';
 import ActivityRail from './components/ActivityRail.vue';
 import AppMenu from './components/AppMenu.vue';
@@ -239,8 +237,6 @@ const editorPane = ref<{
 
 const tabStates = new Map<string, EditorTabState>();
 let sessionHydrating = false;
-let closeApproved = false;
-let closeInProgress = false;
 let suppressDrafts = false;
 let restoringTabPath: string | null = null;
 let unlistenClose: UnlistenFn | null = null;
@@ -579,7 +575,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange);
   window.addEventListener('beforeunload', handleBeforeUnload);
   void appWindow
-    .onCloseRequested(handleCloseRequested)
+    .onCloseRequested(windowClose.handleCloseRequested)
     .then((unlisten) => {
       unlistenClose = unlisten;
     })
@@ -722,7 +718,13 @@ function cancelImagePasteName(): void {
 async function requestImageSave(
   file: File,
 ): Promise<ImageSaveResult | null> {
-  if (imageRequestActive || closeInProgress || closeApproved) return null;
+  if (
+    imageRequestActive ||
+    windowClose.isInProgress() ||
+    windowClose.isApproved()
+  ) {
+    return null;
+  }
   const tab = activeTab.value;
   if (!tab || isImagePath(tab.path)) return null;
   if (imagePaste.value || prompt.value || confirmation.value) return null;
@@ -766,8 +768,8 @@ async function requestImageSave(
     if (
       activeTab.value?.path !== notePath ||
       editorSession.value !== session ||
-      closeInProgress ||
-      closeApproved
+      windowClose.isInProgress() ||
+      windowClose.isApproved()
     ) {
       return null;
     }
@@ -776,8 +778,8 @@ async function requestImageSave(
     if (
       activeTab.value?.path !== notePath ||
       editorSession.value !== session ||
-      closeInProgress ||
-      closeApproved
+      windowClose.isInProgress() ||
+      windowClose.isApproved()
     ) {
       return null;
     }
@@ -908,6 +910,29 @@ const autoSave = useAutoSave({
     const tab = tabs.value.find((item) => item.path === path);
     return tab ? saveTab(tab) : false;
   },
+});
+
+const windowClose = useWindowClose({
+  isBlocked: () =>
+    Boolean(confirmation.value || prompt.value || busy.value),
+  hasAnyDialog: () =>
+    Boolean(confirmation.value || prompt.value || imagePaste.value),
+  isImagePasteOpen: () => imagePaste.value !== null,
+  cancelImagePaste: cancelImagePasteName,
+  captureActiveState: () => captureTabState(activePath.value),
+  persistSession: persistSessionNow,
+  cancelAutoSaveTimers: cancelAllAutoSaveTimers,
+  waitForPendingSaves: async () => {
+    await Promise.allSettled([...saveTasks.values()]);
+  },
+  prepareClose: prepareForClose,
+  scheduleAutoSaveForDirty: scheduleAutoSaveForDirtyTabs,
+  flushDrafts,
+  setSuppressDrafts: (value) => {
+    suppressDrafts = value;
+  },
+  closeWindow: () => appWindow.close(),
+  setError,
 });
 
 function cancelAutoSave(path: string): void {
@@ -1311,14 +1336,6 @@ async function toggleMaximizeWindow(): Promise<void> {
   }
 }
 
-async function closeWindow(): Promise<void> {
-  try {
-    await appWindow.close();
-  } catch (err) {
-    setError(err);
-  }
-}
-
 async function prepareForClose(): Promise<boolean> {
   const dirtyTabs = tabs.value.filter(
     (tab) => !isImagePath(tab.path) && tab.content !== tab.savedContent,
@@ -1351,47 +1368,6 @@ async function prepareForClose(): Promise<boolean> {
     suppressDrafts = true;
   }
   return closeAnyway;
-}
-
-async function handleCloseRequested(
-  event: CloseRequestedEvent,
-): Promise<void> {
-  if (closeApproved) return;
-  event.preventDefault();
-  if (closeInProgress || confirmation.value || prompt.value || busy.value) {
-    return;
-  }
-  if (imagePaste.value) {
-    cancelImagePasteName();
-  }
-
-  closeInProgress = true;
-  try {
-    captureTabState(activePath.value);
-    persistSessionNow();
-    cancelAllAutoSaveTimers();
-    await Promise.allSettled([...saveTasks.values()]);
-    if (confirmation.value || prompt.value || imagePaste.value) {
-      closeApproved = false;
-      scheduleAutoSaveForDirtyTabs();
-      return;
-    }
-    if (!(await prepareForClose())) {
-      closeApproved = false;
-      flushDrafts();
-      scheduleAutoSaveForDirtyTabs();
-      return;
-    }
-    closeApproved = true;
-    await appWindow.close();
-  } catch (err) {
-    closeApproved = false;
-    suppressDrafts = false;
-    scheduleAutoSaveForDirtyTabs();
-    setError(err);
-  } finally {
-    closeInProgress = false;
-  }
 }
 
 function isTitlebarInteractive(target: EventTarget | null): boolean {
@@ -2380,8 +2356,8 @@ const externalSync = useExternalChangeSync({
   canRefresh: () =>
     !switching.value &&
     !mutating.value &&
-    !closeInProgress &&
-    !closeApproved &&
+    !windowClose.isInProgress() &&
+    !windowClose.isApproved() &&
     !workspaceModalsOpen(),
   onRefresh: refreshWorkspaceFromDisk,
   onError: setError,
@@ -2813,7 +2789,7 @@ watch(
             class="window-control close"
             :title="t('window.close')"
             :aria-label="t('window.close')"
-            @click="closeWindow"
+            @click="windowClose.close"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m7 7 10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
