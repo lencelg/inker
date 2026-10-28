@@ -543,6 +543,7 @@ markdown-note-taking/
 │       ├── editorMinimap.ts       # 双 Canvas 缩略图与滚动条控制器
 │       ├── mermaid.ts             # Mermaid 延迟加载
 │       ├── palette.ts             # 快速打开模糊匹配与文件项
+│       ├── paletteCommands.ts     # 命令面板与主题候选定义
 │       ├── paths.ts               # 路径工具
 │       ├── preferences.ts         # 本地偏好读写
 │       ├── recentFiles.ts         # 按工作区保存最近打开文件
@@ -1001,7 +1002,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：51 个测试文件，284 个测试通过
+- 前端：52 个测试文件，288 个测试通过
 - Rust：26 个测试通过
 
 覆盖范围包括：
@@ -1033,6 +1034,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 最近文件组合式状态与持久化
 - 自动保存组合式计时器：延迟保存、取消、模态阻塞重试与保存期间继续编辑
 - 会话组合式持久化：防抖、最大间隔、恢复期间跳过与定时器取消
+- 命令面板/主题候选定义、开关状态、禁用条件与当前主题标记
 - App 级集成：启动、监听失败提示、快速打开最近排序、`>` 命令切换、视图命令、无关文件忽略、外部重载、冲突保留/重载/另存副本、图片刷新与外部删除
 - 设置浮层在命令面板打开时的键盘暂停，以及模态关闭后的焦点恢复
 - Markdown 标题提取与列表式目录生成（层级、范围、转义、重复标题）

@@ -84,9 +84,12 @@ import {
   commandKeepsSettingsOpen,
   type PaletteItem,
 } from './lib/palette';
+import {
+  codeThemePaletteItems,
+  commandPaletteItems,
+  themePaletteItems,
+} from './lib/paletteCommands';
 import { buildTableOfContents } from './lib/toc';
-import { allThemes } from './lib/themes';
-import { allCodeThemes } from './lib/codeThemes';
 import {
   ancestorDirs,
   basename,
@@ -324,9 +327,23 @@ const paletteItems = computed<PaletteItem[]>(() => {
       recentFiles.files.value,
     );
   }
-  if (level === 'themes') return themePaletteItems();
-  if (level === 'codeThemes') return codeThemePaletteItems();
-  return commandPaletteItems();
+  if (level === 'themes') {
+    return themePaletteItems(preferences.value.theme);
+  }
+  if (level === 'codeThemes') {
+    return codeThemePaletteItems(preferences.value.codeTheme);
+  }
+  return commandPaletteItems({
+    canEdit:
+      activeTab.value !== null &&
+      !isImagePath(activeTab.value.path),
+    vimEnabled: preferences.value.vimEnabled,
+    immersive: preferences.value.immersive,
+    autoSave: preferences.value.autoSave,
+    quickOpenIncludeImages:
+      preferences.value.quickOpenIncludeImages,
+    sidebarVisible: sidebarVisible.value,
+  });
 });
 const palettePlaceholder = computed(() =>
   paletteLevel.value === null
@@ -338,173 +355,6 @@ const paletteEmptyLabel = computed(() =>
     ? ''
     : t(PALETTE_LABELS[paletteLevel.value].empty),
 );
-
-function themePaletteItems(): PaletteItem[] {
-  return [
-    { id: '__back', label: t('palette.back'), kind: 'back' },
-    ...allThemes().map((theme) => ({
-      id: theme.id,
-      label: theme.label,
-      detail:
-        theme.id === preferences.value.theme
-          ? t('palette.current')
-          : undefined,
-      kind: 'theme' as const,
-    })),
-  ];
-}
-
-function codeThemePaletteItems(): PaletteItem[] {
-  return [
-    { id: '__back', label: t('palette.back'), kind: 'back' },
-    ...allCodeThemes().map((theme) => ({
-      id: theme.id,
-      label: theme.label,
-      detail:
-        theme.id === preferences.value.codeTheme
-          ? t('palette.current')
-          : undefined,
-      kind: 'theme' as const,
-    })),
-  ];
-}
-
-function toggleDetail(value: boolean): string {
-  return t(value ? 'palette.on' : 'palette.off');
-}
-
-function commandPaletteItems(): PaletteItem[] {
-  const canEdit =
-    activeTab.value !== null && !isImagePath(activeTab.value.path);
-  const command = (
-    id: string,
-    label: string,
-    keywords: string[],
-    extra: Partial<PaletteItem> = {},
-  ): PaletteItem => ({
-    id,
-    label,
-    keywords,
-    kind: 'command',
-    ...extra,
-  });
-
-  return [
-    command('preferences.colorTheme', t('command.preferences.colorTheme'), [
-      'theme',
-      'color',
-      'appearance',
-      '主题',
-      '界面',
-      '外观',
-    ]),
-    command('preferences.codeTheme', t('command.preferences.codeTheme'), [
-      'theme',
-      'code',
-      'syntax',
-      'highlight',
-      '代码',
-      '主题',
-      '高亮',
-    ]),
-    command(
-      'preferences.openSettings',
-      t('command.preferences.openSettings'),
-      ['settings', 'preferences', '设置', '首选项', '配置'],
-    ),
-    command(
-      'preferences.toggleVim',
-      t('command.preferences.toggleVim'),
-      ['vim', 'keymap', 'editor', '模式', '快捷键'],
-      { detail: toggleDetail(preferences.value.vimEnabled) },
-    ),
-    command(
-      'preferences.toggleZen',
-      t('command.preferences.toggleZen'),
-      ['zen', 'immersive', 'focus', '沉浸', '专注'],
-      { detail: toggleDetail(preferences.value.immersive) },
-    ),
-    command(
-      'preferences.toggleAutoSave',
-      t('command.preferences.toggleAutoSave'),
-      ['autosave', 'save', '自动保存', '保存'],
-      { detail: toggleDetail(preferences.value.autoSave) },
-    ),
-    command(
-      'preferences.toggleQuickOpenImages',
-      t('command.preferences.toggleQuickOpenImages'),
-      ['quick open', 'image', 'ctrl+p', '快速打开', '图片', '文件'],
-      { detail: toggleDetail(preferences.value.quickOpenIncludeImages) },
-    ),
-    command('view.source', t('command.view.source'), [
-      'source',
-      'edit',
-      'mode',
-      '源码',
-      '编辑',
-      '模式',
-    ]),
-    command('view.wysiwyg', t('command.view.wysiwyg'), [
-      'wysiwyg',
-      'live',
-      'preview',
-      '实时',
-      '所见即所得',
-    ]),
-    command('view.preview', t('command.view.preview'), [
-      'preview',
-      'read',
-      '预览',
-      '阅读',
-    ]),
-    command('view.side', t('command.view.side'), [
-      'side',
-      'split',
-      'side by side',
-      '分屏',
-      '并排',
-      '预览',
-    ]),
-    command(
-      'view.togglePreview',
-      t('command.view.togglePreview'),
-      [
-        'toggle',
-        'switch',
-        'live',
-        'wysiwyg',
-        'side',
-        'split',
-        '实时',
-        '侧边',
-        '并排',
-        '切换',
-        '预览',
-      ],
-    ),
-    command(
-      'view.toggleSidebar',
-      t('command.view.toggleSidebar'),
-      ['sidebar', 'panel', '侧边栏', '侧栏'],
-      { detail: toggleDetail(sidebarVisible.value) },
-    ),
-    command('file.save', t('command.file.save'), ['save', '保存'], {
-      detail: 'Ctrl/Cmd+S',
-      disabled: !canEdit,
-    }),
-    command(
-      'file.chooseFolder',
-      t('command.file.chooseFolder'),
-      ['folder', 'workspace', 'open', '文件夹', '笔记库', '工作区'],
-    ),
-    command(
-      'markdown.createToc',
-      t('command.markdown.createToc'),
-      ['toc', 'table of contents', 'outline', '目录', '大纲'],
-      { disabled: !canEdit },
-    ),
-  ];
-}
 
 interface ConfirmOptions {
   title: string;
