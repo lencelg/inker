@@ -25,13 +25,14 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const MAX_RESULTS = 100;
 const query = ref('');
 const active = ref(0);
 const input = ref<HTMLInputElement | null>(null);
 const list = ref<HTMLElement | null>(null);
 
 const filtered = computed(() =>
-  filterPaletteItems(props.items, query.value),
+  filterPaletteItems(props.items, query.value).slice(0, MAX_RESULTS),
 );
 
 function iconFor(kind: PaletteItemKind | undefined): Component | null {
@@ -74,6 +75,23 @@ function move(delta: number): void {
 function choose(item = filtered.value[active.value]): void {
   if (!item || item.disabled) return;
   emit('select', item);
+}
+
+function isImeComposing(event: KeyboardEvent): boolean {
+  return event.isComposing || event.keyCode === 229;
+}
+
+function onEnter(event: KeyboardEvent): void {
+  if (isImeComposing(event)) return;
+  event.preventDefault();
+  choose();
+}
+
+function onEscape(event: KeyboardEvent): void {
+  if (isImeComposing(event)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emit('close');
 }
 
 watch(query, () => {
@@ -122,9 +140,9 @@ onMounted(async () => {
           @keydown.page-up.prevent="move(-8)"
           @keydown.home.prevent="jumpTo(0)"
           @keydown.end.prevent="jumpTo(filtered.length - 1)"
-          @keydown.enter.prevent="choose()"
+          @keydown.enter="onEnter"
           @keydown.tab.prevent
-          @keydown.esc.stop.prevent="emit('close')"
+          @keydown.esc="onEscape"
         />
       </div>
 

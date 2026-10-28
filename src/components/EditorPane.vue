@@ -248,7 +248,7 @@ const syntaxTheme = HighlightStyle.define([
   },
   {
     tag: [tags.punctuation, tags.separator, tags.bracket],
-    color: 'var(--syntax-operator)',
+    class: 'cm-code-punctuation',
   },
   {
     tag: [tags.tagName, tags.angleBracket],
@@ -380,6 +380,12 @@ const theme = EditorView.theme({
   },
   '.cm-codeblock-themed': {
     backgroundColor: 'var(--code-bg)',
+    color: 'var(--code-fg)',
+  },
+  '.cm-code-punctuation': {
+    color: 'var(--syntax-operator)',
+  },
+  '.cm-codeblock-themed .cm-code-punctuation': {
     color: 'var(--code-fg)',
   },
   '.cm-cursor, .cm-dropCursor': {

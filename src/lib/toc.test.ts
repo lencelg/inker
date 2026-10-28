@@ -63,6 +63,22 @@ describe('extractMarkdownHeadings', () => {
       { level: 2, text: 'Sub', id: 'sub' },
     ]);
   });
+
+  it('preserves literal angle brackets and strips inline HTML tags', () => {
+    const headings = extractMarkdownHeadings(
+      [
+        '## Range 0 < x > 10',
+        '## Hello <em>world</em>',
+        '## \\<b\\> literal',
+      ].join('\n'),
+    );
+
+    expect(headings.map((item) => item.text)).toEqual([
+      'Range 0 < x > 10',
+      'Hello world',
+      '<b> literal',
+    ]);
+  });
 });
 
 describe('buildTableOfContents', () => {
@@ -126,6 +142,20 @@ describe('buildTableOfContents', () => {
     );
   });
 
+  it('keeps escaped emphasis and literal angle brackets literal', () => {
+    expect(
+      buildTableOfContents([
+        heading(2, '*draft* plan', 'draft-plan'),
+        heading(2, 'Range 0 < x > 10', 'range-0-x-10'),
+      ]),
+    ).toBe(
+      [
+        '- [\\*draft\\* plan](#draft-plan)',
+        '- [Range 0 &lt; x &gt; 10](#range-0-x-10)',
+      ].join('\n'),
+    );
+  });
+
   it('returns an empty string when there are no headings', () => {
     expect(buildTableOfContents([])).toBe('');
   });
@@ -134,5 +164,11 @@ describe('buildTableOfContents', () => {
 describe('escapeTocLabel', () => {
   it('escapes brackets and backslashes', () => {
     expect(escapeTocLabel('[a] \\ b')).toBe('\\[a\\] \\\\ b');
+  });
+
+  it('escapes emphasis, code and angle brackets', () => {
+    expect(escapeTocLabel('*draft* _x_ `code` <b>')).toBe(
+      '\\*draft\\* \\_x\\_ \\`code\\` &lt;b&gt;',
+    );
   });
 });

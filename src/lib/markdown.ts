@@ -28,6 +28,31 @@ function inlineText(token: Token | undefined): string {
     .join('');
 }
 
+function inlineDisplayText(token: Token | undefined): string {
+  if (!token) return '';
+  if (!token.children?.length) return token.content;
+  return token.children
+    .map((child) => {
+      if (
+        child.type === 'html_inline' ||
+        child.type === 'html_block'
+      ) {
+        return '';
+      }
+      if (
+        child.type === 'softbreak' ||
+        child.type === 'hardbreak'
+      ) {
+        return ' ';
+      }
+      if (child.type === 'image') {
+        return child.content || String(child.attrGet('alt') ?? '');
+      }
+      return child.content;
+    })
+    .join('');
+}
+
 export interface MarkdownHeading {
   level: number;
   text: string;
@@ -46,8 +71,8 @@ export function extractMarkdownHeadings(
     if (!Number.isInteger(level) || level < 1 || level > 6) continue;
     headings.push({
       level,
-      text: inlineText(tokens[index + 1])
-        .replace(/<[^>]*>/g, '')
+      text: inlineDisplayText(tokens[index + 1])
+        .replace(/\r?\n/g, ' ')
         .trim(),
       id: String(token.attrGet('id') ?? ''),
     });

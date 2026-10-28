@@ -104,6 +104,21 @@ export function filterPaletteItems(
     .map((entry) => entry.item);
 }
 
+const SETTINGS_PERSISTENT_COMMANDS = new Set([
+  'preferences.colorTheme',
+  'preferences.codeTheme',
+  'preferences.openSettings',
+  'preferences.toggleVim',
+  'preferences.toggleZen',
+  'preferences.toggleAutoSave',
+  'preferences.toggleQuickOpenImages',
+  'file.save',
+]);
+
+export function commandKeepsSettingsOpen(commandId: string): boolean {
+  return SETTINGS_PERSISTENT_COMMANDS.has(commandId);
+}
+
 export function buildFilePaletteItems(
   entries: readonly FileEntry[],
   includeImages: boolean,

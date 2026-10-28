@@ -68,10 +68,12 @@ import {
   type DraftEntry,
 } from './lib/drafts';
 import { isImagePath } from './lib/fileKinds';
+import { restoreSettingsFocus } from './lib/focus';
 import { localizeError, t, type TranslationKey } from './lib/i18n';
 import { renderMarkdown, extractMarkdownHeadings } from './lib/markdown';
 import {
   buildFilePaletteItems,
+  commandKeepsSettingsOpen,
   type PaletteItem,
 } from './lib/palette';
 import { buildTableOfContents } from './lib/toc';
@@ -167,6 +169,7 @@ const htmlExport = ref<{
 const settingsOpen = ref(false);
 type PaletteLevel = 'files' | 'commands' | 'themes' | 'codeThemes';
 const paletteLevel = ref<PaletteLevel | null>(null);
+let palettePreviousFocus: HTMLElement | null = null;
 const isMaximized = ref(false);
 const appWindow = getCurrentWindow();
 let unlistenWindow: UnlistenFn | null = null;
@@ -1238,6 +1241,12 @@ function openPalette(level: 'files' | 'commands'): void {
   ) {
     return;
   }
+  if (paletteLevel.value === null) {
+    palettePreviousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+  }
   clearFeedback();
   paletteLevel.value = level;
 }
@@ -1253,7 +1262,13 @@ async function dismissPalette(): Promise<void> {
 }
 
 function restorePaletteFocus(): void {
-  if (settingsOpen.value || viewMode.value === 'preview') return;
+  const previous = palettePreviousFocus;
+  palettePreviousFocus = null;
+  if (settingsOpen.value) {
+    restoreSettingsFocus(previous);
+    return;
+  }
+  if (viewMode.value === 'preview') return;
   focusActiveEditor();
 }
 
@@ -1262,6 +1277,7 @@ async function openPaletteFile(path: string): Promise<void> {
   settingsOpen.value = false;
   await nextTick();
   if (isImagePath(path)) {
+    palettePreviousFocus = null;
     await selectNote(path);
     return;
   }
@@ -1318,15 +1334,22 @@ async function runPaletteCommand(id: string): Promise<void> {
   }
 
   closePalette();
-  if (id !== 'preferences.openSettings') {
+  if (!commandKeepsSettingsOpen(id)) {
     settingsOpen.value = false;
   }
   await nextTick();
 
   switch (id) {
-    case 'preferences.openSettings':
+    case 'preferences.openSettings': {
+      const alreadyOpen = settingsOpen.value;
       openSettings();
+      if (alreadyOpen) {
+        restorePaletteFocus();
+      } else {
+        palettePreviousFocus = null;
+      }
       return;
+    }
     case 'preferences.toggleVim':
       toggleVim();
       break;
@@ -1369,6 +1392,7 @@ async function runPaletteCommand(id: string): Promise<void> {
       return;
     case 'markdown.createToc':
       await createTableOfContents();
+      restorePaletteFocus();
       return;
     default:
       return;
@@ -2902,6 +2926,7 @@ watch(
       v-if="settingsOpen"
       :preferences="preferences"
       :maximized="isMaximized"
+      :suspended="paletteLevel !== null"
       @update="updatePreferences"
       @close="settingsOpen = false"
       @minimize="minimizeWindow"

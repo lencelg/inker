@@ -89,4 +89,56 @@ describe('QuickPalette', () => {
 
     wrapper.unmount();
   });
+
+  it('does not select while an IME composition is active', async () => {
+    const wrapper = mountPalette();
+    await nextTick();
+
+    await wrapper.find('input').trigger('keydown', {
+      key: 'Enter',
+      isComposing: true,
+    });
+
+    expect(wrapper.emitted('select')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it('does not close on Escape while an IME composition is active', async () => {
+    const wrapper = mountPalette();
+    await nextTick();
+
+    await wrapper.find('input').trigger('keydown', {
+      key: 'Escape',
+      isComposing: true,
+    });
+
+    expect(wrapper.emitted('close')).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  it('caps the rendered result list for large workspaces', async () => {
+    const many: PaletteItem[] = Array.from(
+      { length: 150 },
+      (_, index) => ({
+        id: `note-${index}.md`,
+        label: `Note ${index}`,
+        kind: 'note',
+      }),
+    );
+    const wrapper = mount(QuickPalette, {
+      attachTo: document.body,
+      props: {
+        items: many,
+        placeholder: 'Search files by name',
+        emptyLabel: 'No matching files',
+      },
+    });
+    await nextTick();
+
+    expect(wrapper.findAll('.palette-item')).toHaveLength(100);
+
+    wrapper.unmount();
+  });
 });

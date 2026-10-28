@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FileEntry } from '../types';
 import {
   buildFilePaletteItems,
+  commandKeepsSettingsOpen,
   filterPaletteItems,
   fuzzyScore,
   type PaletteItem,
@@ -122,5 +123,27 @@ describe('buildFilePaletteItems', () => {
     expect(filterPaletteItems(palette, 'docs').map((item) => item.id)).toEqual([
       'docs/plan.md',
     ]);
+  });
+});
+
+describe('commandKeepsSettingsOpen', () => {
+  it('keeps settings open for preference toggles and save', () => {
+    expect(commandKeepsSettingsOpen('preferences.colorTheme')).toBe(true);
+    expect(commandKeepsSettingsOpen('preferences.codeTheme')).toBe(true);
+    expect(commandKeepsSettingsOpen('preferences.toggleVim')).toBe(true);
+    expect(commandKeepsSettingsOpen('preferences.toggleAutoSave')).toBe(
+      true,
+    );
+    expect(commandKeepsSettingsOpen('preferences.openSettings')).toBe(
+      true,
+    );
+    expect(commandKeepsSettingsOpen('file.save')).toBe(true);
+  });
+
+  it('closes settings for commands that change the workspace view', () => {
+    expect(commandKeepsSettingsOpen('view.source')).toBe(false);
+    expect(commandKeepsSettingsOpen('view.togglePreview')).toBe(false);
+    expect(commandKeepsSettingsOpen('file.chooseFolder')).toBe(false);
+    expect(commandKeepsSettingsOpen('markdown.createToc')).toBe(false);
   });
 });

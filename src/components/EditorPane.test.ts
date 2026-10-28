@@ -98,6 +98,20 @@ describe('EditorPane', () => {
     wrapper.unmount();
   });
 
+  it('uses the code theme foreground for punctuation in fenced code', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      initialContent: '```js\nconst value = { a: 1 };\n```',
+    });
+    await nextTick();
+
+    expect(
+      wrapper.find('.cm-codeblock-themed .cm-code-punctuation').exists(),
+    ).toBe(true);
+
+    wrapper.unmount();
+  });
+
   it('leaves code blocks unthemed when source highlighting is off', async () => {
     prepareEditorDom();
     const wrapper = mountEditor({
