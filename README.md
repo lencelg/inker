@@ -487,6 +487,7 @@ markdown-note-taking/
 │   ├── style.css                  # 全局样式、主题变量、布局
 │   ├── composables/
 │   │   ├── useAutoSave.ts         # 自动保存计时器与重试
+│   │   ├── useDraftPersistence.ts # 崩溃草稿刷新与最大间隔
 │   │   ├── useExternalChangeSync.ts # 外部变更防抖、阻塞与重试
 │   │   ├── useRecentFiles.ts      # 最近文件状态与持久化
 │   │   └── useSessionPersistence.ts # 会话防抖与最大间隔持久化
@@ -593,7 +594,7 @@ markdown-note-taking/
 
 `EditorTabs`、`NoteSidebar`、`StatusBar` 等组件通过 props 接收状态，通过事件把用户操作交回 `App.vue`。
 
-可独立的状态逐步迁移到 `src/composables/`（目前为最近文件、自动保存、会话持久化与外部变更同步），并新增 App 级集成测试覆盖启动、快捷面板、外部变更与冲突流程。
+可独立的状态逐步迁移到 `src/composables/`（目前为最近文件、自动保存、会话持久化、草稿刷新与外部变更同步），并新增 App 级集成测试覆盖启动、快捷面板、外部变更与冲突流程。
 
 ### 4.3 前端数据流
 
@@ -1003,7 +1004,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：53 个测试文件，293 个测试通过
+- 前端：54 个测试文件，299 个测试通过
 - Rust：26 个测试通过
 
 覆盖范围包括：
@@ -1035,6 +1036,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 最近文件组合式状态与持久化
 - 自动保存组合式计时器：延迟保存、取消、模态阻塞重试与保存期间继续编辑
 - 会话组合式持久化：防抖、最大间隔、恢复期间跳过与定时器取消
+- 崩溃草稿组合式刷新：脏标签写入、干净标签清理、抑制状态与图片跳过
 - 命令面板/主题候选定义、开关状态、禁用条件与当前主题标记
 - 外部变更组合式同步：事件累积、防抖、阻塞恢复、回调重试与销毁
 - App 级集成：启动、监听失败提示、快速打开最近排序、`>` 命令切换、视图命令、无关文件忽略、外部重载、冲突保留/重载/另存副本、图片刷新与外部删除

@@ -17,6 +17,7 @@ import {
 import { openPath } from '@tauri-apps/plugin-opener';
 import { api } from './api';
 import { useAutoSave } from './composables/useAutoSave';
+import { useDraftPersistence } from './composables/useDraftPersistence';
 import {
   useExternalChangeSync,
   type ExternalChangeDefer,
@@ -65,15 +66,11 @@ import {
 } from './lib/imagePaste';
 import {
   clearWorkspaceDrafts,
-  putDraftEntry,
-  readDraftList,
   readDraftsForWorkspace,
   removeDraft,
-  removeDraftEntry,
   removeDraftsUnder,
   renameDrafts,
   writeDraft,
-  writeDraftList,
   type DraftEntry,
 } from './lib/drafts';
 import {
@@ -145,8 +142,6 @@ interface PendingImagePaste {
 
 const SESSION_DEBOUNCE_MS = 400;
 const SESSION_MAX_INTERVAL_MS = 5000;
-const DRAFT_IDLE_MS = 2000;
-const DRAFT_MAX_INTERVAL_MS = 15000;
 const EXTERNAL_REFRESH_DEBOUNCE_MS = 300;
 const SPLIT_STORAGE_KEY = 'inker-split-ratio';
 const LEGACY_SPLIT_STORAGE_KEY = 'markleaf-split-ratio';
@@ -240,8 +235,6 @@ const editorPane = ref<{
 } | null>(null);
 
 const tabStates = new Map<string, EditorTabState>();
-let draftTimer = 0;
-let lastDraftFlushAt = 0;
 let sessionHydrating = false;
 let closeApproved = false;
 let closeInProgress = false;
@@ -933,61 +926,23 @@ async function flushAutoSave(): Promise<void> {
   await saveAllDirtyTabs();
 }
 
+const draftPersistence = useDraftPersistence({
+  notesDir: () => notesDir.value,
+  tabs: () => tabs.value,
+  isImage: isImagePath,
+  isSuppressed: () => suppressDrafts,
+});
+
 function clearDraftTimer(): void {
-  if (draftTimer) {
-    window.clearTimeout(draftTimer);
-    draftTimer = 0;
-  }
+  draftPersistence.clearTimer();
 }
 
 function flushDrafts(): void {
-  if (suppressDrafts) return;
-  const dir = notesDir.value;
-  if (!dir) return;
-  clearDraftTimer();
-  lastDraftFlushAt = Date.now();
-
-  let list = readDraftList();
-  let changed = false;
-  for (const tab of tabs.value) {
-    if (isImagePath(tab.path)) continue;
-    const existing = list.find(
-      (entry) => entry.notesDir === dir && entry.path === tab.path,
-    );
-    if (tab.content !== tab.savedContent) {
-      if (existing?.content === tab.content) continue;
-      const next = putDraftEntry(list, {
-        notesDir: dir,
-        path: tab.path,
-        content: tab.content,
-        updatedAt: Date.now(),
-      });
-      if (next !== list) {
-        list = next;
-        changed = true;
-      }
-    } else if (existing) {
-      const next = removeDraftEntry(list, dir, tab.path);
-      if (next !== list) {
-        list = next;
-        changed = true;
-      }
-    }
-  }
-  if (changed) writeDraftList(list);
+  draftPersistence.flush();
 }
 
 function scheduleDraftFlush(): void {
-  if (!notesDir.value) return;
-  if (Date.now() - lastDraftFlushAt >= DRAFT_MAX_INTERVAL_MS) {
-    flushDrafts();
-    return;
-  }
-  clearDraftTimer();
-  draftTimer = window.setTimeout(() => {
-    draftTimer = 0;
-    flushDrafts();
-  }, DRAFT_IDLE_MS);
+  draftPersistence.schedule();
 }
 
 async function handleWindowBlur(): Promise<void> {
