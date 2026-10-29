@@ -536,6 +536,18 @@ const theme = EditorView.theme({
   '.cm-vimMode .cm-line::selection, .cm-vimMode .cm-line ::selection': {
     backgroundColor: 'transparent',
   },
+  '.cm-fat-cursor': {
+    height: '1.2em !important',
+    lineHeight: '1.2em !important',
+    backgroundColor: '#f5f0e6 !important',
+    color: '#1f2933 !important',
+    borderRadius: '0',
+    boxShadow: '0 0 0 1px rgba(31, 41, 51, 0.22)',
+  },
+  '&:not(.cm-focused) .cm-fat-cursor': {
+    outline: '1px solid #f5f0e6',
+    backgroundColor: 'transparent !important',
+  },
   '&.cm-vim-linewise .cm-selectionBackground': {
     backgroundColor: 'transparent !important',
   },
