@@ -38,6 +38,10 @@ import { language, t } from '../lib/i18n';
 import { withBlockSpacing } from '../lib/blockInsertion';
 import { readClipboardImageFile } from '../lib/clipboardImage';
 import {
+  hasClipboardText,
+  readClipboardText,
+} from '../lib/clipboardText';
+import {
   imageFilesFrom,
   type ImageSaveHandler,
 } from '../lib/imagePaste';
@@ -695,10 +699,9 @@ onMounted(() => {
               void uploadImages(editorView, files, position);
               return true;
             }
-            const text = event.clipboardData?.getData('text/plain') ?? '';
-            if (text !== '') return false;
+            if (hasClipboardText(event.clipboardData)) return false;
             event.preventDefault();
-            void uploadClipboardImage(editorView, position);
+            void pasteClipboardFallback(editorView, position);
             return true;
           },
           drop: (event, editorView) => {
@@ -1026,6 +1029,25 @@ function insertMarkdownImage(
     scrollIntoView: true,
   });
   editorView.focus();
+}
+
+async function pasteClipboardFallback(
+  editorView: EditorView,
+  position: number,
+): Promise<void> {
+  const text = await readClipboardText();
+  if (text !== null) {
+    if (!editorView.dom.isConnected) return;
+    const { from, to } = editorView.state.selection.main;
+    editorView.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + text.length },
+      scrollIntoView: true,
+    });
+    editorView.focus();
+    return;
+  }
+  await uploadClipboardImage(editorView, position);
 }
 
 async function uploadClipboardImage(

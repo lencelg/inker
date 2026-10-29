@@ -18,6 +18,7 @@
     "core:window:allow-is-maximized",
     "core:window:allow-start-dragging",
     "dialog:allow-save",
-    "clipboard-manager:allow-read-image"
+    "clipboard-manager:allow-read-image",
+    "clipboard-manager:allow-read-text"
   ]
 }

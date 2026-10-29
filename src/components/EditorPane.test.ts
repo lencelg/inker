@@ -1,5 +1,12 @@
 import { mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { nextTick } from 'vue';
 import EditorPane from './EditorPane.vue';
 import type { ImageSaveHandler } from '../lib/imagePaste';
@@ -8,7 +15,13 @@ const clipboardMocks = vi.hoisted(() => ({
   readClipboardImageFile: vi.fn(),
 }));
 
+const clipboardTextMocks = vi.hoisted(() => ({
+  hasClipboardText: vi.fn(),
+  readClipboardText: vi.fn(),
+}));
+
 vi.mock('../lib/clipboardImage', () => clipboardMocks);
+vi.mock('../lib/clipboardText', () => clipboardTextMocks);
 
 class ResizeObserverStub {
   observe(): void {}
@@ -63,6 +76,11 @@ function prepareEditorDom(): void {
     });
   }
 }
+
+beforeEach(() => {
+  clipboardTextMocks.hasClipboardText.mockReturnValue(false);
+  clipboardTextMocks.readClipboardText.mockResolvedValue(null);
+});
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -143,6 +161,52 @@ describe('EditorPane', () => {
     expect(wrapper.emitted('change')?.at(-1)?.[0]).toContain(
       '- [A](#a)',
     );
+
+    wrapper.unmount();
+  });
+
+  it('falls back to the native clipboard for plain text paste', async () => {
+    prepareEditorDom();
+    clipboardTextMocks.readClipboardText.mockResolvedValue('pasted text');
+    const wrapper = mountEditor();
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', {
+      value: { types: [], items: [], files: [], getData: () => '' },
+    });
+    content.dispatchEvent(event);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(wrapper.find('.cm-content').text()).toContain('pasted text');
+
+    wrapper.unmount();
+  });
+
+  it('lets the WebView paste text when clipboardData is present', async () => {
+    prepareEditorDom();
+    clipboardTextMocks.hasClipboardText.mockReturnValue(true);
+    const wrapper = mountEditor();
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', {
+      value: {
+        types: ['text/plain'],
+        items: [],
+        files: [],
+        getData: () => 'native text',
+      },
+    });
+    content.dispatchEvent(event);
+    await nextTick();
+
+    expect(clipboardTextMocks.readClipboardText).not.toHaveBeenCalled();
+    expect(clipboardMocks.readClipboardImageFile).not.toHaveBeenCalled();
 
     wrapper.unmount();
   });

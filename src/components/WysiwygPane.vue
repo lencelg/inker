@@ -39,6 +39,10 @@ import {
 } from '../lib/anchors';
 import { codeHighlightRanges } from '../lib/codeHighlight';
 import { readClipboardImageFile } from '../lib/clipboardImage';
+import {
+  hasClipboardText,
+  readClipboardText,
+} from '../lib/clipboardText';
 import type { BreadcrumbItem } from '../lib/headings';
 import { localizeError, language, t } from '../lib/i18n';
 import {
@@ -452,6 +456,20 @@ async function uploadClipboardImage(
   }
 }
 
+async function pasteClipboardFallback(
+  view: EditorView,
+  position: number,
+): Promise<void> {
+  const text = await readClipboardText();
+  if (text !== null) {
+    if (!view.dom.isConnected) return;
+    view.pasteText(text);
+    view.focus();
+    return;
+  }
+  await uploadClipboardImage(view, position);
+}
+
 async function uploadImages(
   view: EditorView,
   files: File[],
@@ -478,10 +496,9 @@ const uploadPlugin = $prose(
             void uploadImages(view, files, view.state.selection.from);
             return true;
           }
-          const text = event.clipboardData?.getData('text/plain') ?? '';
-          if (text !== '') return false;
+          if (hasClipboardText(event.clipboardData)) return false;
           event.preventDefault();
-          void uploadClipboardImage(view, view.state.selection.from);
+          void pasteClipboardFallback(view, view.state.selection.from);
           return true;
         },
         handleDrop: (view, event, _slice, moved) => {
