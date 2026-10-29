@@ -1,9 +1,9 @@
 {
   "name": "inker",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Inker - local-first Markdown notes desktop app",
+  "description": "Inker - local Markdown editor",
   "author": "lencelg",
   "license": "MIT",
   "scripts": {
