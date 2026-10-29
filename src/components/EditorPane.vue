@@ -388,6 +388,94 @@ function sourceHighlightExtension(enabled: boolean) {
     : [plainCodeBlocks, plainCodeBlockTheme];
 }
 
+interface VimLinewiseState {
+  visualMode?: boolean;
+  visualLine?: boolean;
+}
+
+function vimLinewiseActive(view: EditorView): boolean {
+  const cm = (
+    view as unknown as {
+      cm?: { state?: { vim?: VimLinewiseState } };
+    }
+  ).cm;
+  const vim = cm?.state?.vim;
+  return Boolean(vim?.visualMode && vim?.visualLine);
+}
+
+function buildVimLinewiseDecorations(
+  view: EditorView,
+): DecorationSet {
+  if (!vimLinewiseActive(view)) return Decoration.none;
+  const spans: Array<{ from: number; to: number }> = [];
+  for (const range of view.state.selection.ranges) {
+    if (range.empty) continue;
+    const first = view.state.doc.lineAt(range.from).number;
+    const last = view.state.doc.lineAt(range.to).number;
+    for (let number = first; number <= last; number += 1) {
+      const line = view.state.doc.line(number);
+      if (line.to <= line.from) continue;
+      spans.push({ from: line.from, to: line.to });
+    }
+  }
+  spans.sort((left, right) => left.from - right.from);
+  const merged: Array<{ from: number; to: number }> = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last && span.from <= last.to) {
+      last.to = Math.max(last.to, span.to);
+    } else {
+      merged.push({ ...span });
+    }
+  }
+  return Decoration.set(
+    merged.map((span) =>
+      Decoration.mark({
+        class: 'cm-vim-linewise-selection',
+      }).range(span.from, span.to),
+    ),
+    true,
+  );
+}
+
+const vimLinewiseSelection = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    private view: EditorView;
+
+    constructor(view: EditorView) {
+      this.view = view;
+      this.decorations = buildVimLinewiseDecorations(view);
+      view.dom.classList.toggle(
+        'cm-vim-linewise',
+        vimLinewiseActive(view),
+      );
+    }
+
+    update(update: ViewUpdate): void {
+      if (
+        !update.docChanged &&
+        !update.selectionSet &&
+        !update.viewportChanged
+      ) {
+        return;
+      }
+      this.decorations = buildVimLinewiseDecorations(update.view);
+      update.view.dom.classList.toggle(
+        'cm-vim-linewise',
+        vimLinewiseActive(update.view),
+      );
+    }
+
+    destroy(): void {
+      this.view.dom.classList.remove('cm-vim-linewise');
+    }
+  },
+  {
+    decorations: (plugin) => plugin.decorations,
+  },
+);
+
 const theme = EditorView.theme({
   '&': {
     height: '100%',
@@ -447,6 +535,16 @@ const theme = EditorView.theme({
   },
   '.cm-vimMode .cm-line::selection, .cm-vimMode .cm-line ::selection': {
     backgroundColor: 'transparent',
+  },
+  '&.cm-vim-linewise .cm-selectionBackground': {
+    backgroundColor: 'transparent !important',
+  },
+  '&.cm-vim-linewise > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+    backgroundColor: 'transparent !important',
+  },
+  '.cm-vim-linewise-selection': {
+    backgroundColor: 'var(--editor-selection)',
+    borderRadius: '2px',
   },
   '.cm-panels': {
     backgroundColor: 'var(--bg-soft)',
@@ -719,6 +817,7 @@ onMounted(() => {
         EditorState.allowMultipleSelections.of(true),
         multiCursorKeymap,
         multiCursorMouse,
+        vimLinewiseSelection,
         EditorView.domEventHandlers({
           paste: (event, editorView) => {
             if (props.readOnly) return false;
