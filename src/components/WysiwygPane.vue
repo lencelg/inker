@@ -829,8 +829,8 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   overflow-x: auto;
   border-radius: 8px;
-  background: var(--code-bg, #0d1117);
-  color: var(--code-fg, #c9d1d9);
+  background: transparent;
+  color: var(--ink);
   font-family: var(--mono-font);
   font-size: 0.86em;
   line-height: 1.6;

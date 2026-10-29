@@ -383,14 +383,14 @@ const theme = EditorView.theme({
     color: 'var(--ink)',
   },
   '.cm-codeblock-themed': {
-    backgroundColor: 'var(--code-bg)',
-    color: 'var(--code-fg)',
+    backgroundColor: 'transparent',
+    color: 'var(--ink)',
   },
   '.cm-code-punctuation': {
     color: 'var(--syntax-operator)',
   },
   '.cm-codeblock-themed .cm-code-punctuation': {
-    color: 'var(--code-fg)',
+    color: 'var(--ink)',
   },
   '.cm-cursor, .cm-dropCursor': {
     borderLeftColor: 'var(--editor-caret, var(--ink))',

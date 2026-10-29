@@ -972,8 +972,8 @@ button:disabled {
   margin: 1em 0;
   padding: 14px 16px;
   border-radius: 10px;
-  background: var(--code-bg, #0d1117);
-  color: var(--code-fg, #c9d1d9);
+  background: transparent;
+  color: var(--ink);
   overflow-x: auto;
   font-family: var(--mono-font);
 }
