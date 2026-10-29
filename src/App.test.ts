@@ -47,6 +47,10 @@ const mocks = vi.hoisted(() => {
     startDragging: vi.fn(async () => undefined),
   };
 
+  const webviewMock = {
+    setZoom: vi.fn(async () => undefined),
+  };
+
   const apiMock = {
     getState: vi.fn(),
     chooseNotesDir: vi.fn(),
@@ -71,6 +75,7 @@ const mocks = vi.hoisted(() => {
   return {
     listen,
     windowMock,
+    webviewMock,
     apiMock,
     getNotesChangedHandler: () => notesChangedHandler,
     getWatchErrorHandler: () => watchErrorHandler,
@@ -87,6 +92,9 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => mocks.windowMock,
+}));
+vi.mock('@tauri-apps/api/webview', () => ({
+  getCurrentWebview: () => mocks.webviewMock,
 }));
 vi.mock('@tauri-apps/plugin-opener', () => ({
   openPath: vi.fn(async () => undefined),
@@ -260,6 +268,34 @@ afterEach(() => {
 });
 
 describe('App integration', () => {
+  it('zooms the workbench with the VS Code shortcuts', async () => {
+    const wrapper = mountApp();
+    await settle();
+    mocks.webviewMock.setZoom.mockClear();
+
+    pressShortcut({ key: '=' });
+    await settle();
+    expect(mocks.webviewMock.setZoom).toHaveBeenLastCalledWith(1.2);
+
+    pressShortcut({ key: '=' });
+    await settle();
+    expect(mocks.webviewMock.setZoom).toHaveBeenLastCalledWith(
+      expect.closeTo(1.44, 5),
+    );
+
+    pressShortcut({ key: '0' });
+    await settle();
+    expect(mocks.webviewMock.setZoom).toHaveBeenLastCalledWith(1);
+
+    pressShortcut({ key: '-' });
+    await settle();
+    expect(mocks.webviewMock.setZoom).toHaveBeenLastCalledWith(
+      expect.closeTo(1 / 1.2, 5),
+    );
+
+    wrapper.unmount();
+  });
+
   it('shows a warning when file watching is unavailable', async () => {
     mocks.apiMock.getState.mockResolvedValue({
       ...state,

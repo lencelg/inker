@@ -10,6 +10,7 @@ import {
 } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { api } from './api';
 import { useAutoSave } from './composables/useAutoSave';
 import { useClosePreparation } from './composables/useClosePreparation';
@@ -113,6 +114,14 @@ import {
 import { buildRestorePlan } from './lib/workspaceRestore';
 import type { ViewMode } from './lib/viewModes';
 import { applySlowWheel } from './lib/wheelScroll';
+import {
+  nextZoomLevel,
+  readStoredZoomLevel,
+  storeZoomLevel,
+  zoomActionFromEvent,
+  zoomScale,
+  type ZoomAction,
+} from './lib/zoom';
 import type { FileEntry, NotesState, SearchMatch } from './types';
 
 const WysiwygPane = defineAsyncComponent(
@@ -173,6 +182,8 @@ let palettePreviousFocus: HTMLElement | null = null;
 const recentFiles = useRecentFiles();
 const isMaximized = ref(false);
 const appWindow = getCurrentWindow();
+const appWebview = getCurrentWebview();
+let zoomLevel = readStoredZoomLevel();
 let unlistenWindow: UnlistenFn | null = null;
 const error = ref('');
 const warning = ref('');
@@ -565,6 +576,7 @@ function resetSplit(): void {
 }
 
 onMounted(() => {
+  void applyStoredZoom();
   window.addEventListener('keydown', handleGlobalKeydown, true);
   window.addEventListener('wheel', handleGlobalWheel, {
     capture: true,
@@ -1813,8 +1825,37 @@ function handlePreviewScroll(line: number): void {
   editorPane.value?.scrollToLine(line);
 }
 
+async function applyZoom(action: ZoomAction): Promise<void> {
+  const next = nextZoomLevel(zoomLevel, action);
+  if (next === zoomLevel) return;
+  zoomLevel = next;
+  storeZoomLevel(next);
+  try {
+    await appWebview.setZoom(zoomScale(next));
+  } catch {
+    // Ignore webviews that do not expose a zoom factor.
+  }
+}
+
+async function applyStoredZoom(): Promise<void> {
+  try {
+    await appWebview.setZoom(zoomScale(zoomLevel));
+  } catch {
+    // Ignore webviews that do not expose a zoom factor.
+  }
+}
+
 function handleGlobalKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return;
+
+  const zoomAction = zoomActionFromEvent(event);
+  if (zoomAction) {
+    event.preventDefault();
+    event.stopPropagation();
+    void applyZoom(zoomAction);
+    return;
+  }
+
   const modifier = event.ctrlKey || event.metaKey;
 
   if (modifier && !event.altKey && event.key.toLowerCase() === 'p') {
