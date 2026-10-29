@@ -9,6 +9,7 @@ import {
   CODE_LANGUAGES,
   resolveCodeLanguage,
 } from './codeLanguages';
+import { BUILTIN_CODE_THEME_REGISTRATIONS } from './codeThemeRegistrations';
 import {
   renderTokensToHtml,
   tokensFromShiki,
@@ -68,11 +69,11 @@ export async function initShiki(
   if (highlighter && initialized) return;
 
   initPromise = (async () => {
-    let registrations = themes;
-    if (!registrations) {
-      const { CODE_THEMES } = await import('./codeThemes');
-      registrations = CODE_THEMES.map((theme) => theme.shikiTheme);
-    }
+    const registrations =
+      themes ??
+      BUILTIN_CODE_THEME_REGISTRATIONS.map(
+        (registration) => registration.theme,
+      );
 
     highlighter = await createHighlighterCore({
       themes: [...registrations],

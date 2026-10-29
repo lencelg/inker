@@ -1,19 +1,8 @@
 import type { ThemeRegistrationAny } from '@shikijs/types';
-import githubDark from '@shikijs/themes/github-dark';
-import githubLight from '@shikijs/themes/github-light';
-import githubDarkDimmed from '@shikijs/themes/github-dark-dimmed';
-import githubDarkHighContrast from '@shikijs/themes/github-dark-high-contrast';
-import oneDarkPro from '@shikijs/themes/one-dark-pro';
-import oneLight from '@shikijs/themes/one-light';
-import monokai from '@shikijs/themes/monokai';
-import nord from '@shikijs/themes/nord';
-import dracula from '@shikijs/themes/dracula';
-import solarizedDark from '@shikijs/themes/solarized-dark';
-import solarizedLight from '@shikijs/themes/solarized-light';
-import gruvboxDarkMedium from '@shikijs/themes/gruvbox-dark-medium';
-import tokyoNight from '@shikijs/themes/tokyo-night';
-import minLight from '@shikijs/themes/min-light';
-import darkPlus from '@shikijs/themes/dark-plus';
+import {
+  BUILTIN_CODE_THEME_REGISTRATIONS,
+  type BuiltInCodeThemeId,
+} from './codeThemeRegistrations';
 
 import { customCodeThemes, type CustomCodeTheme } from './customThemes';
 import { t } from './i18n';
@@ -35,22 +24,7 @@ export interface CodeThemeDefinition {
   custom?: boolean;
 }
 
-export type BuiltInCodeThemeId =
-  | 'github-dark'
-  | 'github-light'
-  | 'atom-one-dark'
-  | 'monokai'
-  | 'nord'
-  | 'tokyo-night'
-  | 'vs-dark'
-  | 'atom-one-light'
-  | 'github-dark-dimmed'
-  | 'dracula'
-  | 'solarized-dark'
-  | 'solarized-light'
-  | 'gruvbox-dark'
-  | 'tokyo-night-light'
-  | 'github-dark-high-contrast';
+export type { BuiltInCodeThemeId } from './codeThemeRegistrations';
 
 export type CodeThemeId =
   | BuiltInCodeThemeId
@@ -81,27 +55,14 @@ function makeTheme(
   };
 }
 
-export const CODE_THEMES: readonly CodeThemeDefinition[] = [
-  makeTheme('github-dark', 'GitHub Dark', githubDark),
-  makeTheme('github-light', 'GitHub Light', githubLight),
-  makeTheme('atom-one-dark', 'Atom One Dark', oneDarkPro),
-  makeTheme('monokai', 'Monokai', monokai),
-  makeTheme('nord', 'Nord', nord),
-  makeTheme('tokyo-night', 'Tokyo Night', tokyoNight),
-  makeTheme('vs-dark', 'VS Dark', darkPlus),
-  makeTheme('atom-one-light', 'Atom One Light', oneLight),
-  makeTheme('github-dark-dimmed', 'GitHub Dark Dimmed', githubDarkDimmed),
-  makeTheme('dracula', 'Dracula', dracula),
-  makeTheme('solarized-dark', 'Solarized Dark', solarizedDark),
-  makeTheme('solarized-light', 'Solarized Light', solarizedLight),
-  makeTheme('gruvbox-dark', 'Gruvbox Dark', gruvboxDarkMedium),
-  makeTheme('tokyo-night-light', 'Min Light', minLight),
-  makeTheme(
-    'github-dark-high-contrast',
-    'GitHub Dark High Contrast',
-    githubDarkHighContrast,
-  ),
-];
+export const CODE_THEMES: readonly CodeThemeDefinition[] =
+  BUILTIN_CODE_THEME_REGISTRATIONS.map((registration) =>
+    makeTheme(
+      registration.id,
+      registration.label,
+      registration.theme,
+    ),
+  );
 
 const customPaletteCache = new WeakMap<CustomCodeTheme, SyntaxPalette>();
 
