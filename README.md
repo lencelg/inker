@@ -82,7 +82,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - **Vim 模式**：可选的 Vim 键位，支持自定义映射，例如在 Normal 模式用 `<Space>p` 粘贴图片。
 - **多光标**：源码编辑器与实时预览均支持多光标编辑。
 - **Markdown 增强**：任务列表、表格、KaTeX 数学公式、Mermaid 图表、清洗后的原始 HTML。
-- **代码高亮**：源码代码块与预览代码块独立开关，可使用内置或导入的 highlight.js 代码主题。
+- **代码高亮**：源码代码块与预览代码块独立开关，使用 Shiki/TextMate 和 VS Code 代码主题，可导入 VS Code 主题 JSON 或旧版 highlight.js CSS。
 - **目录与导航**：标题面包屑、源码缩略图、`Markdown: Create Table Of Contents` 命令一键插入目录。
 - **专注写作**：Zen 模式隐藏多余界面元素；底部状态栏显示光标位置、编辑模式、Vim 模式和保存状态。
 
@@ -115,7 +115,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ### 主题与个性化
 
-- 内置亮色、暗色与 Monokai 界面主题，以及多套代码高亮主题。
+- 内置暖白、白色、深色、Monokai、Nord、Dracula、Gruvbox、Solarized 等界面主题，以及多套 TextMate/VS Code 代码高亮主题。
+- 支持“界面主题 + 代码主题”联动预设，也可单独调整后显示为自定义。
 - 支持导入受控格式的自定义界面主题与代码主题。
 - 可选择编辑器字体、字号与预览字体行为。
 - 简体中文 / English 界面，默认跟随系统语言，切换后立即生效。
@@ -137,6 +138,9 @@ cargo test --manifest-path src-tauri/Cargo.toml
 | `Ctrl/Cmd + S` | 保存当前笔记 |
 | `Ctrl/Cmd + Shift + M` | 切换 Zen 模式 |
 | `Ctrl/Cmd + 滚轮` | 调整编辑器字号 |
+| `Ctrl/Cmd + =` / `Ctrl/Cmd + +` | 放大界面 |
+| `Ctrl/Cmd + -` | 缩小界面 |
+| `Ctrl/Cmd + 0` | 重置界面缩放 |
 | `@`（快速打开中） | 搜索当前笔记标题 |
 | `>`（快速打开中） | 切换到命令模式 |
 

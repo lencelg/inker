@@ -26,6 +26,10 @@ import {
 } from './imagePaste';
 import { DEFAULT_VIM_MAPPINGS } from './vimMappings';
 import {
+  themePresetForPair,
+  type ThemePresetValue,
+} from './themePresets';
+import {
   DEFAULT_THEME,
   LEGACY_THEME_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -77,6 +81,7 @@ export interface Preferences {
   immersive: boolean;
   codeHighlight: boolean;
   codeTheme: CodeThemeId;
+  themePreset: ThemePresetValue;
   sourceHighlight: boolean;
   language: LanguagePreference;
   exportEmbedImages: boolean;
@@ -123,8 +128,15 @@ export function normalizePreferences(value: unknown): Preferences {
     value && typeof value === 'object'
       ? (value as Partial<Preferences>)
       : {};
+  const theme = isThemeId(source.theme)
+    ? source.theme
+    : DEFAULT_THEME;
+  const codeTheme = isCodeThemeId(source.codeTheme)
+    ? source.codeTheme
+    : DEFAULT_CODE_THEME;
   return {
-    theme: isThemeId(source.theme) ? source.theme : DEFAULT_THEME,
+    theme,
+    themePreset: themePresetForPair(theme, codeTheme) ?? 'custom',
     fontSize: clampFontSize(Number(source.fontSize)),
     fontFamily: isFontId(source.fontFamily)
       ? source.fontFamily
@@ -132,9 +144,7 @@ export function normalizePreferences(value: unknown): Preferences {
     vimEnabled: source.vimEnabled === true,
     immersive: source.immersive === true,
     codeHighlight: source.codeHighlight !== false,
-    codeTheme: isCodeThemeId(source.codeTheme)
-      ? source.codeTheme
-      : DEFAULT_CODE_THEME,
+    codeTheme,
     sourceHighlight: source.sourceHighlight !== false,
     language: isLanguagePreference(source.language)
       ? source.language

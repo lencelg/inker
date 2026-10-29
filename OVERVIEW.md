@@ -29,7 +29,7 @@ Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` �
 | Vim | `@replit/codemirror-vim` |
 | 富文本编辑器 | Milkdown 7 / ProseMirror |
 | Markdown 渲染 | `markdown-it` |
-| 代码高亮 | `highlight.js` |
+| 代码高亮 | Shiki（TextMate / VS Code 主题） |
 | 数学公式 | KaTeX |
 | 图表 | Mermaid 12 |
 | HTML 清洗 | DOMPurify |
@@ -48,7 +48,7 @@ Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` �
 @milkdown/*                  Markdown WYSIWYG 编辑器
 @replit/codemirror-vim       Vim 键位与命令
 markdown-it                  Markdown 解析
-highlight.js                 代码语法高亮
+shiki                        TextMate / VS Code 主题语法高亮
 katex                        数学公式
 mermaid                      图表渲染
 dompurify                    HTML 安全清洗
@@ -161,10 +161,10 @@ tempfile                     测试临时目录
 - 数学公式。
 - Mermaid 图表。
 - 代码块语法高亮（可跟随“预览代码高亮”设置），右上角显示当前语言。
-- 代码高亮主题可切换，内置 GitHub Dark、GitHub Light、Atom One Dark、Monokai、Nord、Tokyo Night 和 VS Dark，默认 GitHub Dark。
-- 代码主题同时作用于预览、实时预览，以及源码模式中的围栏代码块；切换后立即生效。
-- 源码模式会为围栏代码块应用代码主题的缩进块背景与 token 配色（关键字、字符串、注释、数字、类型、函数、变量、运算符、标签），Markdown 语法高亮保持不变。
-- 关闭“源码代码块语法高亮”后不应用代码主题配色与背景。
+- 代码高亮使用 Shiki 的 TextMate 语法和 VS Code 主题，可切换 GitHub Dark、GitHub Dark Dimmed、GitHub Dark High Contrast、GitHub Light、Atom One Dark、Atom One Light、Monokai、Nord、Dracula、Tokyo Night、Min Light、Solarized Dark、Solarized Light、Gruvbox Dark 和 VS Dark，默认 GitHub Dark。
+- 代码主题作用于预览和实时预览；源码模式保留 CodeMirror/Lezer 语法树高亮，并从同一主题提取颜色变量对齐配色。
+- 源码模式会为围栏代码块应用对齐后的 token 配色（关键字、字符串、注释、数字、类型、函数、变量、常量、属性、运算符、标签），Markdown 语法高亮保持不变。
+- 关闭“源码代码块语法高亮”后不应用代码主题配色。
 - 原始 HTML 渲染（经 DOMPurify 清洗）。
 - 本地图片解析。
 - 粘贴、拖拽图片时按图片设置转换格式，并保存到配置的工作区相对目录（默认 `assets/`）。
@@ -235,6 +235,10 @@ tempfile                     测试临时目录
 - 白色
 - 深色
 - Monokai
+- Nord
+- Dracula
+- Gruvbox Dark
+- Solarized Light
 - VS Code Light+
 - VS Code Dark+
 - VS Code 高对比
@@ -246,10 +250,11 @@ tempfile                     测试临时目录
 - Source Code Pro
 - 系统等宽
 
+- 设置面板提供 Theme Preset，可一次切换界面主题与代码主题；单独修改任一项后显示为自定义。
 - 字体大小可调，快捷键为 `Ctrl/Cmd + 鼠标滚轮`。
 - 设置面板会跟随当前应用主题。
 - 下拉框为自定义组件，弹层样式与主题一致。
-- 支持导入自定义界面主题 JSON 和 highlight.js CSS 代码主题。
+- 支持导入自定义界面主题 JSON，以及 VS Code 主题 JSON / 旧版 highlight.js CSS 代码主题。
 - 导入成功后自动保存、选中并立即应用。
 - 已导入主题显示在对应主题下拉框下方，可直接删除。
 
@@ -269,23 +274,29 @@ tempfile                     测试临时目录
 }
 ```
 
-自定义代码主题使用 highlight.js CSS：
+自定义代码主题推荐使用 VS Code 主题 JSON：
 
-```css
-.hljs {
-  color: #d8dee9;
-  background: #2e3440;
-}
-
-.hljs-keyword {
-  color: #81a1c1;
+```json
+{
+  "name": "Ocean Code",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#0b1220",
+    "editor.foreground": "#d8dee9"
+  },
+  "tokenColors": [
+    { "scope": "keyword", "settings": { "foreground": "#81a1c1" } },
+    { "scope": "string", "settings": { "foreground": "#a3be8c" } }
+  ]
 }
 ```
+
+旧版 highlight.js CSS 仍可导入，会转换为近似的 Shiki 主题。
 
 导入限制：
 
 - 界面主题仅允许受支持的语义颜色变量，必须以内置主题为 `base`。
-- 代码主题仅保留 `.hljs` 作用域内的样式，拒绝 `@import` 和外部 `url()`。
+- VS Code 主题仅保留 tokenColors/editor 颜色；旧版 CSS 仅保留 `.hljs` 作用域内的样式，拒绝 `@import` 和外部 `url()`。
 - 单个文件最大 256 KB，每类最多保存 20 个自定义主题。
 - 主题保存在本机 localStorage，不会上传网络。
 
@@ -543,8 +554,10 @@ inker/
 │   └── lib/
 │       ├── anchors.ts             # 标题 slug / 锚点查找 / 滚动
 │       ├── blockInsertion.ts      # 块插入与上下文空行处理
-│       ├── codeHighlight.ts       # highlight.js token 范围映射
-│       ├── codeThemes.ts          # 代码高亮主题与动态样式
+│       ├── codeHighlight.ts       # Shiki token 范围映射
+│       ├── codeThemes.ts          # Shiki / VS Code 代码主题
+│       ├── shikiHighlighter.ts    # Shiki 单例、语言/主题懒加载
+│       ├── themePalette.ts        # 主题 token 颜色提取
 │       ├── customThemes.ts        # 自定义主题注册表与持久化
 │       ├── themeImport.ts         # 界面主题 / 代码主题解析与清洗
 │       ├── docxExport.ts          # DOCX 内容转换
@@ -776,7 +789,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 - 代码围栏生成 `.code-block` 和语言标识。
 - 本地图片改写为占位图，并通过 `data-md-src` 延迟解析。
 - 支持 Mermaid 围栏。
-- 使用 `highlight.js` 自动或显式语言高亮。
+- 使用 Shiki/TextMate 对显式声明的语言做语法高亮；未知语言回退为纯文本。
 
 标题 ID 规则：
 
@@ -943,6 +956,9 @@ Markdown 图片路径
 | `Ctrl/Cmd+S` | 保存当前笔记 |
 | `Ctrl/Cmd+Shift+M` | 切换 Zen 模式 |
 | `Ctrl/Cmd+滚轮` | 调整字体大小 |
+| `Ctrl/Cmd+=` / `Ctrl/Cmd++` | 放大界面 |
+| `Ctrl/Cmd+-` | 缩小界面 |
+| `Ctrl/Cmd+0` | 重置界面缩放 |
 | `Ctrl/Cmd+D` | 源码编辑器选择下一个相同文本 |
 | `Alt+点击` | 源码编辑器添加多光标 |
 | `Ctrl/Cmd+V` | 粘贴图片（源码 / 实时预览） |
@@ -1155,7 +1171,7 @@ cargo tauri icon assets/icons/inker.svg
    当前每个窗口只有一个编辑工作区。
 
 10. **只能导入受控格式的主题**
-    自定义界面主题仅支持语义颜色变量 JSON，不能改变布局；自定义代码主题仅支持 highlight.js `.css` 风格规则。导入主题存储于 localStorage，清理 WebView 数据后会丢失。
+    自定义界面主题仅支持语义颜色变量 JSON，不能改变布局；自定义代码主题支持 VS Code 主题 JSON 或旧版 highlight.js CSS，但只做颜色/字体样式映射，不包含 LSP 语义高亮。导入主题存储于 localStorage，清理 WebView 数据后会丢失。
 
 11. **目前仅打包 `.deb`**
     其他平台安装包需要修改 Tauri bundle 配置。

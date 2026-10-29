@@ -52,8 +52,8 @@ describe('DOCX export', () => {
     expect(xml).toContain('m:oMath');
     expect(xml).toContain('w:anchor="inkerHeading2"');
     expect(xml).toContain('TOC');
-    expect(xml).toContain('w:fill="0D1117"');
-    expect(xml).toContain('w:color w:val="C9D1D9"');
+    expect(xml).toContain('w:fill="24292E"');
+    expect(xml).toContain('w:color w:val="E1E4E8"');
     expect(Object.keys(archive.files)).toContain('word/footer1.xml');
 
     const core = archive.file('docProps/core.xml');

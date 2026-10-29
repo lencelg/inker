@@ -26,6 +26,7 @@
     "@milkdown/kit": "^7.22.3",
     "@milkdown/plugin-math": "^7.5.9",
     "@replit/codemirror-vim": "^6.4.0",
+    "@shikijs/types": "^4.5.0",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2.8.3",
@@ -33,11 +34,11 @@
     "codemirror": "^6.0.2",
     "docx": "^9.14.0",
     "dompurify": "^3.4.17",
-    "highlight.js": "^11.12.0",
     "katex": "^0.19.0",
     "markdown-it": "^15.0.3",
     "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^12.2.0",
+    "shiki": "^4.5.0",
     "vue": "^3.5.44"
   },
   "devDependencies": {

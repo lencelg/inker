@@ -57,6 +57,7 @@ import {
 import { isLocalImageSource } from '../lib/markdown';
 import { renderMermaid } from '../lib/mermaid';
 import { createProseMultiCursorPlugin } from '../lib/proseMultiCursor';
+import type { CodeThemeId } from '../lib/codeThemes';
 
 const props = defineProps<{
   initialContent: string;
@@ -64,6 +65,8 @@ const props = defineProps<{
   readOnly: boolean;
   immersive: boolean;
   codeHighlight: boolean;
+  codeTheme: CodeThemeId;
+  highlightRevision: number;
   requestImageSave: ImageSaveHandler;
 }>();
 
@@ -533,12 +536,16 @@ const codeHighlightPlugin = $prose(() => {
       const text = node.textContent;
       if (!text) return;
 
-      for (const range of codeHighlightRanges(text, language)) {
+      for (const range of codeHighlightRanges(
+        text,
+        language,
+        props.codeTheme,
+      )) {
         decorations.push(
           Decoration.inline(
             position + 1 + range.from,
             position + 1 + range.to,
-            { class: range.className },
+            { class: range.className, style: range.style },
           ),
         );
       }
@@ -688,7 +695,11 @@ watch(
 );
 
 watch(
-  () => props.codeHighlight,
+  [
+    () => props.codeHighlight,
+    () => props.codeTheme,
+    () => props.highlightRevision,
+  ],
   () => {
     editor?.action((ctx) => {
       const view = ctx.get(editorViewCtx);

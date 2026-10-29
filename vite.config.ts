@@ -7,6 +7,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
+    // Shiki initializes a WASM engine; keep worker concurrency bounded so
+    // highlighting tests do not race on engine startup.
+    maxWorkers: 4,
   },
   build: {
     rollupOptions: {

@@ -1,8 +1,14 @@
-import hljs from 'highlight.js/lib/common';
 import MarkdownIt from 'markdown-it';
 import type { StateCore, Token } from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 import { headingSlug } from './anchors';
+import {
+  codeThemeById,
+  DEFAULT_CODE_THEME,
+  type CodeThemeId,
+} from './codeThemes';
+import { escapeHtml } from './codeRender';
+import { highlightFenceHtml } from './shikiHighlighter';
 
 const TRANSPARENT_IMAGE =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -100,14 +106,6 @@ function addHeadingIds(state: StateCore): void {
 
 markdown.core.ruler.push('heading_ids', addHeadingIds);
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 interface SourceMappedToken {
   map: [number, number] | null;
   nesting: number;
@@ -145,40 +143,26 @@ markdown.renderer.rules.fence = (tokens, idx, _options, env) => {
     return `<div class="mermaid-block"${sourceLine}><pre class="mermaid-source">${source}</pre></div>\n`;
   }
 
-  const highlightEnabled =
-    (env as { codeHighlight?: boolean } | undefined)?.codeHighlight !==
-    false;
-  const knownLanguage = info ? hljs.getLanguage(info) : undefined;
-  let highlighted: { value: string; language?: string } = {
-    value: escapeHtml(token.content),
-  };
-  let displayLanguage = info || 'text';
-
-  if (highlightEnabled) {
-    if (knownLanguage) {
-      highlighted = {
-        value: hljs.highlight(token.content, {
-          language: info,
-          ignoreIllegals: true,
-        }).value,
-        language: info,
-      };
-    } else {
-      const detected = hljs.highlightAuto(token.content);
-      highlighted = {
-        value: detected.value,
-        language: detected.language,
-      };
-      displayLanguage = info || detected.language || 'text';
-    }
-  }
+  const envData = env as
+    | { codeHighlight?: boolean; codeTheme?: CodeThemeId }
+    | undefined;
+  const highlightEnabled = envData?.codeHighlight !== false;
+  const displayLanguage = info || 'text';
+  const fallback = escapeHtml(token.content);
+  const highlighted = highlightEnabled
+    ? highlightFenceHtml(
+        token.content,
+        info,
+        codeThemeById(envData?.codeTheme ?? DEFAULT_CODE_THEME),
+      )
+    : null;
 
   const languageClass = displayLanguage
     ? ` class="language-${escapeHtml(displayLanguage)}"`
     : '';
   const badge = escapeHtml(displayLanguage || 'text');
 
-  return `<div class="code-block"${sourceLine}><span class="code-language">${badge}</span><pre class="hljs"><code${languageClass}>${highlighted.value}</code></pre></div>\n`;
+  return `<div class="code-block"${sourceLine}><span class="code-language">${badge}</span><pre class="hljs"><code${languageClass}>${highlighted ?? fallback}</code></pre></div>\n`;
 };
 
 const originalCodeBlockRenderer = markdown.renderer.rules.code_block;
@@ -217,6 +201,7 @@ export function isLocalImageSource(source: string): boolean {
 
 export interface RenderOptions {
   codeHighlight?: boolean;
+  codeTheme?: CodeThemeId;
 }
 
 export function renderMarkdown(
@@ -225,5 +210,6 @@ export function renderMarkdown(
 ): string {
   return markdown.render(source, {
     codeHighlight: options.codeHighlight !== false,
+    codeTheme: options.codeTheme ?? DEFAULT_CODE_THEME,
   });
 }

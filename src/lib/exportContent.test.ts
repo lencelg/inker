@@ -41,7 +41,7 @@ describe('HTML export preparation', () => {
     expect(prepared.documentHtml).toContain(
       '<title>Ocean Notes</title>',
     );
-    expect(prepared.documentHtml).toContain('--code-bg: #0d1117');
+    expect(prepared.documentHtml).toContain('--code-bg: #24292e');
     expect(prepared.documentHtml).toContain(
       'name="generator" content="Inker"',
     );
@@ -89,7 +89,7 @@ describe('HTML export preparation', () => {
     expect(html.indexOf('class="export-toc"')).toBeLessThan(
       html.indexOf('<h1'),
     );
-    expect(html).toContain('--code-bg: #0d1117');
+    expect(html).toContain('--code-bg: #24292e');
   });
 
   it('embeds local images with data URLs', async () => {

@@ -41,6 +41,8 @@ const safeHtml = computed(() =>
       'data-md-src',
       'data-source-line',
       'data-source-line-end',
+      'data-shiki-theme',
+      'style',
     ],
   }),
 );

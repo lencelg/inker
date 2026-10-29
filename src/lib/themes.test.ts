@@ -10,4 +10,11 @@ describe('UI themes', () => {
       label: 'Monokai',
     });
   });
+
+  it('includes the expanded palette of built-in themes', () => {
+    for (const id of ['nord', 'dracula', 'gruvbox', 'solarized-light']) {
+      expect(isBuiltInThemeId(id)).toBe(true);
+      expect(allThemes().some((theme) => theme.id === id)).toBe(true);
+    }
+  });
 });

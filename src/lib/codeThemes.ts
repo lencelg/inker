@@ -1,101 +1,118 @@
-import { customCodeThemes } from './customThemes';
+import type { ThemeRegistrationAny } from '@shikijs/types';
+import githubDark from '@shikijs/themes/github-dark';
+import githubLight from '@shikijs/themes/github-light';
+import githubDarkDimmed from '@shikijs/themes/github-dark-dimmed';
+import githubDarkHighContrast from '@shikijs/themes/github-dark-high-contrast';
+import oneDarkPro from '@shikijs/themes/one-dark-pro';
+import oneLight from '@shikijs/themes/one-light';
+import monokai from '@shikijs/themes/monokai';
+import nord from '@shikijs/themes/nord';
+import dracula from '@shikijs/themes/dracula';
+import solarizedDark from '@shikijs/themes/solarized-dark';
+import solarizedLight from '@shikijs/themes/solarized-light';
+import gruvboxDarkMedium from '@shikijs/themes/gruvbox-dark-medium';
+import tokyoNight from '@shikijs/themes/tokyo-night';
+import minLight from '@shikijs/themes/min-light';
+import darkPlus from '@shikijs/themes/dark-plus';
+
+import { customCodeThemes, type CustomCodeTheme } from './customThemes';
 import { t } from './i18n';
-import githubDarkCss from 'highlight.js/styles/github-dark.css?raw';
-import githubLightCss from 'highlight.js/styles/github.css?raw';
-import atomOneDarkCss from 'highlight.js/styles/atom-one-dark.css?raw';
-import monokaiCss from 'highlight.js/styles/monokai.css?raw';
-import nordCss from 'highlight.js/styles/nord.css?raw';
-import tokyoNightCss from 'highlight.js/styles/tokyo-night-dark.css?raw';
-import vsDarkCss from 'highlight.js/styles/vs2015.css?raw';
-
-export const CODE_THEMES = [
-  {
-    id: 'github-dark',
-    label: 'GitHub Dark',
-    background: '#0d1117',
-    foreground: '#c9d1d9',
-    css: githubDarkCss,
-  },
-  {
-    id: 'github-light',
-    label: 'GitHub Light',
-    background: '#ffffff',
-    foreground: '#24292e',
-    css: githubLightCss,
-  },
-  {
-    id: 'atom-one-dark',
-    label: 'Atom One Dark',
-    background: '#282c34',
-    foreground: '#abb2bf',
-    css: atomOneDarkCss,
-  },
-  {
-    id: 'monokai',
-    label: 'Monokai',
-    background: '#272822',
-    foreground: '#f8f8f2',
-    css: monokaiCss,
-  },
-  {
-    id: 'nord',
-    label: 'Nord',
-    background: '#2e3440',
-    foreground: '#d8dee9',
-    css: nordCss,
-  },
-  {
-    id: 'tokyo-night',
-    label: 'Tokyo Night',
-    background: '#1a1b26',
-    foreground: '#9aa5ce',
-    css: tokyoNightCss,
-  },
-  {
-    id: 'vs-dark',
-    label: 'VS Dark',
-    background: '#1e1e1e',
-    foreground: '#dcdcdc',
-    css: vsDarkCss,
-  },
-] as const;
-
-export type BuiltInCodeThemeId = (typeof CODE_THEMES)[number]['id'];
-export type CodeThemeId =
-  | BuiltInCodeThemeId
-  | `custom-code-${string}`;
+import { useCodeTheme } from './shikiHighlighter';
+import {
+  deriveSyntaxPalette,
+  type SyntaxPalette,
+} from './themePalette';
 
 export interface CodeThemeDefinition {
   id: CodeThemeId;
   label: string;
   background: string;
   foreground: string;
-  css: string;
+  shikiTheme: ThemeRegistrationAny;
+  shikiThemeName: string;
+  palette: SyntaxPalette;
+  legacyCss?: string;
   custom?: boolean;
 }
 
+export type BuiltInCodeThemeId =
+  | 'github-dark'
+  | 'github-light'
+  | 'atom-one-dark'
+  | 'monokai'
+  | 'nord'
+  | 'tokyo-night'
+  | 'vs-dark'
+  | 'atom-one-light'
+  | 'github-dark-dimmed'
+  | 'dracula'
+  | 'solarized-dark'
+  | 'solarized-light'
+  | 'gruvbox-dark'
+  | 'tokyo-night-light'
+  | 'github-dark-high-contrast';
+
+export type CodeThemeId =
+  | BuiltInCodeThemeId
+  | `custom-code-${string}`;
+
 export const DEFAULT_CODE_THEME: BuiltInCodeThemeId = 'github-dark';
-const CODE_THEME_STYLE_ID = 'inker-code-theme';
-const SOURCE_SYNTAX_CLASSES = {
-  keyword: 'hljs-keyword',
-  number: 'hljs-number',
-  string: 'hljs-string',
-  comment: 'hljs-comment',
-  type: 'hljs-title class_',
-  function: 'hljs-title function_',
-  variable: 'hljs-variable',
-  operator: 'hljs-operator',
-  tag: 'hljs-tag hljs-name',
-} as const;
-let sourceColorKey = '';
+
+function themeName(theme: ThemeRegistrationAny, fallback: string): string {
+  return typeof theme.name === 'string' && theme.name
+    ? theme.name
+    : fallback;
+}
+
+function makeTheme(
+  id: BuiltInCodeThemeId,
+  label: string,
+  shikiTheme: ThemeRegistrationAny,
+): CodeThemeDefinition {
+  const palette = deriveSyntaxPalette(shikiTheme);
+  return {
+    id,
+    label,
+    background: palette.background,
+    foreground: palette.foreground,
+    shikiTheme,
+    shikiThemeName: themeName(shikiTheme, id),
+    palette,
+  };
+}
+
+export const CODE_THEMES: readonly CodeThemeDefinition[] = [
+  makeTheme('github-dark', 'GitHub Dark', githubDark),
+  makeTheme('github-light', 'GitHub Light', githubLight),
+  makeTheme('atom-one-dark', 'Atom One Dark', oneDarkPro),
+  makeTheme('monokai', 'Monokai', monokai),
+  makeTheme('nord', 'Nord', nord),
+  makeTheme('tokyo-night', 'Tokyo Night', tokyoNight),
+  makeTheme('vs-dark', 'VS Dark', darkPlus),
+  makeTheme('atom-one-light', 'Atom One Light', oneLight),
+  makeTheme('github-dark-dimmed', 'GitHub Dark Dimmed', githubDarkDimmed),
+  makeTheme('dracula', 'Dracula', dracula),
+  makeTheme('solarized-dark', 'Solarized Dark', solarizedDark),
+  makeTheme('solarized-light', 'Solarized Light', solarizedLight),
+  makeTheme('gruvbox-dark', 'Gruvbox Dark', gruvboxDarkMedium),
+  makeTheme('tokyo-night-light', 'Min Light', minLight),
+  makeTheme(
+    'github-dark-high-contrast',
+    'GitHub Dark High Contrast',
+    githubDarkHighContrast,
+  ),
+];
+
+const customPaletteCache = new WeakMap<CustomCodeTheme, SyntaxPalette>();
+
+const BUILT_IN_IDS = new Set<string>(
+  CODE_THEMES.map((theme) => theme.id),
+);
 
 export function isBuiltInCodeThemeId(
   value: unknown,
 ): value is BuiltInCodeThemeId {
-  return (
-    typeof value === 'string' &&
-    CODE_THEMES.some((theme) => theme.id === value)
-  );
+  return typeof value === 'string' && BUILT_IN_IDS.has(value);
 }
 
 export function isCodeThemeId(value: unknown): value is CodeThemeId {
@@ -106,18 +123,30 @@ export function isCodeThemeId(value: unknown): value is CodeThemeId {
   );
 }
 
+function customDefinition(theme: CustomCodeTheme): CodeThemeDefinition {
+  const shikiThemeName = `custom:${theme.id}`;
+  let palette = customPaletteCache.get(theme);
+  if (!palette) {
+    palette = deriveSyntaxPalette(theme.theme);
+    customPaletteCache.set(theme, palette);
+  }
+  return {
+    id: theme.id,
+    label: t('theme.custom', { name: theme.name }),
+    background: theme.background,
+    foreground: theme.foreground,
+    shikiTheme: theme.theme,
+    shikiThemeName,
+    palette,
+    legacyCss: theme.legacyCss,
+    custom: true,
+  };
+}
+
 export function allCodeThemes(): CodeThemeDefinition[] {
   return [
-    ...CODE_THEMES.map((theme) => ({
-      ...theme,
-      id: theme.id as CodeThemeId,
-    })),
-    ...customCodeThemes.value.map((theme) => ({
-      ...theme,
-      id: theme.id as CodeThemeId,
-      label: t('theme.custom', { name: theme.name }),
-      custom: true,
-    })),
+    ...CODE_THEMES,
+    ...customCodeThemes.value.map(customDefinition),
   ];
 }
 
@@ -128,78 +157,15 @@ export function codeThemeById(id: CodeThemeId): CodeThemeDefinition {
   );
 }
 
-function applySourceSyntaxColors(theme: CodeThemeDefinition): void {
-  if (typeof document === 'undefined' || !document.body) return;
-
-  const root = document.documentElement;
-  const key = `${theme.id}\u0000${theme.css}`;
-  if (
-    key === sourceColorKey &&
-    root.style.getPropertyValue('--code-syntax-keyword') !== ''
-  ) {
-    return;
-  }
-
-  const host = document.createElement('div');
-  host.setAttribute('aria-hidden', 'true');
-  host.style.position = 'absolute';
-  host.style.left = '-9999px';
-  host.style.top = '0';
-  host.style.visibility = 'hidden';
-  host.style.pointerEvents = 'none';
-
-  const base = document.createElement('pre');
-  base.className = 'hljs';
-  base.style.color = theme.foreground;
-  host.append(base);
-
-  const samples: Array<[string, HTMLElement]> = [];
-  for (const [name, className] of Object.entries(
-    SOURCE_SYNTAX_CLASSES,
-  )) {
-    const sample = document.createElement('span');
-    sample.className = className;
-    base.append(sample);
-    samples.push([name, sample]);
-  }
-
-  document.body.append(host);
-  try {
-    for (const [name, sample] of samples) {
-      const color = getComputedStyle(sample).color;
-      if (color) {
-        root.style.setProperty(`--code-syntax-${name}`, color);
-      }
-    }
-    sourceColorKey = key;
-  } finally {
-    host.remove();
-  }
-}
-
 export function applyCodeTheme(id: CodeThemeId): void {
   const theme = codeThemeById(id);
-  let style = document.getElementById(
-    CODE_THEME_STYLE_ID,
-  ) as HTMLStyleElement | null;
-
-  if (!style) {
-    style = document.createElement('style');
-    style.id = CODE_THEME_STYLE_ID;
-    document.head.append(style);
+  const root = document.documentElement;
+  for (const [name, color] of Object.entries(theme.palette.colors)) {
+    root.style.setProperty(`--code-syntax-${name}`, color);
   }
-  if (style.textContent !== theme.css) {
-    style.textContent = theme.css;
-  }
-
-  document.documentElement.style.setProperty(
-    '--code-bg',
-    theme.background,
-  );
-  document.documentElement.style.setProperty(
-    '--code-fg',
-    theme.foreground,
-  );
-  document.documentElement.dataset.codeTheme = theme.id;
-  applySourceSyntaxColors(theme);
+  root.style.setProperty('--code-bg', theme.background);
+  root.style.setProperty('--code-fg', theme.foreground);
+  root.dataset.codeTheme = theme.id;
+  root.dataset.codeThemeType = theme.palette.type;
+  useCodeTheme(theme);
 }

@@ -31,6 +31,7 @@ import { latexToMath } from 'docx/math';
 import {
   DEFAULT_CODE_THEME,
   codeThemeById,
+  type CodeThemeDefinition,
   type CodeThemeId,
 } from './codeThemes';
 import { t } from './i18n';
@@ -192,10 +193,20 @@ function colorToHex(value: string): string | null {
     .join('');
 }
 
-function syntaxColors(css: string): Record<string, string> {
+function syntaxColors(
+  theme: CodeThemeDefinition,
+): Record<string, string> {
   const colors: Record<string, string> = {
     ...FALLBACK_SYNTAX_COLORS,
   };
+  for (const [kind, value] of Object.entries(theme.palette.colors)) {
+    const color = colorToHex(value);
+    if (!color) continue;
+    colors[kind] = color;
+    colors[`tk-${kind}`] = color;
+  }
+
+  const css = theme.legacyCss ?? '';
   if (!css.trim()) return colors;
 
   const cleaned = css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -571,11 +582,18 @@ function codeRuns(
   }
 
   let nextColor = color;
-  for (const name of Array.from(node.classList)) {
-    const themed = context.syntax[name];
-    if (themed) {
-      nextColor = themed;
-      break;
+  const inlineColor = node.style?.color
+    ? colorToHex(node.style.color)
+    : null;
+  if (inlineColor) {
+    nextColor = inlineColor;
+  } else {
+    for (const name of Array.from(node.classList)) {
+      const themed = context.syntax[name];
+      if (themed) {
+        nextColor = themed;
+        break;
+      }
     }
   }
   return Array.from(node.childNodes).flatMap((child) =>
@@ -1115,7 +1133,7 @@ export async function docxToBase64(
   );
   const context: DocxContext = {
     bookmarks: headingBookmarks(container),
-    syntax: syntaxColors(theme.css),
+    syntax: syntaxColors(theme),
     codeBackground: colorHex(theme.background, 'F6F8FA'),
     codeForeground: colorHex(theme.foreground, '1F2933'),
     listIndex: 0,

@@ -72,6 +72,7 @@ import { isImagePath } from './lib/fileKinds';
 import { restoreSettingsFocus } from './lib/focus';
 import { localizeError, t, type TranslationKey } from './lib/i18n';
 import { renderMarkdown, extractMarkdownHeadings } from './lib/markdown';
+import { highlightRevision } from './lib/shikiHighlighter';
 import {
   buildFilePaletteItems,
   commandKeepsSettingsOpen,
@@ -114,6 +115,7 @@ import {
 import { buildRestorePlan } from './lib/workspaceRestore';
 import type { ViewMode } from './lib/viewModes';
 import { applySlowWheel } from './lib/wheelScroll';
+import { expandPresetPatch } from './lib/themePresets';
 import {
   nextZoomLevel,
   readStoredZoomLevel,
@@ -260,11 +262,13 @@ const activeImagePath = computed(() =>
     ? activeTab.value.path
     : null,
 );
-const previewHtml = computed(() =>
-  renderMarkdown(activeTab.value?.content ?? '', {
+const previewHtml = computed(() => {
+  void highlightRevision.value;
+  return renderMarkdown(activeTab.value?.content ?? '', {
     codeHighlight: preferences.value.codeHighlight,
-  }),
-);
+    codeTheme: preferences.value.codeTheme,
+  });
+});
 const anySaving = computed(() => savingPaths.value.length > 0);
 const busy = computed(() => switching.value || mutating.value);
 const vimEnabled = computed(() => preferences.value.vimEnabled);
@@ -687,7 +691,7 @@ const workspaceLifecycle = useWorkspaceLifecycle({
 function updatePreferences(patch: Partial<Preferences>): void {
   const next = normalizePreferences({
     ...basePreferences.value,
-    ...patch,
+    ...expandPresetPatch(patch),
   });
   basePreferences.value = next;
   savePreferences(next);
@@ -702,7 +706,7 @@ function updateWorkspacePreferences(
   workspaceSettingsMap = setWorkspaceOverrides(
     workspaceSettingsMap,
     dir,
-    patch,
+    expandPresetPatch(patch),
   );
   workspaceOverrides.value = workspaceOverridesFor(
     workspaceSettingsMap,
@@ -2940,6 +2944,8 @@ watch(
           :read-only="switching || mutating"
           :immersive="immersiveEnabled"
           :code-highlight="preferences.codeHighlight"
+          :code-theme="preferences.codeTheme"
+          :highlight-revision="highlightRevision"
           :request-image-save="requestImageSave"
           @change="handleContentChange"
         />

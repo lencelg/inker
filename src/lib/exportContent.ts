@@ -9,6 +9,12 @@ import {
 } from './codeThemes';
 import { getLanguage, t } from './i18n';
 import { isLocalImageSource, renderMarkdown } from './markdown';
+import { extractFenceLanguages } from './codeLanguages';
+import {
+  ensureShikiLanguage,
+  ensureShikiTheme,
+  initShiki,
+} from './shikiHighlighter';
 import { renderMermaid } from './mermaid';
 import { basename } from './paths';
 
@@ -447,7 +453,7 @@ function buildDocumentHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="Inker">
 <title>${escapeHtml(title)}</title>
-<style>${theme.css}\n${EXPORT_CSS}\n${themeVars}</style>
+<style>${EXPORT_CSS}\n${themeVars}</style>
 </head>
 <body>
 <article class="markdown-body export-body">${contentHtml}</article>
@@ -455,16 +461,40 @@ function buildDocumentHtml(
 </html>`;
 }
 
+async function prepareShiki(
+  source: string,
+  codeTheme: CodeThemeId,
+  enabled: boolean,
+): Promise<void> {
+  if (!enabled) return;
+  await Promise.race([
+    initShiki(),
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 1500);
+    }),
+  ]);
+  await ensureShikiTheme(codeThemeById(codeTheme));
+  await Promise.all(
+    extractFenceLanguages(source).map((language) =>
+      ensureShikiLanguage(language),
+    ),
+  );
+}
+
 export async function prepareExport(
   notePath: string,
   markdownSource: string,
   options: ExportOptions = {},
 ): Promise<PreparedExport> {
+  const codeHighlight = options.codeHighlight !== false;
+  const codeTheme = options.codeTheme ?? DEFAULT_CODE_THEME;
+  await prepareShiki(markdownSource, codeTheme, codeHighlight);
   const container = document.createElement('div');
   container.className = 'markdown-body export-body';
   container.innerHTML = DOMPurify.sanitize(
     renderMarkdown(markdownSource, {
-      codeHighlight: options.codeHighlight !== false,
+      codeHighlight,
+      codeTheme,
     }),
     {
       ADD_ATTR: [
@@ -553,7 +583,7 @@ export async function prepareExport(
     title,
     contentHtml,
     language,
-    options.codeTheme ?? DEFAULT_CODE_THEME,
+    codeTheme,
   );
 
   return {

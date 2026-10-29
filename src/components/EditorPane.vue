@@ -216,8 +216,16 @@ function attachVimStatus(): void {
   emit('vimMode', formatVimMode({ mode: cm.state.vim?.mode ?? 'normal' }));
 }
 
+const SOURCE_FALLBACK: Record<string, string> = {
+  constant: 'number',
+  parameter: 'variable',
+  property: 'variable',
+  attribute: 'variable',
+  punctuation: 'operator',
+};
+
 function codeSyntaxColor(name: string): string {
-  return `var(--code-syntax-${name}, var(--syntax-${name}))`;
+  return `var(--code-syntax-${name}, var(--syntax-${SOURCE_FALLBACK[name] ?? name}))`;
 }
 
 const syntaxTheme = HighlightStyle.define([
@@ -245,6 +253,22 @@ const syntaxTheme = HighlightStyle.define([
   {
     tag: [tags.variableName, tags.propertyName, tags.attributeName],
     color: codeSyntaxColor('variable'),
+  },
+  {
+    tag: [
+      tags.constant(tags.variableName),
+      tags.standard(tags.variableName),
+      tags.self,
+    ],
+    color: codeSyntaxColor('constant'),
+  },
+  {
+    tag: tags.propertyName,
+    color: codeSyntaxColor('property'),
+  },
+  {
+    tag: tags.attributeName,
+    color: codeSyntaxColor('attribute'),
   },
   {
     tag: [tags.operator, tags.operatorKeyword],
@@ -390,7 +414,7 @@ const theme = EditorView.theme({
     color: 'var(--syntax-operator)',
   },
   '.cm-codeblock-themed .cm-code-punctuation': {
-    color: 'var(--ink)',
+    color: 'var(--code-syntax-punctuation, var(--ink))',
   },
   '.cm-cursor, .cm-dropCursor': {
     borderLeftColor: 'var(--editor-caret, var(--ink))',
@@ -415,8 +439,14 @@ const theme = EditorView.theme({
   '.cm-activeLineGutter': {
     backgroundColor: 'var(--editor-active-line-gutter)',
   },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
+  '.cm-selectionLayer .cm-selectionBackground': {
     backgroundColor: 'var(--editor-selection)',
+  },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+    backgroundColor: 'var(--editor-selection)',
+  },
+  '.cm-vimMode .cm-line::selection, .cm-vimMode .cm-line ::selection': {
+    backgroundColor: 'transparent',
   },
   '.cm-panels': {
     backgroundColor: 'var(--bg-soft)',

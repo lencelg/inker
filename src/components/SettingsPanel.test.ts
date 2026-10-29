@@ -88,9 +88,11 @@ describe('SettingsPanel', () => {
       .trigger('click');
 
     const items = wrapper.findAll('.setting-item');
-    expect(items).toHaveLength(1);
-    expect(items[0].text()).toContain('Workbench: Color Theme');
+    expect(items).toHaveLength(2);
+    expect(items[0].text()).toContain('Workbench: Theme Preset');
     expect(items[0].text()).toContain('已修改');
+    expect(items[1].text()).toContain('Workbench: Color Theme');
+    expect(items[1].text()).toContain('已修改');
   });
 
   it('resets a setting to its default value', async () => {

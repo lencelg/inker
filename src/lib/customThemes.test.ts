@@ -19,6 +19,27 @@ import {
   isThemeId,
 } from './themes';
 import { createSettingsSchema } from './settingsSchema';
+import { convertHljsCssToShikiTheme } from './legacyCodeTheme';
+
+function customCodeTheme(
+  name: string,
+  background: string,
+  foreground: string,
+  css: string,
+) {
+  return {
+    name,
+    background,
+    foreground,
+    theme: convertHljsCssToShikiTheme({
+      name,
+      background,
+      foreground,
+      css,
+    }),
+    legacyCss: css,
+  };
+}
 
 const SOURCE_SYNTAX_VARS = [
   '--code-syntax-keyword',
@@ -86,12 +107,14 @@ describe('custom themes', () => {
   });
 
   it('stores and applies custom code themes', () => {
-    const theme = addCustomCodeTheme({
-      name: 'My Code',
-      background: '#101010',
-      foreground: '#eeeeee',
-      css: '.hljs { color: #eeeeee; background: #101010; }',
-    });
+    const theme = addCustomCodeTheme(
+      customCodeTheme(
+        'My Code',
+        '#101010',
+        '#eeeeee',
+        '.hljs { color: #eeeeee; background: #101010; }',
+      ),
+    );
 
     expect(theme.id).toMatch(/^custom-code-/);
     expect(isCodeThemeId(theme.id)).toBe(true);
@@ -106,8 +129,8 @@ describe('custom themes', () => {
       document.documentElement.style.getPropertyValue('--code-bg'),
     ).toBe('#101010');
     expect(
-      document.getElementById('inker-code-theme')?.textContent,
-    ).toContain('.hljs');
+      document.documentElement.style.getPropertyValue('--code-syntax-keyword'),
+    ).toBe('#eeeeee');
 
     const schema = createSettingsSchema(normalizePreferences({}));
     const options = schema.find(
@@ -119,11 +142,12 @@ describe('custom themes', () => {
   });
 
   it('derives source editor token colors from the code theme CSS', () => {
-    const theme = addCustomCodeTheme({
-      name: 'Source Colors',
-      background: '#101010',
-      foreground: '#eeeeee',
-      css: `
+    const theme = addCustomCodeTheme(
+      customCodeTheme(
+        'Source Colors',
+        '#101010',
+        '#eeeeee',
+        `
         .hljs { color: #eeeeee; background: #101010; }
         .hljs-keyword { color: #ff5555; }
         .hljs-string { color: #50fa7b; }
@@ -135,7 +159,8 @@ describe('custom themes', () => {
         .hljs-operator { color: #f8f8f2; }
         .hljs-name { color: #ff79c6; }
       `,
-    });
+      ),
+    );
 
     applyCodeTheme(theme.id);
     const style = document.documentElement.style;
@@ -175,12 +200,14 @@ describe('custom themes', () => {
       base: 'paper',
       colors: { '--accent': '#0000ff' },
     });
-    const code = addCustomCodeTheme({
-      name: 'Code',
-      background: '#000000',
-      foreground: '#ffffff',
-      css: '.hljs { color: #fff; background: #000; }',
-    });
+    const code = addCustomCodeTheme(
+      customCodeTheme(
+        'Code',
+        '#000000',
+        '#ffffff',
+        '.hljs { color: #fff; background: #000; }',
+      ),
+    );
 
     const preferences = normalizePreferences({
       theme: ui.id,

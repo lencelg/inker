@@ -33,7 +33,9 @@ const notice = ref('');
 
 const isUi = computed(() => props.kind === 'ui');
 const accept = computed(() =>
-  isUi.value ? '.json,application/json' : '.css,text/css',
+  isUi.value
+    ? '.json,application/json'
+    : '.json,.css,application/json,text/css',
 );
 const formatLabel = computed(() =>
   isUi.value

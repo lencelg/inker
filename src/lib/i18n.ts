@@ -262,7 +262,7 @@ const zh = {
   'setting.enabled': '已启用',
   'setting.disabled': '已停用',
   'themeImport.uiFormat': '.json 界面主题',
-  'themeImport.codeFormat': '.css 代码高亮主题',
+  'themeImport.codeFormat': '.json / .css 代码高亮主题',
   'themeImport.imported': '已导入“{name}”',
   'themeImport.deleted': '已删除“{name}”',
   'themeImport.importUi': '导入界面主题',
@@ -286,7 +286,8 @@ const zh = {
   'themeImport.error.parseCss': '无法解析代码主题 CSS',
   'themeImport.error.missingBaseColors':
     '代码主题的 .hljs 规则必须定义 background 和 color',
-  'themeImport.error.noRules': '没有找到可用的 highlight.js 样式规则',
+  'themeImport.error.noRules': '没有找到可用的代码高亮规则',
+  'themeImport.error.tooManyTokenRules': '代码高亮规则过多（最多 2000 条）',
   'themeImport.error.limitUi': '最多只能保存 {count} 个自定义界面主题',
   'themeImport.error.limitCode': '最多只能保存 {count} 个自定义代码主题',
   'theme.paper': '暖白',
@@ -310,6 +311,9 @@ const zh = {
   'settings.category.export.description': '导出格式、图片与目录。',
   'settings.language.description': '界面显示语言。',
   'settings.colorTheme.description': '界面、编辑器和预览的配色。',
+  'settings.themePreset.description':
+    '同时选择界面主题和代码高亮主题；单独修改任一项后会显示为自定义。',
+  'themePreset.custom': '自定义',
   'settings.colorTheme.hint': '切换后立即应用。',
   'settings.colorTheme.reset': '恢复默认主题',
   'settings.fontSize.description': '编辑器字号。',
@@ -646,7 +650,7 @@ const en: Record<TranslationKey, string> = {
   'setting.enabled': 'Enabled',
   'setting.disabled': 'Disabled',
   'themeImport.uiFormat': '.json UI theme',
-  'themeImport.codeFormat': '.css code highlight theme',
+  'themeImport.codeFormat': '.json / .css code highlight theme',
   'themeImport.imported': 'Imported “{name}”',
   'themeImport.deleted': 'Deleted “{name}”',
   'themeImport.importUi': 'Import UI Theme',
@@ -677,7 +681,9 @@ const en: Record<TranslationKey, string> = {
   'themeImport.error.missingBaseColors':
     'Code theme .hljs rules must define background and color',
   'themeImport.error.noRules':
-    'No usable highlight.js style rules were found',
+    'No usable code highlight rules were found',
+  'themeImport.error.tooManyTokenRules':
+    'Too many code highlight rules (maximum 2000)',
   'themeImport.error.limitUi':
     'You can save at most {count} custom UI themes',
   'themeImport.error.limitCode':
@@ -708,6 +714,9 @@ const en: Record<TranslationKey, string> = {
   'settings.language.description': 'Display language.',
   'settings.colorTheme.description':
     'Colors for the interface, editor, and preview.',
+  'settings.themePreset.description':
+    'Choose a matching interface and code highlight theme; changing either one individually switches to Custom.',
+  'themePreset.custom': 'Custom',
   'settings.colorTheme.hint': 'Applies immediately.',
   'settings.colorTheme.reset': 'Restore Default Theme',
   'settings.fontSize.description': 'Editor font size.',

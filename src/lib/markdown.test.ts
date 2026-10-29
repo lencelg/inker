@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { renderMarkdown } from './markdown';
+import {
+  ensureShikiLanguage,
+  initShiki,
+} from './shikiHighlighter';
+
+beforeAll(async () => {
+  await initShiki();
+  await ensureShikiLanguage('shellscript');
+});
 
 describe('fenced code rendering', () => {
   it('highlights code and shows its language', () => {
@@ -8,7 +17,7 @@ describe('fenced code rendering', () => {
     );
     expect(html).toContain('class="code-block"');
     expect(html).toContain('class="code-language">bash');
-    expect(html).toContain('hljs-');
+    expect(html).toContain('class="tk tk-');
   });
 
   it('keeps the language badge when highlighting is disabled', () => {
@@ -17,14 +26,15 @@ describe('fenced code rendering', () => {
       { codeHighlight: false },
     );
     expect(html).toContain('class="code-language">bash');
-    expect(html).not.toContain('hljs-');
+    expect(html).not.toContain('class="tk tk-');
   });
 
-  it('detects a language for fences without info', () => {
+  it('falls back to plain text for fences without info', () => {
     const html = renderMarkdown(
       '```\n# merge\ngit merge feature\n```',
     );
-    expect(html).toMatch(/class="code-language">[^<]+<\/span>/);
+    expect(html).toContain('class="code-language">text');
+    expect(html).not.toContain('class="tk tk-');
   });
 });
 

@@ -13,6 +13,7 @@ import {
   DEFAULT_THEME,
   allThemes,
 } from './themes';
+import { themePresetOptions } from './themePresets';
 import {
   DEFAULT_IMAGE_FOLDER,
   DEFAULT_IMAGE_FORMAT,
@@ -152,6 +153,16 @@ function settingTemplates(): SettingTemplate[] {
         'chinese',
       ],
       preference: 'language',
+    },
+    {
+      id: 'workbench.themePreset',
+      category: 'common',
+      title: 'Workbench: Theme Preset',
+      description: t('settings.themePreset.description'),
+      controlType: 'select',
+      defaultValue: 'paper',
+      keywords: ['预设', '主题', '配色', 'preset', 'theme', 'appearance'],
+      preference: 'themePreset',
     },
     {
       id: 'workbench.colorTheme',
@@ -577,6 +588,9 @@ export function createSettingsSchema(
       value: theme.id,
     }),
   );
+  const presetOptions: SettingsOption[] = themePresetOptions().map(
+    (option) => ({ label: option.label, value: option.value }),
+  );
   const languageOptions: SettingsOption[] = LANGUAGE_OPTIONS.map(
     (option) => ({
       label: t(option.label as TranslationKey),
@@ -589,7 +603,9 @@ export function createSettingsSchema(
       ? (preferences[template.preference] as SettingsValue)
       : (localValues[template.id] ?? template.defaultValue);
     const options =
-      template.id === 'workbench.colorTheme'
+      template.id === 'workbench.themePreset'
+        ? presetOptions
+        : template.id === 'workbench.colorTheme'
         ? themeOptions
         : template.id === 'preview.codeTheme'
           ? codeThemeOptions

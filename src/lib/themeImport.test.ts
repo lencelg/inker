@@ -76,9 +76,9 @@ describe('theme import', () => {
     expect(theme.name).toBe('nord-custom');
     expect(theme.background).toBeTruthy();
     expect(theme.foreground).toBeTruthy();
-    expect(theme.css).toContain('.hljs-keyword');
-    expect(theme.css).not.toContain('body');
-    expect(theme.css).not.toContain('url(');
+    expect(theme.legacyCss).toContain('.hljs-keyword');
+    expect(theme.legacyCss).not.toContain('body');
+    expect(theme.legacyCss).not.toContain('url(');
   });
 
   it('rejects unsafe or incomplete code themes', () => {
@@ -100,5 +100,31 @@ describe('theme import', () => {
         'huge.css',
       ),
     ).toThrow('文件过大');
+  });
+
+  it('accepts a VS Code theme JSON file', () => {
+    const theme = parseCodeThemeFile(
+      JSON.stringify({
+        name: 'VS Test',
+        type: 'dark',
+        colors: {
+          'editor.background': '#111111',
+          'editor.foreground': '#eeeeee',
+        },
+        tokenColors: [
+          { scope: 'keyword', settings: { foreground: '#ff0000' } },
+          {
+            scope: ['string', 'constant.numeric'],
+            settings: { foreground: '#00ff00' },
+          },
+        ],
+      }),
+      'vs-test.json',
+    );
+
+    expect(theme.name).toBe('VS Test');
+    expect(theme.background).toBe('#111111');
+    expect(theme.foreground).toBe('#eeeeee');
+    expect(theme.theme.tokenColors).toHaveLength(2);
   });
 });

@@ -1,5 +1,7 @@
 import { ref } from 'vue';
+import type { ThemeRegistrationAny } from '@shikijs/types';
 import { t } from './i18n';
+import { convertHljsCssToShikiTheme } from './legacyCodeTheme';
 
 export type CustomUiThemeId = `custom-ui-${string}`;
 export type CustomCodeThemeId = `custom-code-${string}`;
@@ -16,11 +18,15 @@ export interface CustomCodeTheme {
   name: string;
   background: string;
   foreground: string;
-  css: string;
+  theme: ThemeRegistrationAny;
+  legacyCss?: string;
+  legacy?: boolean;
 }
 
 export const CUSTOM_UI_THEMES_STORAGE_KEY = 'inker-custom-ui-themes';
 export const CUSTOM_CODE_THEMES_STORAGE_KEY = 'inker-custom-code-themes';
+export const CUSTOM_CODE_THEMES_V2_STORAGE_KEY =
+  'inker-custom-code-themes-v2';
 export const MAX_CUSTOM_THEMES = 20;
 
 const UI_THEME_ID_PREFIX = 'custom-ui-';
@@ -56,6 +62,30 @@ function isCodeTheme(value: unknown): value is CustomCodeTheme {
     typeof theme.name === 'string' &&
     typeof theme.background === 'string' &&
     typeof theme.foreground === 'string' &&
+    !!theme.theme &&
+    typeof theme.theme === 'object' &&
+    (theme.legacyCss === undefined ||
+      typeof theme.legacyCss === 'string')
+  );
+}
+
+interface LegacyCodeTheme {
+  id: string;
+  name: string;
+  background: string;
+  foreground: string;
+  css: string;
+}
+
+function isLegacyCodeTheme(value: unknown): value is LegacyCodeTheme {
+  if (!value || typeof value !== 'object') return false;
+  const theme = value as Partial<LegacyCodeTheme>;
+  return (
+    typeof theme.id === 'string' &&
+    theme.id.startsWith(CODE_THEME_ID_PREFIX) &&
+    typeof theme.name === 'string' &&
+    typeof theme.background === 'string' &&
+    typeof theme.foreground === 'string' &&
     typeof theme.css === 'string'
   );
 }
@@ -85,6 +115,53 @@ function writeList(key: string, value: unknown[]): void {
   }
 }
 
+function writeCodeThemes(themes: CustomCodeTheme[]): void {
+  writeList(CUSTOM_CODE_THEMES_V2_STORAGE_KEY, themes);
+}
+
+function readCodeThemes(): CustomCodeTheme[] {
+  if (!canUseStorage()) return [];
+  try {
+    const rawV2 = window.localStorage.getItem(
+      CUSTOM_CODE_THEMES_V2_STORAGE_KEY,
+    );
+    if (rawV2) {
+      const parsed: unknown = JSON.parse(rawV2);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(isCodeTheme).slice(0, MAX_CUSTOM_THEMES);
+      }
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        Array.isArray((parsed as { themes?: unknown }).themes)
+      ) {
+        return (parsed as { themes: unknown[] }).themes
+          .filter(isCodeTheme)
+          .slice(0, MAX_CUSTOM_THEMES);
+      }
+    }
+
+    const legacy = readList(
+      CUSTOM_CODE_THEMES_STORAGE_KEY,
+      isLegacyCodeTheme,
+    );
+    if (legacy.length === 0) return [];
+    const converted = legacy.map((theme) => ({
+      id: theme.id as CustomCodeThemeId,
+      name: theme.name,
+      background: theme.background,
+      foreground: theme.foreground,
+      theme: convertHljsCssToShikiTheme(theme),
+      legacyCss: theme.css,
+      legacy: true,
+    }));
+    writeCodeThemes(converted);
+    return converted;
+  } catch {
+    return [];
+  }
+}
+
 function createThemeId(prefix: string): string {
   const suffix =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -106,9 +183,7 @@ function createCodeThemeId(): CustomCodeThemeId {
 export const customUiThemes = ref<CustomUiTheme[]>(
   readList(CUSTOM_UI_THEMES_STORAGE_KEY, isUiTheme),
 );
-export const customCodeThemes = ref<CustomCodeTheme[]>(
-  readList(CUSTOM_CODE_THEMES_STORAGE_KEY, isCodeTheme),
-);
+export const customCodeThemes = ref<CustomCodeTheme[]>(readCodeThemes());
 
 export function findCustomUiTheme(
   id: string,
@@ -152,7 +227,7 @@ export function addCustomCodeTheme(
     id: createCodeThemeId(),
   };
   customCodeThemes.value = [...customCodeThemes.value, next];
-  writeList(CUSTOM_CODE_THEMES_STORAGE_KEY, customCodeThemes.value);
+  writeCodeThemes(customCodeThemes.value);
   return next;
 }
 
@@ -167,5 +242,5 @@ export function removeCustomCodeTheme(id: string): void {
   customCodeThemes.value = customCodeThemes.value.filter(
     (theme) => theme.id !== id,
   );
-  writeList(CUSTOM_CODE_THEMES_STORAGE_KEY, customCodeThemes.value);
+  writeCodeThemes(customCodeThemes.value);
 }

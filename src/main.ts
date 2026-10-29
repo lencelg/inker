@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import { initShiki } from './lib/shikiHighlighter';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import inkerIconUrl from '../assets/icons/inker.svg?url';
 import './lib/font-assets';
@@ -26,4 +27,5 @@ document.addEventListener('click', (event) => {
   }
 });
 
+void initShiki();
 createApp(App).mount('#app');
