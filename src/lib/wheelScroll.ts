@@ -14,8 +14,16 @@ export function wheelDeltaPixels(
   return base * factor;
 }
 
+// Known workspace scrollers skip the ancestor walk and its style reads.
+const WORKSPACE_SCROLLERS =
+  '.cm-scroller, .markdown-body, .wysiwyg-host, .launcher-list';
+
 function findScrollable(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null;
+  const known = target.closest<HTMLElement>(WORKSPACE_SCROLLERS);
+  if (known) {
+    return known.scrollHeight > known.clientHeight + 1 ? known : null;
+  }
   let node: HTMLElement | null =
     target instanceof HTMLElement ? target : target.parentElement;
   while (node) {

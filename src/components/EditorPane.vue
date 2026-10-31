@@ -231,6 +231,7 @@ function applyVimMappings(): void {
 let scrollFrame = 0;
 let resizeFrame = 0;
 let centerFrame = 0;
+let cursorFrame = 0;
 let vimStatusFrame = 0;
 let minimap: EditorMinimap | null = null;
 let resizeObserver: ResizeObserver | null = null;
@@ -769,14 +770,11 @@ function emitScrollSync(): void {
   const maximum = scrollElement.scrollHeight - scrollElement.clientHeight;
   const ratio = maximum > 0 ? scrollElement.scrollTop / maximum : 0;
   const rect = scrollElement.getBoundingClientRect();
-  const position = view.posAtCoords({
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-  });
-  const line =
-    position === null
-      ? view.state.doc.lines
-      : view.state.doc.lineAt(position).number;
+  const height = rect.top + rect.height / 2 - view.documentTop;
+  const block = view.lineBlockAtHeight(Math.max(0, height));
+  const line = view.state.doc.lineAt(
+    Math.min(block.from, view.state.doc.length),
+  ).number;
   emit('scrollSync', { line, ratio });
 }
 
@@ -810,17 +808,28 @@ function refreshHeadingTrail(): void {
   breadcrumbs.value = activeHeadingTrail(headings, line);
 }
 
-const HEADING_REFRESH_DELAY = 120;
+function scheduleCursorSync(): void {
+  if (cursorFrame) return;
+  cursorFrame = requestAnimationFrame(() => {
+    cursorFrame = 0;
+    emitCursor();
+    refreshHeadingTrail();
+  });
+}
+
+const HEADING_REFRESH_DELAY = 300;
 let headingRefreshTimer = 0;
 
-function scheduleHeadingCollection(): void {
+function scheduleHeadingCollection(
+  delay = HEADING_REFRESH_DELAY,
+): void {
   if (headingRefreshTimer) window.clearTimeout(headingRefreshTimer);
   headingRefreshTimer = window.setTimeout(() => {
     headingRefreshTimer = 0;
     if (!view) return;
     headings = collectHeadings(view.state);
     refreshHeadingTrail();
-  }, HEADING_REFRESH_DELAY);
+  }, delay);
 }
 
 function activeBlock(
@@ -1213,8 +1222,7 @@ onMounted(() => {
             scheduleScrollSync();
           }
           if (update.docChanged || update.selectionSet) {
-            emitCursor();
-            refreshHeadingTrail();
+            scheduleCursorSync();
             centerSelection();
             minimap?.handleUpdate(update);
           }
@@ -1261,8 +1269,7 @@ onMounted(() => {
   view.focus();
   scheduleScrollSync();
   emitCursor();
-  headings = collectHeadings(view.state);
-  refreshHeadingTrail();
+  scheduleHeadingCollection(0);
   scheduleVimStatus();
   try {
     setupVimCommands();
@@ -1395,6 +1402,10 @@ onBeforeUnmount(() => {
   if (centerFrame) {
     cancelAnimationFrame(centerFrame);
     centerFrame = 0;
+  }
+  if (cursorFrame) {
+    cancelAnimationFrame(cursorFrame);
+    cursorFrame = 0;
   }
   if (vimStatusFrame) {
     cancelAnimationFrame(vimStatusFrame);

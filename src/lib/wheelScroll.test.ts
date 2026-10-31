@@ -92,4 +92,19 @@ describe('wheel scrolling', () => {
     expect(content.scrollTop).toBe(100);
     document.body.replaceChildren();
   });
+
+  it('finds known workspace scrollers without an overflow style walk', () => {
+    const workspace = document.createElement('main');
+    workspace.className = 'workspace';
+    const content = scrollable('visible', 1000, 400);
+    content.classList.add('markdown-body');
+    workspace.append(content);
+    document.body.append(workspace);
+
+    const result = dispatchWheel(content);
+    expect(result.handled).toBe(true);
+    expect(content.scrollTop).toBe(149);
+    expect(result.event.defaultPrevented).toBe(true);
+    document.body.replaceChildren();
+  });
 });

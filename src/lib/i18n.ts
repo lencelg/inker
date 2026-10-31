@@ -85,9 +85,7 @@ const zh = {
   'menu.export': '导出',
   'menu.vim': 'Vim 模式',
   'menu.settings': '设置',
-  'export.pdf': 'PDF',
   'export.html': 'HTML',
-  'export.docx': 'Word (.docx)',
   'export.contents': 'Table of contents',
   'export.html.title': '导出 HTML',
   'export.html.embedded': '内嵌图片',
@@ -103,19 +101,6 @@ const zh = {
   'export.warning.remoteImage':
     '无法下载远程图片“{url}”，已保留原链接。',
   'export.warning.mermaid': 'Mermaid 图表渲染失败：{message}',
-  'export.preview.title': '导出预览',
-  'export.preview.paginating': '正在分页…',
-  'export.preview.pages': '{count} 页',
-  'export.preview.zoomOut': '缩小预览',
-  'export.preview.zoomIn': '放大预览',
-  'export.preview.failed': '分页预览失败：{message}',
-  'export.preview.tooManyPages': '文档分页失败：页数过多。',
-  'export.preview.notConverging': '文档分页失败：内容无法继续拆分。',
-  'export.preview.progress': '正在分页… {done}/{total}',
-  'export.preview.buildingDocx': '正在生成 Word…',
-  'export.preview.overflow': '部分内容超过单页高度，可能被裁切。',
-  'export.preview.docxHint': 'Word 可能根据本机字体微调分页。',
-  'export.docx.save': '保存 Word',
   'viewMode.source': '源码模式',
   'viewMode.wysiwyg': '实时预览',
   'viewMode.preview': '预览模式',
@@ -185,8 +170,6 @@ const zh = {
   'preview.imageLoadFailed': '图片加载失败：{message}',
   'preview.mermaidFailed': 'Mermaid 渲染失败：{message}',
   'preview.empty': '开始输入 Markdown，预览会实时更新。',
-  'print.hint': '在打印对话框中选择“打印到文件”即可保存为 PDF。',
-  'print.action': '打印 / 另存为 PDF',
   'search.title': '搜索',
   'search.searching': '搜索中…',
   'search.placeholder': '搜索笔记',
@@ -356,10 +339,10 @@ const zh = {
   'settings.codeHighlight.hint': '关闭后使用纯文本样式。',
   'settings.codeTheme.description': '代码块配色主题（预览与源码）。',
   'settings.includeImages.description': 'HTML 默认内嵌图片。',
-  'settings.includeImages.hint': 'PDF 和 Word 始终内嵌图片。',
+  'settings.includeImages.hint': '可在导出对话框中切换为链接图片。',
   'settings.openAfterExport.description': '导出后打开文件。',
   'settings.includeToc.description': '为导出生成目录。',
-  'settings.includeToc.hint': '列出一到四级标题；Word 页码打开后更新。',
+  'settings.includeToc.hint': '列出一到四级标题。',
   'settings.imageConfirmPaste.description': '粘贴图片时先确认文件名。',
   'settings.imageConfirmPaste.hint': '关闭后直接按命名模板保存。',
   'settings.imageNameTemplate.description': '图片文件名模板，扩展名由保存格式决定。',
@@ -427,8 +410,6 @@ const zh = {
   'command.toc.empty': '当前笔记没有可生成的标题。',
   'command.toc.sourceOnly': '请切换到源码或侧边预览模式后再生成目录。',
   'command.toc.readOnly': '当前编辑器不可编辑，无法插入目录。',
-  'docx.mermaid.title': 'Mermaid 图表',
-  'docx.mermaid.source': '（Mermaid 图表）',
 } as const;
 
 export type TranslationKey = keyof typeof zh;
@@ -473,9 +454,7 @@ const en: Record<TranslationKey, string> = {
   'menu.export': 'Export',
   'menu.vim': 'Vim Mode',
   'menu.settings': 'Settings',
-  'export.pdf': 'PDF',
   'export.html': 'HTML',
-  'export.docx': 'Word (.docx)',
   'export.contents': 'Table of contents',
   'export.html.title': 'Export HTML',
   'export.html.embedded': 'Embed Images',
@@ -492,22 +471,6 @@ const en: Record<TranslationKey, string> = {
   'export.warning.remoteImage':
     'Could not download remote image “{url}”; kept the original link.',
   'export.warning.mermaid': 'Mermaid render failed: {message}',
-  'export.preview.title': 'Export preview',
-  'export.preview.paginating': 'Paginating…',
-  'export.preview.pages': '{count} pages',
-  'export.preview.zoomOut': 'Zoom out preview',
-  'export.preview.zoomIn': 'Zoom in preview',
-  'export.preview.failed': 'Could not paginate preview: {message}',
-  'export.preview.tooManyPages': 'Pagination failed: too many pages.',
-  'export.preview.notConverging':
-    'Pagination failed: content could not be split further.',
-  'export.preview.progress': 'Paginating… {done}/{total}',
-  'export.preview.buildingDocx': 'Building Word file…',
-  'export.preview.overflow':
-    'Some content is taller than one page and may be clipped.',
-  'export.preview.docxHint':
-    'Word may adjust pagination based on installed fonts.',
-  'export.docx.save': 'Save Word',
   'viewMode.source': 'Source Mode',
   'viewMode.wysiwyg': 'Live Preview',
   'viewMode.preview': 'Preview Mode',
@@ -581,8 +544,6 @@ const en: Record<TranslationKey, string> = {
   'preview.imageLoadFailed': 'Failed to load image: {message}',
   'preview.mermaidFailed': 'Mermaid render failed: {message}',
   'preview.empty': 'Start typing Markdown; the preview updates live.',
-  'print.hint': 'Choose “Print to File” in the print dialog to save as PDF.',
-  'print.action': 'Print / Save as PDF',
   'search.title': 'Search',
   'search.searching': 'Searching…',
   'search.placeholder': 'Search notes',
@@ -786,12 +747,11 @@ const en: Record<TranslationKey, string> = {
   'settings.includeImages.description':
     'Embed images by default in HTML exports.',
   'settings.includeImages.hint':
-    'PDF and Word always embed images.',
+    'You can switch to linked images in the export dialog.',
   'settings.openAfterExport.description': 'Open the file after export.',
   'settings.includeToc.description':
     'Generate a table of contents for exports.',
-  'settings.includeToc.hint':
-    'Includes headings 1–4; Word updates page numbers on open.',
+  'settings.includeToc.hint': 'Includes headings 1–4.',
   'settings.imageConfirmPaste.description':
     'Ask for a file name before saving a pasted image.',
   'settings.imageConfirmPaste.hint':
@@ -870,8 +830,6 @@ const en: Record<TranslationKey, string> = {
   'command.toc.sourceOnly':
     'Switch to source or side-by-side preview to create a table of contents.',
   'command.toc.readOnly': 'The editor is read-only; cannot insert a table of contents.',
-  'docx.mermaid.title': 'Mermaid Diagram',
-  'docx.mermaid.source': '(Mermaid Diagram)',
 };
 
 const MESSAGES: Record<Language, Record<TranslationKey, string>> = {

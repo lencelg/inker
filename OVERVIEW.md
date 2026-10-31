@@ -33,7 +33,6 @@ Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` �
 | 数学公式 | KaTeX |
 | 图表 | Mermaid 12 |
 | HTML 清洗 | DOMPurify |
-| Word 导出 | `docx` |
 | 后端 | Rust |
 | 测试 | Vitest + Vue Test Utils + jsdom；Rust 单元测试 |
 
@@ -52,7 +51,6 @@ shiki                        TextMate / VS Code 主题语法高亮
 katex                        数学公式
 mermaid                      图表渲染
 dompurify                    HTML 安全清洗
-docx                         Word 文档生成
 @lucide/vue                  界面图标
 ```
 
@@ -356,28 +354,20 @@ tempfile                     测试临时目录
 
 ### 2.13 导出
 
-支持三种导出：
+支持导出为 HTML：
 
 | 格式 | 实现 |
 | --- | --- |
 | HTML | 导出对话框提供“内嵌图片 / 链接图片”两种模式，并显示预览、文件体积和警告；可选目录，使用当前代码高亮主题和文档元数据 |
-| Word `.docx` | 先显示分页预览，确认后再生成并保存文档；使用 `docx` 生成原生多级列表、表格边框/列宽/重复表头、连续代码块与语法颜色、Word 原生公式、JPEG/PNG/SVG 图片、Mermaid 2x 栅格化、目录、页码、文档属性和内部链接 |
-| PDF | 应用内 A4 分页预览后调用 WebView 打印；预览与打印复用同一份分页 DOM、目录、代码主题和打印专用样式 |
 
 导出行为：
 
 - 复用当前 Markdown 渲染、代码高亮开关和代码主题。
-- 本地图片在 PDF/Word 中始终内嵌；HTML 可切换内嵌或保留原始路径。
+- HTML 可切换内嵌图片或保留原始路径。
 - 尝试下载并内嵌远程图片；失败时保留链接并显示警告。
-- 统一使用 A4、20mm 页边距和 170 × 257mm 内容区；PDF 与 Word 预览都显示页码。
 - 支持 `\pagebreak` 或 `\newpage` 段落作为强制分页标记。
-- 长段落按行拆分；列表按条目、表格按行拆分，并尽量保持代码块、图片、引用和目录整块呈现。
-- PDF 预览和打印使用同一份分页 DOM，避免打印时再次分页；Word 预览使用同一分页器配合 Word 版式样式。
-- 分页过程异步执行并定期让出主线程，显示进度；Word 文件在点击保存后才生成，生成期间同样会周期性让出事件循环。
-- 分页带有页数和拆分次数保护，异常文档会显示错误而不是无限卡住。
-- Word 最终分页仍可能受本机字体和 Word 自身排版影响。
 - 导出设置包括 HTML 图片模式、目录（默认关闭）和导出后打开。
-- Word 目录页码会在 Word 打开后由字段更新；HTML/PDF 目录使用内部锚点。
+- 导出的 HTML 可在浏览器中直接打印或另存为 PDF。
 
 ### 2.14 桌面窗口
 
@@ -486,7 +476,7 @@ tempfile                     测试临时目录
 | 自定义界面主题导入 | ✅ 已完成 |
 | 自定义代码主题导入 | ✅ 已完成 |
 | VS Code 风格设置面板 | ✅ 已完成 |
-| HTML / Word / PDF 导出 | ✅ 已完成 |
+| HTML 导出 | ✅ 已完成 |
 | Debian `.deb` 打包 | ✅ 已完成 |
 | “工作区”设置 | ✅ 按笔记库覆盖偏好，支持重置 |
 | 导出分类中的选项 | ✅ 已接入导出流程 |
@@ -534,7 +524,7 @@ inker/
 │   ├── composables/
 │   │   ├── useAutoSave.ts         # 自动保存计时器与重试
 │   │   ├── useClosePreparation.ts # 关闭前保存确认与失败处理
-│   │   ├── useDocumentExport.ts   # PDF / HTML / DOCX 导出流程
+│   │   ├── useDocumentExport.ts   # HTML 导出流程
 │   │   ├── useDraftPersistence.ts # 崩溃草稿刷新与最大间隔
 │   │   ├── useExternalChangeSync.ts # 外部变更防抖、阻塞与重试
 │   │   ├── useRecentFiles.ts      # 最近文件状态与持久化
@@ -560,7 +550,6 @@ inker/
 │   │   ├── ExternalChangeDialog.vue # 外部修改冲突操作
 │   │   ├── PromptDialog.vue
 │   │   ├── QuickPalette.vue       # VS Code 风格快速打开 / 命令面板
-│   │   ├── ExportPreviewDialog.vue # PDF / Word 分页预览
 │   │   ├── HtmlExportDialog.vue   # HTML 导出预览与图片模式
 │   │   ├── InkerMark.vue
 │   │   └── settings/
@@ -579,10 +568,7 @@ inker/
 │       ├── themePalette.ts        # 主题 token 颜色提取
 │       ├── customThemes.ts        # 自定义主题注册表与持久化
 │       ├── themeImport.ts         # 界面主题 / 代码主题解析与清洗
-│       ├── docxExport.ts          # DOCX 内容转换
-│       ├── exportContent.ts       # HTML / PDF / 导出准备
-│       ├── pageLayout.ts          # 统一 A4 页面规格与预览样式
-│       ├── pagination.ts          # DOM 测量、分页与页面切片
+│       ├── exportContent.ts       # HTML 导出准备
 │       ├── externalChange.ts      # 外部修改冲突分类
 │       ├── fileKinds.ts           # 图片扩展名识别
 │       ├── focus.ts               # 模态关闭后的焦点恢复
@@ -804,7 +790,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 
 ### 4.7 打包体积与内存策略
 
-- 重型界面按需加载：WYSIWYG、只读预览、设置浮层、搜索面板、图片查看器、导出预览/HTML 导出对话框和 `exportContent` 均使用动态 `import()`；未打开对应界面时不会解析 KaTeX、DOMPurify、分页和 DOCX 相关代码。快速打开保持同步加载，避免输入时序问题。
+- 重型界面按需加载：WYSIWYG、只读预览、设置浮层、搜索面板、图片查看器、HTML 导出对话框和 `exportContent` 均使用动态 `import()`；未打开对应界面时不会解析 KaTeX 和 DOMPurify 相关代码。快速打开保持同步加载，避免输入时序问题。
 - Shiki 启动预热：应用启动时在后台初始化 WASM、内置主题和常用语言；打开笔记时会预加载该笔记围栏中使用的语言，避免在 Vim 插入模式或滚动代码块时才触发语法加载。其余语言仍按需加载。
 - 编辑防抖：源码代码块配色重建延迟 80ms、标题面包屑收集延迟 120ms，避免快速输入（尤其是 Vim 模式）时每个按键都执行全量语法遍历和 tokenize。
 - 字体资源：等宽字体只引入 latin 子集；`vite.config.ts` 中的构建插件从 CSS 移除 woff/ttf 回退，只保留 woff2。字体资源由约 2 MB 降至约 0.4 MB。
@@ -929,9 +915,6 @@ Markdown 图片路径
 - 解析本地图片为 Data URL。
 - 渲染 Mermaid SVG。
 - 生成独立 HTML。
-- PDF 使用 `ExportPreviewDialog.vue` 的 iframe 分页，并从同一个 iframe 调用系统打印。
-- `pagination.ts` 在 iframe 内按 A4 内容区测量块高，按段落行、列表条目和表格行拆分，生成固定页面。
-- DOCX 通过 `docxExport.ts` 将渲染后的 DOM 转换为 Word 文档结构；`buildDocxPreviewDocument` 为其生成 Word 版式预览。
 
 ### 5.7 自动保存、会话与草稿
 
@@ -1126,7 +1109,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 最近工作区：去重、容量上限、会话快照补全与 localStorage 往返
 - 窗口关闭流程：等待保存、取消/确认、错误恢复与重复关闭保护
 - 关闭前保存：自动保存跳过确认、失败重试、放弃草稿与弹窗阻塞
-- PDF / HTML / DOCX 导出准备、保存、取消与导出后打开
+- HTML 导出准备、保存、取消与导出后打开
 - 崩溃草稿组合式刷新：脏标签写入、干净标签清理、抑制状态与图片跳过
 - 命令面板/主题候选定义、开关状态、禁用条件与当前主题标记
 - 外部变更组合式同步：事件累积、防抖、阻塞恢复、回调重试与销毁
@@ -1136,8 +1119,6 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Rust 图片保存目录、嵌套笔记相对路径、目录穿越与符号链接拒绝
 - 中英文界面、系统语言检测与切换
 - HTML 导出模式、目录和图片策略
-- DOCX 原生列表、表格、公式、目录与页码
-- DOCX 预览目录位置与独立分页
 - 图片文件识别
 - 主区域滚轮减速
 - 源码缩略图几何、字符缩放、宽度映射、制表符/全角列宽与字模索引
@@ -1196,36 +1177,33 @@ cargo tauri icon assets/icons/inker.svg
    界面语言与会话恢复保持全局；工作区覆盖保存在本机 localStorage（最多 20 个笔记库），清理 WebView 数据后会丢失。
 
 4. **导出仍有平台边界**
-   PDF 仍通过系统打印对话框生成，不直接写 PDF 文件；HTML 链接图片模式需要图片与 HTML 一起移动；远程图片内嵌受网络与 CORS 限制，失败时会保留原链接并提示。
+   HTML 链接图片模式需要图片与 HTML 一起移动；远程图片内嵌受网络与 CORS 限制，失败时会保留原链接并提示。
 
 5. **Vim 仅用于源码编辑器**  
    实时预览（ProseMirror）使用标准输入和自身多光标。
 
-6. **PDF 依赖系统打印**  
-   PDF 通过打印预览和系统打印对话框生成，不直接由后端写 PDF 文件。
-
-7. **搜索不包含图片内容/名称**  
+6. **搜索不包含图片内容/名称**
    搜索只针对 Markdown 文本。
 
-8. **预览同步是基于块锚点的近似同步**  
+7. **预览同步是基于块锚点的近似同步**
    对非常复杂的自定义 HTML、动态布局或超大文档，滚动位置仍可能存在偏差。
 
-9. **未支持分屏编辑器、多窗口**  
+8. **未支持分屏编辑器、多窗口**
    当前每个窗口只有一个编辑工作区。
 
-10. **只能导入受控格式的主题**
+9. **只能导入受控格式的主题**
     自定义界面主题仅支持语义颜色变量 JSON，不能改变布局；自定义代码主题支持 VS Code 主题 JSON 或旧版 highlight.js CSS，但只做颜色/字体样式映射，不包含 LSP 语义高亮。导入主题存储于 localStorage，清理 WebView 数据后会丢失。
 
-11. **目前仅打包 `.deb`**
+10. **目前仅打包 `.deb`**
     其他平台安装包需要修改 Tauri bundle 配置。
 
-12. **会话与草稿依赖 WebView localStorage**
+11. **会话与草稿依赖 WebView localStorage**
     清理 WebView 数据会丢失会话与草稿。单条草稿超过 256 KB、总量超过约 2 MB 或条目超过 20 条时不会写入；自动保存关闭时，这类大文件没有崩溃恢复保护。
 
-13. **图片粘贴转换有格式边界**
+12. **图片粘贴转换有格式边界**
     只输出 PNG / JPEG / WebP；GIF 粘贴后只保留首帧，SVG 会被栅格化，JPEG 透明区域填白。同格式图片直接透传，质量设置不会重新编码。WebView 不支持 WebP 编码时会提示改用 PNG。撤销插入不会删除已保存的图片文件，重复粘贴也不会自动去重；多光标时图片只插入主光标处。远程图片 URL 不会被下载。
 
-14. **快速打开与目录生成的范围有限**
+13. **快速打开与目录生成的范围有限**
     快速打开只按文件名和相对路径匹配，不搜索笔记正文；默认不列出图片。生成目录包含文档中的 H1–H6 标题（包括引用和列表中的标题，围栏代码块内的 `#` 不计入），输出为列表链接，且仅支持源码与侧边预览模式；实时预览 / 纯预览模式会提示切换。
 
 ---

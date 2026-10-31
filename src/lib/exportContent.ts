@@ -37,11 +37,6 @@ export interface SaveHtmlOptions {
   defaultDirectory?: string;
 }
 
-export interface SaveDocxOptions {
-  codeTheme?: CodeThemeId;
-  includeToc?: boolean;
-}
-
 const MAX_REMOTE_IMAGE_BYTES = 20 * 1024 * 1024;
 const REMOTE_IMAGE = /^(?:https?:)?\/\//i;
 
@@ -595,29 +590,6 @@ export async function prepareExport(
   };
 }
 
-export function buildDocxPreviewDocument(
-  prepared: PreparedExport,
-  includeToc: boolean,
-  codeTheme: CodeThemeId = DEFAULT_CODE_THEME,
-): string {
-  const container = prepared.container.cloneNode(true) as HTMLElement;
-  if (includeToc) {
-    const language = getLanguage();
-    const nav = createTableOfContents(container, language);
-    if (nav) {
-      const pageBreak = document.createElement('div');
-      pageBreak.className = 'page-break';
-      container.prepend(nav, pageBreak);
-    }
-  }
-  return buildDocumentHtml(
-    prepared.title,
-    container.innerHTML,
-    getLanguage(),
-    codeTheme,
-  );
-}
-
 function joinDirectory(directory: string, fileName: string): string {
   const separator =
     directory.includes('\\') && !directory.includes('/') ? '\\' : '/';
@@ -637,29 +609,5 @@ export async function saveHtmlExport(
   });
   if (!path) return null;
   await api.saveExport(path, prepared.documentHtml, false);
-  return path;
-}
-
-export async function buildDocxBase64(
-  prepared: PreparedExport,
-  options: SaveDocxOptions = {},
-): Promise<string> {
-  const { docxToBase64 } = await import('./docxExport');
-  return docxToBase64(prepared.container, prepared.title, {
-    codeTheme: options.codeTheme,
-    includeToc: options.includeToc,
-  });
-}
-
-export async function saveDocxBase64(
-  title: string,
-  base64: string,
-): Promise<string | null> {
-  const path = await save({
-    defaultPath: `${safeFileName(title)}.docx`,
-    filters: [{ name: 'Word', extensions: ['docx'] }],
-  });
-  if (!path) return null;
-  await api.saveExport(path, base64, true);
   return path;
 }

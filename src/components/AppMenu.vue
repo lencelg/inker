@@ -7,8 +7,6 @@ import {
   type ViewMode,
 } from '../lib/viewModes';
 
-type ExportFormat = 'pdf' | 'html' | 'docx';
-
 const props = defineProps<{
   viewMode: ViewMode;
   vimEnabled: boolean;
@@ -17,22 +15,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   modeChange: [mode: ViewMode];
-  export: [format: ExportFormat];
+  export: [];
   toggleVim: [];
   openSettings: [];
 }>();
-
-const EXPORTS: { id: ExportFormat }[] = [
-  { id: 'pdf' },
-  { id: 'html' },
-  { id: 'docx' },
-];
-
-function exportLabel(format: ExportFormat): string {
-  if (format === 'pdf') return t('export.pdf');
-  if (format === 'html') return t('export.html');
-  return t('export.docx');
-}
 
 const menuOpen = ref(false);
 const menuStyle = ref<Record<string, string>>({});
@@ -124,10 +110,10 @@ function chooseMode(mode: ViewMode): void {
   emit('modeChange', mode);
 }
 
-function chooseExport(format: ExportFormat): void {
+function chooseExport(): void {
   if (props.exporting) return;
   closeMenu(true);
-  emit('export', format);
+  emit('export');
 }
 
 function toggleVim(): void {
@@ -226,16 +212,14 @@ function onMenuKeyDown(event: KeyboardEvent): void {
       <div class="app-menu-separator"></div>
       <p class="app-menu-label">{{ t('menu.export') }}</p>
       <button
-        v-for="format in EXPORTS"
-        :key="format.id"
         type="button"
         class="app-menu-item"
         role="menuitem"
         :disabled="exporting"
-        @click="chooseExport(format.id)"
+        @click="chooseExport"
       >
         <span class="app-menu-check" aria-hidden="true"></span>
-        <span>{{ exportLabel(format.id) }}</span>
+        <span>{{ t('export.html') }}</span>
       </button>
 
       <div class="app-menu-separator"></div>

@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe('AppMenu', () => {
-  it('lists the export formats without a quick export duplicate', async () => {
+  it('offers HTML export without a quick export duplicate', async () => {
     const wrapper = mount(AppMenu, {
       attachTo: document.body,
       props: {
@@ -30,9 +30,9 @@ describe('AppMenu', () => {
     const menu = document.querySelector('.app-menu');
     expect(menu).not.toBeNull();
     const text = menu?.textContent ?? '';
-    expect(text).toContain('PDF');
     expect(text).toContain('HTML');
-    expect(text).toContain('Word (.docx)');
+    expect(text).not.toContain('PDF');
+    expect(text).not.toContain('Word');
     expect(text).not.toContain('Quick Export');
 
     wrapper.unmount();

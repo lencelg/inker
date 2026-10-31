@@ -137,6 +137,7 @@ export class EditorMinimap {
   private layoutDirty = false;
   private frame = 0;
   private resizeFrame = 0;
+  private resizeLayoutTimer = 0;
   private resizeObserver: ResizeObserver | null = null;
   private themeObserver: MutationObserver | null = null;
   private pixelRatioMedia: MediaQueryList | null = null;
@@ -194,7 +195,16 @@ export class EditorMinimap {
       this.resizeFrame = requestAnimationFrame(() => {
         this.resizeFrame = 0;
         this.updateWidth();
-        this.schedule(true);
+        if (this.enabled) this.drawAll();
+        // Remeasuring every line on each resize frame stalls large documents,
+        // so wait for the pointer to settle before rebuilding the layout.
+        if (this.resizeLayoutTimer) {
+          window.clearTimeout(this.resizeLayoutTimer);
+        }
+        this.resizeLayoutTimer = window.setTimeout(() => {
+          this.resizeLayoutTimer = 0;
+          this.schedule(true);
+        }, 160);
       });
     });
     this.resizeObserver.observe(this.host);
@@ -361,9 +371,11 @@ export class EditorMinimap {
     if (this.frame) cancelAnimationFrame(this.frame);
     if (this.resizeFrame) cancelAnimationFrame(this.resizeFrame);
     if (this.prefetchTimer) window.clearTimeout(this.prefetchTimer);
+    if (this.resizeLayoutTimer) window.clearTimeout(this.resizeLayoutTimer);
     this.frame = 0;
     this.resizeFrame = 0;
     this.prefetchTimer = 0;
+    this.resizeLayoutTimer = 0;
     this.clearTiles();
     this.segmentCache.clear();
     this.resizeObserver?.disconnect();

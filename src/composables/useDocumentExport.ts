@@ -1,6 +1,6 @@
-import { markRaw, ref } from 'vue';
+import { ref } from 'vue';
 import { openPath } from '@tauri-apps/plugin-opener';
-import type { PreparedExport, SaveDocxOptions } from '../lib/exportContent';
+import type { PreparedExport } from '../lib/exportContent';
 import type { Preferences } from '../lib/preferences';
 
 type ExportContentModule = typeof import('../lib/exportContent');
@@ -9,16 +9,6 @@ let exportContentPromise: Promise<ExportContentModule> | null = null;
 function loadExportContent(): Promise<ExportContentModule> {
   exportContentPromise ??= import('../lib/exportContent');
   return exportContentPromise;
-}
-
-export interface ExportPreviewState {
-  format: 'pdf' | 'docx';
-  title: string;
-  html: string;
-  warnings: string[];
-  docxPrepared?: PreparedExport;
-  docxOptions?: SaveDocxOptions;
-  docxBase64?: string;
 }
 
 export interface HtmlExportState {
@@ -44,7 +34,6 @@ export interface DocumentExportOptions {
 
 export function useDocumentExport(options: DocumentExportOptions) {
   const exporting = ref(false);
-  const exportPreview = ref<ExportPreviewState | null>(null);
   const htmlExport = ref<HtmlExportState | null>(null);
 
   async function openExportedFile(path: string): Promise<void> {
@@ -55,127 +44,41 @@ export function useDocumentExport(options: DocumentExportOptions) {
     }
   }
 
-  async function exportDocument(
-    format: 'pdf' | 'html' | 'docx',
-  ): Promise<void> {
+  async function exportHtml(): Promise<void> {
     const tab = options.getTab();
     if (!tab || exporting.value) return;
 
     exporting.value = true;
     try {
       const preferences = options.getPreferences();
-      const { prepareExport, buildDocxPreviewDocument } =
-        await loadExportContent();
+      const { prepareExport } = await loadExportContent();
       const commonOptions = {
         codeHighlight: preferences.codeHighlight,
         codeTheme: preferences.codeTheme,
+        includeToc: preferences.exportIncludeToc,
       };
-      if (format === 'pdf') {
-        const prepared = await prepareExport(
-          tab.path,
-          tab.content,
-          {
-            ...commonOptions,
-            embedImages: true,
-            includeToc: preferences.exportIncludeToc,
-          },
-        );
-        exportPreview.value = {
-          format: 'pdf',
-          title: prepared.title,
-          html: prepared.documentHtml,
-          warnings: prepared.warnings,
-        };
-        return;
-      }
-      if (format === 'html') {
-        const [embedded, linked] = await Promise.all([
-          prepareExport(tab.path, tab.content, {
-            ...commonOptions,
-            embedImages: true,
-            includeToc: preferences.exportIncludeToc,
-          }),
-          prepareExport(tab.path, tab.content, {
-            ...commonOptions,
-            embedImages: false,
-            includeToc: preferences.exportIncludeToc,
-          }),
-        ]);
-        htmlExport.value = {
-          title: embedded.title,
-          embedded,
-          linked,
-          embeddedBytes: new TextEncoder().encode(
-            embedded.documentHtml,
-          ).length,
-          linkedBytes: new TextEncoder().encode(
-            linked.documentHtml,
-          ).length,
-          warnings: [...new Set(embedded.warnings)],
-        };
-        return;
-      }
-
-      const prepared = await prepareExport(tab.path, tab.content, {
-        ...commonOptions,
-        embedImages: true,
-        includeToc: false,
-      });
-      exportPreview.value = {
-        format: 'docx',
-        title: prepared.title,
-        html: buildDocxPreviewDocument(
-          prepared,
-          preferences.exportIncludeToc,
-          preferences.codeTheme,
-        ),
-        warnings: prepared.warnings,
-        docxPrepared: markRaw(prepared),
-        docxOptions: {
-          codeTheme: preferences.codeTheme,
-          includeToc: preferences.exportIncludeToc,
-        },
+      const [embedded, linked] = await Promise.all([
+        prepareExport(tab.path, tab.content, {
+          ...commonOptions,
+          embedImages: true,
+        }),
+        prepareExport(tab.path, tab.content, {
+          ...commonOptions,
+          embedImages: false,
+        }),
+      ]);
+      htmlExport.value = {
+        title: embedded.title,
+        embedded,
+        linked,
+        embeddedBytes: new TextEncoder().encode(
+          embedded.documentHtml,
+        ).length,
+        linkedBytes: new TextEncoder().encode(
+          linked.documentHtml,
+        ).length,
+        warnings: [...new Set(embedded.warnings)],
       };
-    } catch (error) {
-      options.setError(error);
-    } finally {
-      exporting.value = false;
-    }
-  }
-
-  async function saveDocx(): Promise<void> {
-    const current = exportPreview.value;
-    if (
-      !current ||
-      current.format !== 'docx' ||
-      !current.docxPrepared ||
-      !current.docxOptions ||
-      exporting.value
-    ) {
-      return;
-    }
-
-    exporting.value = true;
-    try {
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => resolve());
-      });
-      const { buildDocxBase64, saveDocxBase64 } =
-        await loadExportContent();
-      const base64 =
-        current.docxBase64 ??
-        (await buildDocxBase64(
-          current.docxPrepared,
-          current.docxOptions,
-        ));
-      if (!base64) return;
-      current.docxBase64 = base64;
-      const path = await saveDocxBase64(current.title, base64);
-      if (!path) return;
-      exportPreview.value = null;
-      if (options.getPreferences().exportOpenAfter) {
-        await openExportedFile(path);
-      }
     } catch (error) {
       options.setError(error);
     } finally {
@@ -210,10 +113,8 @@ export function useDocumentExport(options: DocumentExportOptions) {
 
   return {
     exporting,
-    exportPreview,
     htmlExport,
-    exportDocument,
-    saveDocx,
+    exportHtml,
     saveHtml,
   };
 }

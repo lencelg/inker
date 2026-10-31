@@ -50,12 +50,41 @@ const safeHtml = computed(() =>
   }),
 );
 const bodyRef = ref<HTMLElement | null>(null);
+const IMAGE_CACHE_MAX_CHARS = 12_000_000;
 const imageCache = new Map<string, string>();
+let imageCacheChars = 0;
+
+function readCachedImage(key: string): string | undefined {
+  const value = imageCache.get(key);
+  if (value === undefined) return undefined;
+  imageCache.delete(key);
+  imageCache.set(key, value);
+  return value;
+}
+
+function cacheImage(key: string, value: string): void {
+  if (value.length > IMAGE_CACHE_MAX_CHARS) return;
+  const previous = imageCache.get(key);
+  if (previous !== undefined) {
+    imageCacheChars -= previous.length;
+    imageCache.delete(key);
+  }
+  imageCache.set(key, value);
+  imageCacheChars += value.length;
+  for (const [cachedKey, cachedValue] of imageCache) {
+    if (imageCacheChars <= IMAGE_CACHE_MAX_CHARS) break;
+    if (cachedKey === key) continue;
+    imageCache.delete(cachedKey);
+    imageCacheChars -= cachedValue.length;
+  }
+}
+
 let anchors: SourceAnchor[] = [];
 let resolveRun = 0;
 let suppressScrollUntil = 0;
 let scrollFrame = 0;
 let resizeFrame = 0;
+let resizeAnchorTimer = 0;
 let layoutFrame = 0;
 let anchorFrame = 0;
 let layoutUpdating = false;
@@ -178,7 +207,7 @@ async function resolveImages(run: number): Promise<void> {
       }
 
       const key = `${props.notePath}\u0000${source}`;
-      const cached = imageCache.get(key);
+      const cached = readCachedImage(key);
       if (cached) {
         image.src = cached;
         image.classList.remove('md-image-loading', 'md-image-missing');
@@ -190,7 +219,7 @@ async function resolveImages(run: number): Promise<void> {
       try {
         const asset = await api.readAsset(props.notePath, source);
         const dataUrl = `data:${asset.mime};base64,${asset.data}`;
-        imageCache.set(key, dataUrl);
+        cacheImage(key, dataUrl);
         if (run !== resolveRun || !image.isConnected) return;
         image.src = dataUrl;
         image.classList.remove('md-image-loading', 'md-image-missing');
@@ -360,8 +389,15 @@ function observeBody(): void {
     if (resizeFrame) return;
     resizeFrame = requestAnimationFrame(() => {
       resizeFrame = 0;
-      collectAnchors();
       applyScrollSync();
+      // Anchor positions change with wrapping, but measuring every block on
+      // each resize frame stalls the drag. Rebuild them once the width settles.
+      if (resizeAnchorTimer) window.clearTimeout(resizeAnchorTimer);
+      resizeAnchorTimer = window.setTimeout(() => {
+        resizeAnchorTimer = 0;
+        collectAnchors();
+        applyScrollSync();
+      }, 160);
     });
   });
   resizeObserver.observe(bodyRef.value);
@@ -375,6 +411,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', onPointerUp);
   if (scrollFrame) cancelAnimationFrame(scrollFrame);
   if (resizeFrame) cancelAnimationFrame(resizeFrame);
+  if (resizeAnchorTimer) window.clearTimeout(resizeAnchorTimer);
   if (layoutFrame) cancelAnimationFrame(layoutFrame);
   if (anchorFrame) cancelAnimationFrame(anchorFrame);
   resizeObserver?.disconnect();

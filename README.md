@@ -126,9 +126,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ### 导出
 
 - **HTML**：可选择内嵌图片或保留图片链接，预览文件体积与警告，可选生成目录。
-- **Word `.docx`**：分页预览后生成原生 Word 文档，保留多级列表、表格、代码块、公式、图片、目录和页码。
-- **PDF**：应用内 A4 分页预览，复用同一份分页 DOM 调用系统打印。
-- 统一 A4 版式、页边距、页码与强制分页标记（`\pagebreak` / `\newpage`）。
+- 支持 `\pagebreak` / `\newpage` 强制分页标记，导出的 HTML 可直接在浏览器中打印。
 
 ### 快捷键
 

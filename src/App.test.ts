@@ -144,6 +144,14 @@ const StatusBarStub = defineComponent({
     '<div class="status-stub" :data-mode="mode" :data-save-state="saveState"></div>',
 });
 
+const PreviewPaneStub = defineComponent({
+  name: 'PreviewPane',
+  props: {
+    html: { type: String, default: '' },
+  },
+  template: '<div class="preview-stub">{{ html }}</div>',
+});
+
 let imageMounts = 0;
 
 const ImagePaneStub = defineComponent({
@@ -163,7 +171,7 @@ const stubs = {
   EditorTabs: true,
   EditorPane: EditorPaneStub,
   WysiwygPane: true,
-  PreviewPane: true,
+  PreviewPane: PreviewPaneStub,
   ImagePane: ImagePaneStub,
   ImagePasteDialog: true,
   InkerMark: true,
@@ -172,7 +180,6 @@ const stubs = {
   SearchPanel: true,
   SettingsOverlay: true,
   StatusBar: StatusBarStub,
-  ExportPreviewDialog: true,
   HtmlExportDialog: true,
 };
 
@@ -453,6 +460,37 @@ describe('App integration', () => {
     expect(
       wrapper.find('.status-stub').attributes('data-mode'),
     ).toBe('side');
+  });
+
+  it('debounces preview rendering while typing in split mode', async () => {
+    const wrapper = mountApp();
+    await settle();
+
+    pressShortcut({ key: 'p', shiftKey: true });
+    await settle();
+    const item = wrapper
+      .findAll('.palette-item')
+      .find((entry) =>
+        entry.text().includes(t('command.view.side')),
+      );
+    await item!.trigger('click');
+    await settle();
+
+    expect(wrapper.find('.preview-stub').text()).toContain('>A</h1>');
+
+    wrapper
+      .findComponent(EditorPaneStub)
+      .vm.$emit('change', '# A preview');
+    await settle();
+
+    expect(wrapper.find('.preview-stub').text()).toContain('>A</h1>');
+    expect(wrapper.find('.preview-stub').text()).not.toContain('preview');
+
+    await vi.advanceTimersByTimeAsync(300);
+    await nextTick();
+
+    expect(wrapper.find('.preview-stub').text()).toContain('A preview');
+    wrapper.unmount();
   });
 
   it('reloads a clean tab when the file changes on disk', async () => {

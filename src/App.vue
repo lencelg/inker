@@ -133,9 +133,6 @@ const WysiwygPane = defineAsyncComponent(
 const PreviewPane = defineAsyncComponent(
   () => import('./components/PreviewPane.vue'),
 );
-const ExportPreviewDialog = defineAsyncComponent(
-  () => import('./components/ExportPreviewDialog.vue'),
-);
 const HtmlExportDialog = defineAsyncComponent(
   () => import('./components/HtmlExportDialog.vue'),
 );
@@ -285,13 +282,62 @@ const activeImagePath = computed(() =>
     ? activeTab.value.path
     : null,
 );
-const previewHtml = computed(() => {
-  void highlightRevision.value;
-  return renderMarkdown(activeTab.value?.content ?? '', {
+
+const PREVIEW_REFRESH_DELAY = 250;
+const previewSource = ref<{ path: string; content: string } | null>(null);
+let previewRefreshTimer = 0;
+
+function currentPreviewSource(): {
+  path: string;
+  content: string;
+} | null {
+  const tab = activeTab.value;
+  if (!tab || isImagePath(tab.path)) return null;
+  return { path: tab.path, content: tab.content };
+}
+
+function flushPreviewSource(): void {
+  if (previewRefreshTimer) {
+    window.clearTimeout(previewRefreshTimer);
+    previewRefreshTimer = 0;
+  }
+  previewSource.value = currentPreviewSource();
+}
+
+function schedulePreviewSource(): void {
+  if (viewMode.value !== 'side' && viewMode.value !== 'preview') return;
+  if (previewRefreshTimer) window.clearTimeout(previewRefreshTimer);
+  previewRefreshTimer = window.setTimeout(() => {
+    previewRefreshTimer = 0;
+    previewSource.value = currentPreviewSource();
+  }, PREVIEW_REFRESH_DELAY);
+}
+
+watch(
+  () => activeTab.value?.path ?? null,
+  () => flushPreviewSource(),
+  { immediate: true },
+);
+
+watch(
+  () => activeTab.value?.content ?? '',
+  () => {
+    if (previewSource.value?.path !== (activeTab.value?.path ?? null)) {
+      flushPreviewSource();
+      return;
+    }
+    schedulePreviewSource();
+  },
+);
+
+watch(highlightRevision, () => schedulePreviewSource());
+
+const previewHtml = computed(() =>
+  renderMarkdown(previewSource.value?.content ?? '', {
     codeHighlight: preferences.value.codeHighlight,
     codeTheme: preferences.value.codeTheme,
-  });
-});
+  }),
+);
 const anySaving = computed(() => savingPaths.value.length > 0);
 const busy = computed(() => switching.value || mutating.value);const vimEnabled = computed(() => preferences.value.vimEnabled);
 const lineEnding = computed(() =>
@@ -521,15 +567,27 @@ function startSidebarResize(event: PointerEvent): void {
   const handle = event.currentTarget as HTMLElement;
   const startX = event.clientX;
   const startWidth = sidebarWidth.value;
+  let nextWidth = startWidth;
+  let frame = 0;
   resizingSidebar.value = true;
   handle.setPointerCapture(event.pointerId);
 
   const move = (moveEvent: PointerEvent): void => {
-    sidebarWidth.value = clampSidebarWidth(
+    nextWidth = clampSidebarWidth(
       startWidth + moveEvent.clientX - startX,
     );
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      sidebarWidth.value = nextWidth;
+    });
   };
   const stop = (): void => {
+    if (frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+    sidebarWidth.value = nextWidth;
     resizingSidebar.value = false;
     handle.removeEventListener('pointermove', move);
     handle.removeEventListener('pointerup', stop);
@@ -580,14 +638,26 @@ function startResize(event: PointerEvent): void {
   if (!container) return;
 
   const rect = container.getBoundingClientRect();
+  let nextRatio = splitRatio.value;
+  let frame = 0;
   resizing.value = true;
   resizer.setPointerCapture(event.pointerId);
 
   const move = (moveEvent: PointerEvent): void => {
     const ratio = (moveEvent.clientX - rect.left) / rect.width;
-    splitRatio.value = Math.min(0.8, Math.max(0.2, ratio));
+    nextRatio = Math.min(0.8, Math.max(0.2, ratio));
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      splitRatio.value = nextRatio;
+    });
   };
   const stop = (): void => {
+    if (frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+    splitRatio.value = nextRatio;
     resizing.value = false;
     resizer.removeEventListener('pointermove', move);
     resizer.removeEventListener('pointerup', stop);
@@ -620,10 +690,6 @@ onMounted(() => {
   void applyStoredZoom();
   window.addEventListener('keydown', handleGlobalKeydown, true);
   window.addEventListener('wheel', handleGlobalWheel, {
-    capture: true,
-    passive: false,
-  });
-  window.addEventListener('wheel', handleSlowScrollWheel, {
     capture: true,
     passive: false,
   });
@@ -684,8 +750,11 @@ onBeforeUnmount(() => {
   appDisposed = true;
   window.removeEventListener('keydown', handleGlobalKeydown, true);
   window.removeEventListener('wheel', handleGlobalWheel, true);
-  window.removeEventListener('wheel', handleSlowScrollWheel, true);
   window.removeEventListener('blur', handleWindowBlur);
+  if (previewRefreshTimer) {
+    window.clearTimeout(previewRefreshTimer);
+    previewRefreshTimer = 0;
+  }
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('beforeunload', handleBeforeUnload);
   cancelImagePasteName();
@@ -1086,14 +1155,7 @@ const documentExport = useDocumentExport({
   getNotesDir: () => notesDir.value,
   setError,
 });
-const {
-  exporting,
-  exportPreview,
-  htmlExport,
-  exportDocument,
-  saveDocx: savePreviewDocx,
-  saveHtml,
-} = documentExport;
+const { exporting, htmlExport, exportHtml, saveHtml } = documentExport;
 
 function cancelAutoSave(path: string): void {
   autoSave.cancel(path);
@@ -1182,6 +1244,7 @@ function toggleVim(): void {
 function handleGlobalWheel(event: WheelEvent): void {
   if (!(event.ctrlKey || event.metaKey)) {
     wheelAccumulator = 0;
+    applySlowWheel(event);
     return;
   }
 
@@ -1195,10 +1258,6 @@ function handleGlobalWheel(event: WheelEvent): void {
   const direction = Math.sign(wheelAccumulator);
   wheelAccumulator = 0;
   setFontSize(preferences.value.fontSize - direction);
-}
-
-function handleSlowScrollWheel(event: WheelEvent): void {
-  applySlowWheel(event);
 }
 
 function handleCursor(position: {
@@ -1281,6 +1340,7 @@ async function setViewMode(mode: ViewMode): Promise<void> {
   }
 
   viewMode.value = mode;
+  if (mode !== 'source') flushPreviewSource();
   if (leavingWysiwyg || enteringWysiwyg) {
     editorSession.value += 1;
     previewFocusLine.value = 1;
@@ -1313,7 +1373,6 @@ function openPalette(level: 'files' | 'commands'): void {
     prompt.value ||
     confirmation.value ||
     imagePaste.value ||
-    exportPreview.value ||
     htmlExport.value
   ) {
     return;
@@ -2452,7 +2511,6 @@ function workspaceModalsOpen(): boolean {
     confirmation.value !== null ||
     externalConflict.value !== null ||
     imagePaste.value !== null ||
-    exportPreview.value !== null ||
     htmlExport.value !== null
   );
 }
@@ -2784,7 +2842,6 @@ watch(
     confirmation.value !== null,
     externalConflict.value !== null,
     imagePaste.value !== null,
-    exportPreview.value !== null,
     htmlExport.value !== null,
     busy.value,
   ],
@@ -2857,7 +2914,7 @@ watch(
           :vim-enabled="vimEnabled"
           :exporting="exporting"
           @mode-change="setViewMode"
-          @export="exportDocument"
+          @export="exportHtml"
           @toggle-vim="toggleVim"
           @open-settings="openSettings"
         />
@@ -3148,7 +3205,6 @@ watch(
 
           <PreviewPane
             v-if="viewMode !== 'source'"
-            :key="editorSession"
             :html="previewHtml"
             :note-path="activeTab.path"
             :focus-line="previewFocusLine"
@@ -3275,17 +3331,6 @@ watch(
       :error="prompt.error"
       @confirm="submitPrompt"
       @cancel="cancelPrompt"
-    />
-
-    <ExportPreviewDialog
-      v-if="exportPreview"
-      :format="exportPreview.format"
-      :title="exportPreview.title"
-      :html="exportPreview.html"
-      :warnings="exportPreview.warnings"
-      :busy="exporting"
-      @save="savePreviewDocx"
-      @close="exportPreview = null"
     />
 
     <HtmlExportDialog
