@@ -190,10 +190,7 @@ export function isFullWidthCodePoint(codePoint: number): boolean {
  * Maps a code point to a sampled glyph. Non-ASCII text reuses ASCII glyphs
  * so CJK notes stay legible instead of turning into placeholder boxes.
  */
-export function minimapCharIndex(
-  codePoint: number,
-  _fontScale: number,
-): number {
+export function minimapCharIndex(codePoint: number): number {
   const offset = codePoint - FIRST_CHAR_CODE;
   if (offset < 0 || offset > LAST_CHAR_CODE - FIRST_CHAR_CODE) {
     return (

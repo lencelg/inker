@@ -170,15 +170,12 @@ describe('minimap geometry', () => {
   });
 
   it('maps characters onto sampled glyphs', () => {
-    expect(minimapCharIndex(32, 1)).toBe(0);
-    expect(minimapCharIndex(65, 1)).toBe(33);
-    expect(minimapCharIndex(126, 1)).toBe(94);
-    const wide = minimapCharIndex(0x4e2d, 2);
+    expect(minimapCharIndex(32)).toBe(0);
+    expect(minimapCharIndex(65)).toBe(33);
+    expect(minimapCharIndex(126)).toBe(94);
+    const wide = minimapCharIndex(0x4e2d);
     expect(wide).toBeGreaterThanOrEqual(0);
     expect(wide).toBeLessThan(MINIMAP_CHAR_COUNT);
-    expect(minimapCharIndex(0x4e2d, 4)).toBe(
-      minimapCharIndex(0x4e2d, 2),
-    );
   });
 
   it('maps scroll percentages to editor scrollTop', () => {

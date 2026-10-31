@@ -1,7 +1,6 @@
 import { syntaxTree } from '@codemirror/language';
 import type { EditorView, ViewUpdate } from '@codemirror/view';
 import {
-  MINIMAP_CHAR_COUNT,
   MINIMAP_DEFAULT_MAX_COLUMN,
   MINIMAP_DEFAULT_SCALE,
   MINIMAP_GUTTER_WIDTH,
@@ -15,69 +14,33 @@ import {
   minimapWidthPx,
   type MinimapCharMetrics,
 } from './minimap';
+import {
+  DARK_GLYPH_SOFTEN,
+  LIGHT_GLYPH_SOFTEN,
+  sampleMinimapGlyphs,
+} from './minimapGlyphs';
+import { splitMinimapChunks } from './minimapLines';
+import {
+  minimapNodeColor,
+  readMinimapPalette,
+  type MinimapPalette,
+  type RGBColor,
+} from './minimapPalette';
 import { wheelDeltaPixels } from './wheelScroll';
 
-const HEADING_NODE = /^(?:ATX|Setext)Heading[1-6]$/;
 const MIN_THUMB_HEIGHT = 24;
 const TILE_HEIGHT = 128;
-const MAX_TILE_CACHE = 64;
-const SAMPLED_CHAR_WIDTH = 10;
-const SAMPLED_CHAR_HEIGHT = 16;
-const GLYPH_FONT_SIZE = 16;
-const DARK_GLYPH_SOFTEN = 12 / 15;
-const LIGHT_GLYPH_SOFTEN = 50 / 60;
-const BASE_ALPHA = 1;
-const TOKEN_ALPHA = 1;
-const HEADING_ALPHA = 1;
+const MAX_TILE_POOL = 8;
+const MIN_TILE_CACHE = 12;
+const MAX_TILE_CACHE = 48;
 const MAX_VISUAL_ROWS = 2000;
 const MAX_DEVICE_PIXEL_RATIO = 3;
 const TAB_SIZE = 4;
-
-interface RGBColor {
-  r: number;
-  g: number;
-  b: number;
-  a: number;
-}
 
 interface MinimapSegment {
   from: number;
   to: number;
   color: RGBColor;
-  alpha: number;
-}
-
-interface MinimapChunk {
-  start: number;
-  end: number;
-}
-
-interface LineInfo {
-  number: number;
-  text: string;
-  rowStart: number;
-  visualRows: number;
-  top: number;
-}
-
-interface NodePaint {
-  color: RGBColor;
-  alpha: number;
-}
-
-interface MinimapPalette {
-  base: RGBColor;
-  heading: RGBColor;
-  code: RGBColor;
-  link: RGBColor;
-  quote: RGBColor;
-  tag: RGBColor;
-  marker: RGBColor;
-  strong: RGBColor;
-  emphasis: RGBColor;
-  type: RGBColor;
-  selection: string;
-  backgroundIsLight: boolean;
 }
 
 export interface EditorMinimapOptions {
@@ -101,9 +64,6 @@ export interface EditorMinimapSettings {
 
 type DragKind = 'minimap' | 'scrollbar' | null;
 
-const HEX_COLOR = /^#([0-9a-f]{3,8})$/i;
-const FUNCTIONAL_COLOR = /^rgba?\(\s*([^)]*)\)$/i;
-
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -111,228 +71,6 @@ function clamp(value: number, minimum: number, maximum: number): number {
 function clampPixelRatio(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 1;
   return Math.min(MAX_DEVICE_PIXEL_RATIO, Math.max(1, value));
-}
-
-function cssColor(
-  styles: CSSStyleDeclaration,
-  name: string,
-  fallback: string,
-): string {
-  return styles.getPropertyValue(name).trim() || fallback;
-}
-
-function parseAlpha(token: string | undefined): number {
-  if (!token) return 1;
-  if (token.endsWith('%')) {
-    const percent = Number.parseFloat(token);
-    return Number.isFinite(percent) ? clamp(percent / 100, 0, 1) : 1;
-  }
-  const value = Number.parseFloat(token);
-  return Number.isFinite(value) ? clamp(value, 0, 1) : 1;
-}
-
-function parseChannel(token: string): number {
-  if (token.endsWith('%')) {
-    const percent = Number.parseFloat(token);
-    return Number.isFinite(percent) ? (percent / 100) * 255 : 0;
-  }
-  const value = Number.parseFloat(token);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function parseCssColor(value: string, fallback: RGBColor): RGBColor {
-  const hex = HEX_COLOR.exec(value);
-  if (hex) {
-    const digits = hex[1];
-    if (digits.length === 3 || digits.length === 4) {
-      return {
-        r: Number.parseInt(digits[0] + digits[0], 16),
-        g: Number.parseInt(digits[1] + digits[1], 16),
-        b: Number.parseInt(digits[2] + digits[2], 16),
-        a:
-          digits.length === 4
-            ? Number.parseInt(digits[3] + digits[3], 16) / 255
-            : 1,
-      };
-    }
-    if (digits.length === 6 || digits.length === 8) {
-      return {
-        r: Number.parseInt(digits.slice(0, 2), 16),
-        g: Number.parseInt(digits.slice(2, 4), 16),
-        b: Number.parseInt(digits.slice(4, 6), 16),
-        a:
-          digits.length === 8
-            ? Number.parseInt(digits.slice(6, 8), 16) / 255
-            : 1,
-      };
-    }
-  }
-
-  const functional = FUNCTIONAL_COLOR.exec(value);
-  if (functional) {
-    const parts = functional[1].split(/[\s,/]+/).filter(Boolean);
-    if (parts.length >= 3) {
-      return {
-        r: parseChannel(parts[0]),
-        g: parseChannel(parts[1]),
-        b: parseChannel(parts[2]),
-        a: parseAlpha(parts[3]),
-      };
-    }
-  }
-
-  return fallback;
-}
-
-function relativeLuminance(color: RGBColor): number {
-  const channel = (value: number): number => {
-    const normalized = value / 255;
-    return normalized <= 0.03928
-      ? normalized / 12.92
-      : ((normalized + 0.055) / 1.055) ** 2.4;
-  };
-  return (
-    0.2126 * channel(color.r) +
-    0.7152 * channel(color.g) +
-    0.0722 * channel(color.b)
-  );
-}
-
-function readPalette(): MinimapPalette {
-  const styles = getComputedStyle(document.documentElement);
-  const background = parseCssColor(
-    cssColor(styles, '--panel', '#ffffff'),
-    { r: 255, g: 255, b: 255, a: 1 },
-  );
-  return {
-    base: parseCssColor(cssColor(styles, '--ink', '#1f2933'), {
-      r: 31,
-      g: 41,
-      b: 51,
-      a: 1,
-    }),
-    heading: parseCssColor(
-      cssColor(styles, '--syntax-heading', '#1f4e79'),
-      { r: 31, g: 78, b: 121, a: 1 },
-    ),
-    code: parseCssColor(cssColor(styles, '--syntax-string', '#a31515'), {
-      r: 163,
-      g: 21,
-      b: 21,
-      a: 1,
-    }),
-    link: parseCssColor(cssColor(styles, '--syntax-link', '#0066cc'), {
-      r: 0,
-      g: 102,
-      b: 204,
-      a: 1,
-    }),
-    quote: parseCssColor(cssColor(styles, '--syntax-quote', '#6b7280'), {
-      r: 107,
-      g: 114,
-      b: 128,
-      a: 1,
-    }),
-    tag: parseCssColor(cssColor(styles, '--syntax-tag', '#800000'), {
-      r: 128,
-      g: 0,
-      b: 0,
-      a: 1,
-    }),
-    marker: parseCssColor(
-      cssColor(styles, '--syntax-operator', '#383a42'),
-      { r: 56, g: 58, b: 66, a: 1 },
-    ),
-    strong: parseCssColor(cssColor(styles, '--ink', '#1f2933'), {
-      r: 31,
-      g: 41,
-      b: 51,
-      a: 1,
-    }),
-    emphasis: parseCssColor(cssColor(styles, '--muted', '#6b7280'), {
-      r: 107,
-      g: 114,
-      b: 128,
-      a: 1,
-    }),
-    type: parseCssColor(cssColor(styles, '--syntax-type', '#267f99'), {
-      r: 38,
-      g: 127,
-      b: 153,
-      a: 1,
-    }),
-    selection: cssColor(
-      styles,
-      '--editor-selection',
-      'rgba(37, 99, 235, 0.18)',
-    ),
-    backgroundIsLight: relativeLuminance(background) > 0.55,
-  };
-}
-
-function nodeStyle(
-  name: string,
-  palette: MinimapPalette,
-): NodePaint | null {
-  if (HEADING_NODE.test(name)) {
-    return { color: palette.heading, alpha: HEADING_ALPHA };
-  }
-  switch (name) {
-    case 'InlineCode':
-    case 'CodeText':
-      return { color: palette.code, alpha: TOKEN_ALPHA };
-    case 'CodeInfo':
-      return { color: palette.type, alpha: TOKEN_ALPHA };
-    case 'Link':
-    case 'Image':
-    case 'URL':
-      return { color: palette.link, alpha: TOKEN_ALPHA };
-    case 'HTMLBlock':
-    case 'HTMLTag':
-      return { color: palette.tag, alpha: TOKEN_ALPHA };
-    case 'StrongEmphasis':
-      return { color: palette.strong, alpha: 1 };
-    case 'Emphasis':
-      return { color: palette.emphasis, alpha: 1 };
-    case 'QuoteMark':
-      return { color: palette.quote, alpha: 1 };
-    case 'ListMark':
-      return { color: palette.marker, alpha: 1 };
-    default:
-      return null;
-  }
-}
-
-function splitChunks(text: string, visualRows: number): MinimapChunk[] {
-  if (visualRows <= 1) {
-    return [{ start: 0, end: text.length }];
-  }
-  const chunks: MinimapChunk[] = [];
-  let offset = 0;
-  for (let row = 0; row < visualRows - 1; row += 1) {
-    if (offset >= text.length) break;
-    const remainingRows = visualRows - row;
-    let end =
-      offset +
-      Math.max(
-        1,
-        Math.ceil((text.length - offset) / remainingRows),
-      );
-    end = Math.min(text.length, end);
-    if (end >= text.length) break;
-    const minimum = offset + Math.max(1, Math.floor((end - offset) / 2));
-    const space = text.lastIndexOf(' ', end);
-    if (space >= minimum) end = space + 1;
-    chunks.push({ start: offset, end });
-    offset = end;
-  }
-  if (offset < text.length) {
-    chunks.push({ start: offset, end: text.length });
-  }
-  while (chunks.length < visualRows) {
-    chunks.push({ start: text.length, end: text.length });
-  }
-  return chunks.slice(0, visualRows);
 }
 
 export class EditorMinimap {
@@ -365,19 +103,22 @@ export class EditorMinimap {
   private sliceOffset = 0;
   private viewportHeightVirtual = 0;
   private drawDirty = false;
-  private totalRows = 1;
-  private charsPerRow = 80;
-  private lines: LineInfo[] = [];
+  private lineTops = new Float64Array(0);
+  private lineRows = new Uint16Array(0);
+  private tileCacheLimit = 24;
   private tiles = new Map<number, HTMLCanvasElement>();
+  private tilePool: HTMLCanvasElement[] = [];
   private segmentCache = new Map<number, MinimapSegment[]>();
   private glyphMasks: Uint8ClampedArray[] = [];
   private glyphDeviceScale = 0;
   private glyphLight = false;
   private glyphFont = '';
+  private characterWidth = 9;
+  private fontFamily = '';
   private prefetchTimer = 0;
   private prefetchFirst = 0;
   private prefetchLast = -1;
-  private palette = readPalette();
+  private palette = readMinimapPalette();
   private lineCount = 0;
   private contentHeight = 1;
   private hostHeight = 0;
@@ -422,6 +163,7 @@ export class EditorMinimap {
     this.requestedWidth = minimapWidthPx(this.maxColumn, this.scale);
     this.host.style.width = `${this.requestedWidth}px`;
     this.host.style.display = this.enabled ? '' : 'none';
+    this.refreshFontMetrics();
     this.prepareGlyphs();
     this.scrollElement.addEventListener('scroll', this.onScroll, {
       passive: true,
@@ -451,6 +193,7 @@ export class EditorMinimap {
       if (this.resizeFrame) return;
       this.resizeFrame = requestAnimationFrame(() => {
         this.resizeFrame = 0;
+        this.updateWidth();
         this.schedule(true);
       });
     });
@@ -491,9 +234,13 @@ export class EditorMinimap {
 
     if (enabledChanged) {
       this.host.style.display = enabled ? '' : 'none';
-      if (!enabled && this.frame) {
-        cancelAnimationFrame(this.frame);
-        this.frame = 0;
+      if (!enabled) {
+        this.clearTiles();
+        this.segmentCache.clear();
+        if (this.frame) {
+          cancelAnimationFrame(this.frame);
+          this.frame = 0;
+        }
       }
     }
     if (scaleChanged) {
@@ -503,7 +250,7 @@ export class EditorMinimap {
     }
     this.updateWidth();
     if (enabled && (enabledChanged || scaleChanged || columnChanged)) {
-      this.tiles.clear();
+      this.clearTiles();
       this.segmentCache.clear();
       this.schedule(true);
     }
@@ -512,25 +259,39 @@ export class EditorMinimap {
   private prepareGlyphs(): void {
     const deviceScale = this.metrics.deviceScale;
     const light = this.palette.backgroundIsLight;
-    const fontFamily =
-      getComputedStyle(this.view.contentDOM).fontFamily ||
-      '"JetBrains Mono", "Fira Code", monospace';
     if (
       this.glyphMasks.length > 0 &&
       this.glyphDeviceScale === deviceScale &&
       this.glyphLight === light &&
-      this.glyphFont === fontFamily
+      this.glyphFont === this.fontFamily
     ) {
       return;
     }
     this.glyphDeviceScale = deviceScale;
     this.glyphLight = light;
-    this.glyphFont = fontFamily;
-    this.glyphMasks = this.sampleGlyphs(
+    this.glyphFont = this.fontFamily;
+    this.glyphMasks = sampleMinimapGlyphs(
       deviceScale,
       light ? LIGHT_GLYPH_SOFTEN : DARK_GLYPH_SOFTEN,
-      fontFamily,
+      this.fontFamily,
     );
+  }
+
+  private refreshFontMetrics(): boolean {
+    const styles = getComputedStyle(this.view.contentDOM);
+    const fontSize = Number.parseFloat(styles.fontSize);
+    this.fontFamily =
+      styles.fontFamily || '"JetBrains Mono", "Fira Code", monospace';
+    const measured = this.view.defaultCharacterWidth;
+    const characterWidth =
+      measured > 0
+        ? measured
+        : Number.isFinite(fontSize) && fontSize > 0
+          ? fontSize * 0.6
+          : 9;
+    if (characterWidth === this.characterWidth) return false;
+    this.characterWidth = characterWidth;
+    return true;
   }
 
   private watchFontLoading(): void {
@@ -540,6 +301,7 @@ export class EditorMinimap {
       if (this.destroyed) return;
       this.glyphFont = '';
       this.prepareGlyphs();
+      this.clearTiles();
       this.schedule(true);
     };
     this.fontLoadingHandler = resample;
@@ -547,90 +309,9 @@ export class EditorMinimap {
     fonts.addEventListener('loadingdone', resample);
   }
 
-  /**
-   * Samples a 16px bold font and downsamples each glyph to the minimap's
-   * device-pixel grid, mirroring VS Code's MinimapCharRendererFactory.
-   */
-  private sampleGlyphs(
-    deviceScale: number,
-    soften: number,
-    fontFamily: string,
-  ): Uint8ClampedArray[] {
-    const width = deviceScale;
-    const height = deviceScale * 2;
-    const maskSize = width * height;
-    const sourceWidth = MINIMAP_CHAR_COUNT * SAMPLED_CHAR_WIDTH;
-    const canvas = document.createElement('canvas');
-    canvas.width = sourceWidth;
-    canvas.height = SAMPLED_CHAR_HEIGHT;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) return [];
-
-    context.fillStyle = '#fff';
-    context.font = `bold ${GLYPH_FONT_SIZE}px ${fontFamily}`;
-    context.textBaseline = 'middle';
-    for (let index = 0; index < MINIMAP_CHAR_COUNT; index += 1) {
-      const codePoint =
-        index < MINIMAP_CHAR_COUNT - 1 ? 32 + index : 0xfffd;
-      context.fillText(
-        String.fromCodePoint(codePoint),
-        index * SAMPLED_CHAR_WIDTH,
-        SAMPLED_CHAR_HEIGHT / 2,
-      );
-    }
-    const pixels = context.getImageData(
-      0,
-      0,
-      sourceWidth,
-      SAMPLED_CHAR_HEIGHT,
-    ).data;
-
-    const raw: Float32Array[] = [];
-    let brightest = 0;
-    for (let index = 0; index < MINIMAP_CHAR_COUNT; index += 1) {
-      const values = new Float32Array(maskSize);
-      for (let y = 0; y < height; y += 1) {
-        const sourceY1 = (y / height) * SAMPLED_CHAR_HEIGHT;
-        const sourceY2 = ((y + 1) / height) * SAMPLED_CHAR_HEIGHT;
-        for (let x = 0; x < width; x += 1) {
-          const sourceX1 = (x / width) * SAMPLED_CHAR_WIDTH;
-          const sourceX2 = ((x + 1) / width) * SAMPLED_CHAR_WIDTH;
-          let value = 0;
-          let samples = 0;
-          for (let sy = sourceY1; sy < sourceY2; sy += 1) {
-            const py = Math.floor(sy);
-            const yBalance = 1 - (sy - py);
-            for (let sx = sourceX1; sx < sourceX2; sx += 1) {
-              const px = Math.floor(sx);
-              const xBalance = 1 - (sx - px);
-              const alpha =
-                pixels[
-                  (py * sourceWidth + index * SAMPLED_CHAR_WIDTH + px) * 4 +
-                    3
-                ];
-              const weight = xBalance * yBalance;
-              samples += weight;
-              // White text: VS Code measures coverage as R * A / 255.
-              value += alpha * weight;
-            }
-          }
-          const final = samples > 0 ? value / samples : 0;
-          values[y * width + x] = final;
-          if (final > brightest) brightest = final;
-        }
-      }
-      raw.push(values);
-    }
-
-    if (brightest <= 0) return [];
-    const adjust = (255 / brightest) * soften;
-    return raw.map((values) => {
-      const mask = new Uint8ClampedArray(maskSize);
-      for (let pixel = 0; pixel < maskSize; pixel += 1) {
-        mask[pixel] = Math.round(values[pixel] * adjust);
-      }
-      return mask;
-    });
+  private clearTiles(): void {
+    this.tiles.clear();
+    this.tilePool.length = 0;
   }
 
   handleUpdate(update: ViewUpdate): void {
@@ -683,7 +364,7 @@ export class EditorMinimap {
     this.frame = 0;
     this.resizeFrame = 0;
     this.prefetchTimer = 0;
-    this.tiles.clear();
+    this.clearTiles();
     this.segmentCache.clear();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
@@ -762,19 +443,9 @@ export class EditorMinimap {
       parentWidth > 0
         ? parentWidth
         : this.scrollElement.clientWidth + this.host.clientWidth;
-    const measured = this.view.defaultCharacterWidth;
-    const fontSize = Number.parseFloat(
-      getComputedStyle(this.scrollElement).fontSize,
-    );
-    const characterWidth =
-      measured > 0
-        ? measured
-        : Number.isFinite(fontSize) && fontSize > 0
-          ? fontSize * 0.6
-          : 9;
     const width = minimapWidthPx(this.maxColumn, this.scale, {
       availableWidth,
-      characterWidth,
+      characterWidth: this.characterWidth,
       scrollbarWidth: this.scrollbar.offsetWidth,
       pixelRatio: this.pixelRatio,
     });
@@ -796,39 +467,24 @@ export class EditorMinimap {
   private flush(): void {
     if (!this.enabled) return;
     const lineCount = this.view.state.doc.lines;
-    this.updateWidth();
     const contentHeight = Math.max(1, this.view.contentHeight);
     const hostHeight = this.host.clientHeight;
     const hostWidth = this.host.clientWidth;
-    const charsPerRow = this.measureCharsPerRow();
     const layoutChanged =
       this.layoutDirty ||
       lineCount !== this.lineCount ||
       contentHeight !== this.contentHeight ||
       hostHeight !== this.hostHeight ||
-      hostWidth !== this.hostWidth ||
-      charsPerRow !== this.charsPerRow;
+      hostWidth !== this.hostWidth;
 
     if (layoutChanged) {
-      this.layoutAll();
-      this.updateViewport();
-      this.drawAll();
-      this.pendingLines.clear();
-      this.layoutDirty = false;
-      this.drawDirty = false;
-      this.selectionDirty = false;
+      this.rebuildAll();
       return;
     }
 
     if (this.pendingLines.size > 0) {
       if (!this.redrawLines(this.pendingLines)) {
-        this.layoutAll();
-        this.updateViewport();
-        this.drawAll();
-        this.pendingLines.clear();
-        this.layoutDirty = false;
-        this.drawDirty = false;
-        this.selectionDirty = false;
+        this.rebuildAll();
         return;
       }
       this.selectionDirty = false;
@@ -847,45 +503,53 @@ export class EditorMinimap {
     }
   }
 
+  private rebuildAll(): void {
+    this.layoutAll();
+    this.updateViewport();
+    this.drawAll();
+    this.pendingLines.clear();
+    this.layoutDirty = false;
+    this.drawDirty = false;
+    this.selectionDirty = false;
+  }
+
   private layoutAll(): void {
     const state = this.view.state;
-    this.palette = readPalette();
+    this.palette = readMinimapPalette();
+    const fontChanged = this.refreshFontMetrics();
+    if (fontChanged) this.updateWidth();
     this.metrics = minimapCharMetrics(this.scale, this.pixelRatio);
     this.prepareGlyphs();
     this.contentHeight = Math.max(1, this.view.contentHeight);
     this.hostHeight = this.host.clientHeight;
     this.hostWidth = this.host.clientWidth;
     this.lineCount = state.doc.lines;
-    this.charsPerRow = this.measureCharsPerRow();
 
-    const rowCounts: number[] = [];
+    const lineCount = state.doc.lines;
+    const tops = new Float64Array(lineCount);
+    const rows = new Uint16Array(lineCount);
+    const rowPitch = this.metrics.rowPitchCss;
     let totalRows = 0;
-    for (let number = 1; number <= state.doc.lines; number += 1) {
+    for (let number = 1; number <= lineCount; number += 1) {
       const visualRows = this.measureVisualRows(
         state.doc.line(number).from,
       );
-      rowCounts.push(visualRows);
+      tops[number - 1] = totalRows * rowPitch;
+      rows[number - 1] = visualRows;
       totalRows += visualRows;
     }
-    this.totalRows = Math.max(1, totalRows);
-    this.virtualHeight = this.totalRows * this.metrics.rowPitchCss;
-    this.tiles.clear();
+    this.virtualHeight = Math.max(1, totalRows) * rowPitch;
+    this.tileCacheLimit = Math.min(
+      MAX_TILE_CACHE,
+      Math.max(
+        MIN_TILE_CACHE,
+        Math.ceil(this.hostHeight / TILE_HEIGHT) * 3 + 4,
+      ),
+    );
+    this.clearTiles();
     this.segmentCache.clear();
-
-    const lines: LineInfo[] = [];
-    let rowStart = 0;
-    for (let number = 1; number <= state.doc.lines; number += 1) {
-      const visualRows = rowCounts[number - 1];
-      lines.push({
-        number,
-        text: state.doc.line(number).text,
-        rowStart,
-        visualRows,
-        top: rowStart * this.metrics.rowPitchCss,
-      });
-      rowStart += visualRows;
-    }
-    this.lines = lines;
+    this.lineTops = tops;
+    this.lineRows = rows;
   }
 
   private measureVisualRows(from: number): number {
@@ -900,27 +564,14 @@ export class EditorMinimap {
     );
   }
 
-  private measureCharsPerRow(): number {
-    const styles = getComputedStyle(this.view.contentDOM);
-    const padding =
-      (Number.parseFloat(styles.paddingLeft) || 0) +
-      (Number.parseFloat(styles.paddingRight) || 0);
-    const width = this.view.contentDOM.clientWidth - padding;
-    const characterWidth = this.view.defaultCharacterWidth;
-    if (!(width > 0) || !(characterWidth > 0)) {
-      return Math.max(1, this.maxColumn);
-    }
-    return Math.max(1, Math.floor(width / characterWidth));
-  }
-
   private firstVisibleLineIndex(start: number): number {
     let low = 0;
-    let high = this.lines.length;
+    let high = this.lineTops.length;
     while (low < high) {
       const middle = Math.floor((low + high) / 2);
-      const line = this.lines[middle];
       const bottom =
-        line.top + line.visualRows * this.metrics.rowPitchCss;
+        this.lineTops[middle] +
+        this.lineRows[middle] * this.metrics.rowPitchCss;
       if (bottom < start) low = middle + 1;
       else high = middle;
     }
@@ -940,27 +591,31 @@ export class EditorMinimap {
       this.canvasWidthDevice !== pixelWidth ||
       this.canvasHeightDevice !== pixelHeight;
 
-    for (const canvas of [this.baseCanvas, this.overlayCanvas]) {
-      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    if (changed) {
+      for (const canvas of [this.baseCanvas, this.overlayCanvas]) {
         canvas.width = pixelWidth;
         canvas.height = pixelHeight;
       }
     }
 
-    const base = this.baseCanvas.getContext('2d');
-    const overlay = this.overlayCanvas.getContext('2d');
+    if (!this.baseContext) {
+      this.baseContext = this.baseCanvas.getContext('2d');
+      this.overlayContext = this.overlayCanvas.getContext('2d');
+    }
+    const base = this.baseContext;
+    const overlay = this.overlayContext;
     if (!base || !overlay) return false;
-    base.setTransform(1, 0, 0, 1, 0, 0);
-    base.imageSmoothingEnabled = false;
-    overlay.setTransform(1, 0, 0, 1, 0, 0);
-    overlay.imageSmoothingEnabled = false;
-    this.baseContext = base;
-    this.overlayContext = overlay;
+    if (changed) {
+      base.setTransform(1, 0, 0, 1, 0, 0);
+      base.imageSmoothingEnabled = false;
+      overlay.setTransform(1, 0, 0, 1, 0, 0);
+      overlay.imageSmoothingEnabled = false;
+      this.clearTiles();
+    }
     this.canvasWidthDevice = pixelWidth;
     this.canvasHeightDevice = pixelHeight;
     this.widthCss = widthCss;
     this.heightCss = heightCss;
-    if (changed) this.tiles.clear();
     return true;
   }
 
@@ -982,8 +637,8 @@ export class EditorMinimap {
       from: state.doc.line(missing[0]).from,
       to: state.doc.line(missing[missing.length - 1]).to,
       enter: (node) => {
-        const paint = nodeStyle(node.name, this.palette);
-        if (!paint) return undefined;
+        const color = minimapNodeColor(node.name, this.palette);
+        if (!color) return undefined;
         let line = state.doc.lineAt(node.from);
         while (true) {
           if (targets.has(line.number)) {
@@ -991,12 +646,7 @@ export class EditorMinimap {
             const to = Math.min(node.to, line.to) - line.from;
             if (to > from) {
               const list = this.segmentCache.get(line.number) ?? [];
-              list.push({
-                from,
-                to,
-                color: paint.color,
-                alpha: paint.alpha,
-              });
+              list.push({ from, to, color });
               this.segmentCache.set(line.number, list);
             }
           }
@@ -1038,7 +688,8 @@ export class EditorMinimap {
       Math.round(endCss * this.pixelRatio),
     );
     const heightDevice = endDevice - startDevice;
-    const canvas = document.createElement('canvas');
+    const canvas =
+      this.tilePool.pop() ?? document.createElement('canvas');
     canvas.width = this.canvasWidthDevice;
     canvas.height = heightDevice;
     const context = canvas.getContext('2d');
@@ -1049,21 +700,18 @@ export class EditorMinimap {
       startCss - this.metrics.rowPitchCss,
     );
     let last = first;
-    while (last < this.lines.length) {
-      if (this.lines[last].top > endCss) break;
+    while (last < this.lineTops.length) {
+      if (this.lineTops[last] > endCss) break;
       last += 1;
     }
     if (first < last) {
-      this.ensureSegments(
-        this.lines[first].number,
-        this.lines[last - 1].number,
-      );
+      this.ensureSegments(first + 1, last);
       for (let lineIndex = first; lineIndex < last; lineIndex += 1) {
         this.paintLine(
           image.data,
           image.width,
           image.height,
-          this.lines[lineIndex],
+          lineIndex,
           startCss,
         );
       }
@@ -1071,10 +719,14 @@ export class EditorMinimap {
     context.putImageData(image, 0, 0);
 
     this.tiles.set(index, canvas);
-    while (this.tiles.size > MAX_TILE_CACHE) {
+    while (this.tiles.size > this.tileCacheLimit) {
       const oldest = this.tiles.keys().next().value;
       if (oldest === undefined) break;
+      const evicted = this.tiles.get(oldest);
       this.tiles.delete(oldest);
+      if (evicted && this.tilePool.length < MAX_TILE_POOL) {
+        this.tilePool.push(evicted);
+      }
     }
     return canvas;
   }
@@ -1084,7 +736,11 @@ export class EditorMinimap {
     const first = Math.max(0, Math.floor(top / TILE_HEIGHT));
     const last = Math.floor(Math.max(0, bottom - 1) / TILE_HEIGHT);
     for (let index = first; index <= last; index += 1) {
+      const tile = this.tiles.get(index);
       this.tiles.delete(index);
+      if (tile && this.tilePool.length < MAX_TILE_POOL) {
+        this.tilePool.push(tile);
+      }
     }
   }
 
@@ -1171,11 +827,11 @@ export class EditorMinimap {
     if (!this.ensureCanvases()) return true;
     const state = this.view.state;
     for (const number of changed) {
-      if (number < 1 || number > this.lines.length) continue;
+      if (number < 1 || number > this.lineRows.length) continue;
       const visualRows = this.measureVisualRows(
         state.doc.line(number).from,
       );
-      if (visualRows !== this.lines[number - 1].visualRows) {
+      if (visualRows !== this.lineRows[number - 1]) {
         return false;
       }
     }
@@ -1184,21 +840,13 @@ export class EditorMinimap {
     let bottom = Number.NEGATIVE_INFINITY;
 
     for (const number of changed) {
-      if (number < 1 || number > this.lines.length) continue;
-      const previous = this.lines[number - 1];
-      const next: LineInfo = {
-        number,
-        text: state.doc.line(number).text,
-        rowStart: previous.rowStart,
-        visualRows: previous.visualRows,
-        top: previous.top,
-      };
-      this.lines[number - 1] = next;
-      top = Math.min(top, previous.top, next.top);
+      if (number < 1 || number > this.lineRows.length) continue;
+      const index = number - 1;
+      top = Math.min(top, this.lineTops[index]);
       bottom = Math.max(
         bottom,
-        previous.top + previous.visualRows * this.metrics.rowPitchCss,
-        next.top + next.visualRows * this.metrics.rowPitchCss,
+        this.lineTops[index] +
+          this.lineRows[index] * this.metrics.rowPitchCss,
       );
     }
     if (!Number.isFinite(top) || !Number.isFinite(bottom)) {
@@ -1214,31 +862,34 @@ export class EditorMinimap {
     data: Uint8ClampedArray,
     widthDevice: number,
     heightDevice: number,
-    line: LineInfo,
+    lineIndex: number,
     tileStartCss: number,
   ): void {
-    if (!line.text) return;
+    const lineNumber = lineIndex + 1;
+    const text = this.view.state.doc.line(lineNumber).text;
+    if (!text) return;
+    const lineTop = this.lineTops[lineIndex];
     const charWidthDevice = this.metrics.charWidthDevice;
     const charHeightDevice = this.metrics.charHeightDevice;
     const gutterDevice = Math.round(
       MINIMAP_GUTTER_WIDTH * this.pixelRatio,
     );
     const rightLimit = widthDevice - charWidthDevice;
-    const segments = this.segmentCache.get(line.number) ?? [];
-    const chunks = splitChunks(line.text, line.visualRows);
+    const segments = this.segmentCache.get(lineNumber) ?? [];
+    const chunks = splitMinimapChunks(text, this.lineRows[lineIndex]);
     let segmentIndex = 0;
 
     for (let row = 0; row < chunks.length; row += 1) {
       const chunk = chunks[row];
       const y = Math.round(
-        (line.top + row * this.metrics.rowPitchCss - tileStartCss) *
+        (lineTop + row * this.metrics.rowPitchCss - tileStartCss) *
           this.pixelRatio,
       );
       if (y >= heightDevice || y + charHeightDevice <= 0) continue;
       const limit = Math.min(chunk.end, chunk.start + this.maxColumn);
       let displayColumn = 0;
       for (let column = chunk.start; column < limit; ) {
-        const codePoint = line.text.codePointAt(column) ?? 32;
+        const codePoint = text.codePointAt(column) ?? 32;
         const advance = minimapCharAdvance(
           codePoint,
           displayColumn,
@@ -1256,11 +907,8 @@ export class EditorMinimap {
           const painted =
             segment && column >= segment.from && column < segment.to;
           const color = painted ? segment.color : this.palette.base;
-          const alpha = painted ? segment.alpha : BASE_ALPHA;
           const mask =
-            this.glyphMasks[
-              minimapCharIndex(codePoint, this.metrics.deviceScale)
-            ];
+            this.glyphMasks[minimapCharIndex(codePoint)];
           if (mask && x + charWidthDevice <= rightLimit) {
             this.blendGlyph(
               data,
@@ -1270,7 +918,6 @@ export class EditorMinimap {
               x,
               y,
               color,
-              alpha,
             );
           }
         }
@@ -1288,7 +935,6 @@ export class EditorMinimap {
     x: number,
     y: number,
     color: RGBColor,
-    alpha: number,
   ): void {
     const charWidthDevice = this.metrics.charWidthDevice;
     const charHeightDevice = this.metrics.charHeightDevice;
@@ -1300,7 +946,7 @@ export class EditorMinimap {
     ) {
       return;
     }
-    const alphaByte = clamp(alpha * color.a * 255, 0, 255);
+    const alphaByte = clamp(color.a * 255, 0, 255);
     if (alphaByte <= 0) return;
     for (let row = 0; row < charHeightDevice; row += 1) {
       for (let column = 0; column < charWidthDevice; column += 1) {
@@ -1328,7 +974,7 @@ export class EditorMinimap {
       this.canvasWidthDevice,
       this.canvasHeightDevice,
     );
-    if (!this.lines.length) return;
+    if (!this.lineTops.length) return;
 
     const state = this.view.state;
     const renderOffset = this.sliceOffset;
@@ -1337,18 +983,21 @@ export class EditorMinimap {
     this.overlayContext.fillStyle = this.palette.selection;
     for (const range of state.selection.ranges) {
       if (range.empty) continue;
-      const start = this.lines[
-        state.doc.lineAt(range.from).number - 1
-      ];
-      const end = this.lines[
-        state.doc.lineAt(range.to).number - 1
-      ];
-      if (!start || !end) continue;
-      const top = Math.max(0, start.top - renderOffset);
+      const startIndex = state.doc.lineAt(range.from).number - 1;
+      const endIndex = state.doc.lineAt(range.to).number - 1;
+      if (
+        startIndex < 0 ||
+        startIndex >= this.lineTops.length ||
+        endIndex < 0 ||
+        endIndex >= this.lineTops.length
+      ) {
+        continue;
+      }
+      const top = Math.max(0, this.lineTops[startIndex] - renderOffset);
       const bottom = Math.min(
         this.heightCss,
-        end.top +
-          end.visualRows * this.metrics.rowPitchCss -
+        this.lineTops[endIndex] +
+          this.lineRows[endIndex] * this.metrics.rowPitchCss -
           renderOffset,
       );
       if (bottom <= top) continue;
