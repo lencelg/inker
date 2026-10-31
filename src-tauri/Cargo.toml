@@ -1,6 +1,6 @@
 [package]
 name = "inker"
-version = "0.1.0"
+version = "0.1.1"
 description = "Inker - local Markdown editor"
 authors = ["lencelg"]
 edition = "2021"

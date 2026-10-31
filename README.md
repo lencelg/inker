@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.0-blue" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.1-blue" />
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux-informational" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
 </p>
@@ -18,7 +18,7 @@
 
 **Inker** 是一款基于 **Tauri 2 + Vue 3 + Rust** 的 Markdown 笔记应用。它不依赖数据库或云端服务，所有笔记都以普通的 `.md` / `.markdown` 文件保存在你选择的文件夹中——你可以随时用任何编辑器打开、用 Git 管理、或同步到自己的网盘。
 
-Inker 的名字来自 **Ink（墨水）**：写作应当像落墨一样直接、安静、不被打断。应用把 VS Code 式的效率工具（文件树、多标签、快速打开、命令面板、Vim）与 Markdown 写作体验（实时预览、数学公式、图表、多格式导出）放在同一个轻量桌面窗口里。
+Inker 的名字来自 **Ink（墨水）**：写作应当像落墨一样直接、安静、不被打断。应用把 VS Code 式的效率工具（文件树、多标签、快速打开、命令面板、Vim）与 Markdown 写作体验（实时预览、数学公式、图表、HTML 导出）放在同一个轻量桌面窗口里。
 
 ## 安装
 
@@ -27,7 +27,7 @@ Inker 的名字来自 **Ink（墨水）**：写作应当像落墨一样直接、
 前往 [Releases](https://github.com/lencelg/inker/releases/latest) 下载最新的 Debian 安装包：
 
 ```bash
-sudo apt install ./Inker_0.1.0_amd64.deb
+sudo apt install ./Inker_0.1.1_amd64.deb
 ```
 
 安装完成后，在应用菜单中启动 **Inker**，首次启动时选择你的笔记文件夹即可开始写作。
