@@ -205,4 +205,41 @@ describe('settings schema', () => {
     expect(fontSize && isSettingModified(fontSize)).toBe(true);
     expect(theme && isSettingModified(theme)).toBe(false);
   });
+
+  it('exposes minimap settings in the editor category', () => {
+    const schema = createSettingsSchema(
+      normalizePreferences({
+        minimapEnabled: false,
+        minimapScale: 3,
+        minimapMaxColumn: 120,
+      }),
+    );
+    const enabled = schema.find(
+      (setting) => setting.id === 'editor.minimapEnabled',
+    );
+    const scale = schema.find(
+      (setting) => setting.id === 'editor.minimapScale',
+    );
+    const maxColumn = schema.find(
+      (setting) => setting.id === 'editor.minimapMaxColumn',
+    );
+
+    expect(enabled?.category).toBe('editor');
+    expect(enabled?.controlType).toBe('checkbox');
+    expect(enabled?.value).toBe(false);
+    expect(enabled?.defaultValue).toBe(true);
+    expect(enabled?.preference).toBe('minimapEnabled');
+
+    expect(scale?.controlType).toBe('select');
+    expect(scale?.value).toBe(3);
+    expect(scale?.defaultValue).toBe(1);
+    expect(scale?.preference).toBe('minimapScale');
+
+    expect(maxColumn?.controlType).toBe('input');
+    expect(maxColumn?.value).toBe(120);
+    expect(maxColumn?.defaultValue).toBe(120);
+    expect(maxColumn?.min).toBe(20);
+    expect(maxColumn?.max).toBe(200);
+    expect(maxColumn?.preference).toBe('minimapMaxColumn');
+  });
 });

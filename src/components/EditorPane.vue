@@ -31,6 +31,10 @@ import { Vim, getCM, vim } from '@replit/codemirror-vim';
 import Breadcrumbs from './Breadcrumbs.vue';
 import { EditorMinimap } from '../lib/editorMinimap';
 import {
+  MINIMAP_DEFAULT_MAX_COLUMN,
+  MINIMAP_DEFAULT_SCALE,
+} from '../lib/minimap';
+import {
   activeHeadingTrail,
   collectHeadings,
   type HeadingItem,
@@ -82,18 +86,28 @@ import {
   type VimMapping,
 } from '../lib/vimMappings';
 
-const props = defineProps<{
-  initialContent: string;
-  vimEnabled: boolean;
-  readOnly: boolean;
-  layoutKey?: string;
-  immersive: boolean;
-  sourceHighlight: boolean;
-  requestImageSave: ImageSaveHandler;
-  vimMappings: string;
-  notePath: string;
-  files: FileEntry[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    initialContent: string;
+    vimEnabled: boolean;
+    readOnly: boolean;
+    layoutKey?: string;
+    immersive: boolean;
+    sourceHighlight: boolean;
+    requestImageSave: ImageSaveHandler;
+    vimMappings: string;
+    notePath: string;
+    files: FileEntry[];
+    minimapEnabled?: boolean;
+    minimapScale?: number;
+    minimapMaxColumn?: number;
+  }>(),
+  {
+    minimapEnabled: true,
+    minimapScale: MINIMAP_DEFAULT_SCALE,
+    minimapMaxColumn: MINIMAP_DEFAULT_MAX_COLUMN,
+  },
+);
 
 const emit = defineEmits<{
   change: [content: string];
@@ -1190,6 +1204,9 @@ onMounted(() => {
       slider: minimapViewport.value,
       scrollbar: minimapScrollbar.value,
       scrollbarThumb: minimapScrollbarThumb.value,
+      enabled: props.minimapEnabled,
+      scale: props.minimapScale,
+      maxColumn: props.minimapMaxColumn,
     });
   }
   resizeObserver = new ResizeObserver(() => {
@@ -1256,6 +1273,21 @@ watch(
   (readOnly) => {
     view?.dispatch({
       effects: readOnlyCompartment.reconfigure(readOnlyExtensions(readOnly)),
+    });
+  },
+);
+
+watch(
+  () => [
+    props.minimapEnabled,
+    props.minimapScale,
+    props.minimapMaxColumn,
+  ],
+  () => {
+    minimap?.setOptions({
+      enabled: props.minimapEnabled,
+      scale: props.minimapScale,
+      maxColumn: props.minimapMaxColumn,
     });
   },
 );

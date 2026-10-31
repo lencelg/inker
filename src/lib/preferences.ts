@@ -24,6 +24,10 @@ import {
   isImageFormat,
   type ImageFormat,
 } from './imagePaste';
+import {
+  clampMinimapMaxColumn,
+  clampMinimapScale,
+} from './minimap';
 import { DEFAULT_VIM_MAPPINGS } from './vimMappings';
 import {
   themePresetForPair,
@@ -54,6 +58,10 @@ export const IMAGE_FOLDER_STORAGE_KEY = 'inker-image-folder';
 export const IMAGE_QUALITY_STORAGE_KEY = 'inker-image-quality';
 export const VIM_MAPPINGS_STORAGE_KEY = 'inker-vim-mappings';
 export const QUICK_OPEN_IMAGES_STORAGE_KEY = 'inker-quick-open-images';
+export const MINIMAP_ENABLED_STORAGE_KEY = 'inker-minimap-enabled';
+export const MINIMAP_SCALE_STORAGE_KEY = 'inker-minimap-scale';
+export const MINIMAP_MAX_COLUMN_STORAGE_KEY = 'inker-minimap-max-column';
+const MINIMAP_DEFAULTS_STORAGE_KEY = 'inker-minimap-defaults-v2';
 export const FONT_SIZE_STORAGE_KEY = 'inker-font-size';
 export const FONT_FAMILY_STORAGE_KEY = 'inker-font-family';
 export const VIM_STORAGE_KEY = 'inker-vim';
@@ -97,6 +105,9 @@ export interface Preferences {
   imageQuality: number;
   vimMappings: string;
   quickOpenIncludeImages: boolean;
+  minimapEnabled: boolean;
+  minimapScale: number;
+  minimapMaxColumn: number;
 }
 
 export function normalizeImageFolder(value: string): string {
@@ -173,6 +184,9 @@ export function normalizePreferences(value: unknown): Preferences {
         ? source.vimMappings
         : DEFAULT_VIM_MAPPINGS,
     quickOpenIncludeImages: source.quickOpenIncludeImages === true,
+    minimapEnabled: source.minimapEnabled !== false,
+    minimapScale: clampMinimapScale(source.minimapScale),
+    minimapMaxColumn: clampMinimapMaxColumn(source.minimapMaxColumn),
   };
 }
 
@@ -226,6 +240,25 @@ export function readPreferences(): Preferences {
     const rawQuickOpenImages = window.localStorage.getItem(
       QUICK_OPEN_IMAGES_STORAGE_KEY,
     );
+    const rawMinimapEnabled = window.localStorage.getItem(
+      MINIMAP_ENABLED_STORAGE_KEY,
+    );
+    const rawMinimapScale = window.localStorage.getItem(
+      MINIMAP_SCALE_STORAGE_KEY,
+    );
+    const rawMinimapMaxColumn = window.localStorage.getItem(
+      MINIMAP_MAX_COLUMN_STORAGE_KEY,
+    );
+    // The first build of this feature persisted 2x/60 as defaults; move those
+    // profiles to the VS Code-compatible 1x/120 defaults once.
+    const legacyMinimapDefaults =
+      window.localStorage.getItem(MINIMAP_DEFAULTS_STORAGE_KEY) === null &&
+      rawMinimapScale === '2' &&
+      rawMinimapMaxColumn === '60';
+    if (legacyMinimapDefaults) {
+      window.localStorage.removeItem(MINIMAP_SCALE_STORAGE_KEY);
+      window.localStorage.removeItem(MINIMAP_MAX_COLUMN_STORAGE_KEY);
+    }
     const preferences = normalizePreferences({
       theme: read(THEME_STORAGE_KEY, LEGACY_THEME_STORAGE_KEY),
       fontSize: rawSize === null ? DEFAULT_FONT_SIZE : Number(rawSize),
@@ -282,7 +315,21 @@ export function readPreferences(): Preferences {
         rawQuickOpenImages === null
           ? undefined
           : rawQuickOpenImages === 'true',
+      minimapEnabled:
+        rawMinimapEnabled === null
+          ? undefined
+          : rawMinimapEnabled === 'true',
+      minimapScale:
+        legacyMinimapDefaults || rawMinimapScale === null
+          ? undefined
+          : Number(rawMinimapScale),
+      minimapMaxColumn:
+        legacyMinimapDefaults || rawMinimapMaxColumn === null
+          ? undefined
+          : Number(rawMinimapMaxColumn),
     });
+
+    window.localStorage.setItem(MINIMAP_DEFAULTS_STORAGE_KEY, '1');
 
     if (usedLegacyKeys) savePreferences(preferences);
     return preferences;
@@ -378,6 +425,19 @@ export function savePreferences(preferences: Preferences): void {
       QUICK_OPEN_IMAGES_STORAGE_KEY,
       String(preferences.quickOpenIncludeImages),
     );
+    window.localStorage.setItem(
+      MINIMAP_ENABLED_STORAGE_KEY,
+      String(preferences.minimapEnabled),
+    );
+    window.localStorage.setItem(
+      MINIMAP_SCALE_STORAGE_KEY,
+      String(preferences.minimapScale),
+    );
+    window.localStorage.setItem(
+      MINIMAP_MAX_COLUMN_STORAGE_KEY,
+      String(preferences.minimapMaxColumn),
+    );
+    window.localStorage.setItem(MINIMAP_DEFAULTS_STORAGE_KEY, '1');
     window.localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_SIZE_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_FONT_FAMILY_STORAGE_KEY);

@@ -4,6 +4,14 @@ import {
   MIN_AUTO_SAVE_DELAY,
   type Preferences,
 } from './preferences';
+import {
+  MINIMAP_DEFAULT_MAX_COLUMN,
+  MINIMAP_DEFAULT_SCALE,
+  MINIMAP_MAX_MAX_COLUMN,
+  MINIMAP_MAX_SCALE,
+  MINIMAP_MIN_MAX_COLUMN,
+  MINIMAP_MIN_SCALE,
+} from './minimap';
 import { FONTS, fontLabel } from './fonts';
 import {
   DEFAULT_CODE_THEME,
@@ -381,6 +389,78 @@ function settingTemplates(): SettingTemplate[] {
       preference: 'sourceHighlight',
       hint: {
         text: t('settings.sourceHighlight.hint'),
+      },
+    },
+    {
+      id: 'editor.minimapEnabled',
+      category: 'editor',
+      title: 'Editor: Minimap',
+      description: t('settings.minimapEnabled.description'),
+      controlType: 'checkbox',
+      defaultValue: true,
+      keywords: [
+        '缩略图',
+        '小地图',
+        'minimap',
+        'overview',
+        'outline',
+        'navigation',
+      ],
+      preference: 'minimapEnabled',
+      hint: {
+        text: t('settings.minimapEnabled.hint'),
+      },
+    },
+    {
+      id: 'editor.minimapScale',
+      category: 'editor',
+      title: 'Editor: Minimap Scale',
+      description: t('settings.minimapScale.description'),
+      controlType: 'select',
+      defaultValue: MINIMAP_DEFAULT_SCALE,
+      options: [
+        { label: '1×', value: String(MINIMAP_MIN_SCALE) },
+        { label: '2×', value: '2' },
+        { label: '3×', value: String(MINIMAP_MAX_SCALE) },
+      ],
+      keywords: [
+        '缩略图',
+        '小地图',
+        '缩放',
+        '比例',
+        '密度',
+        'minimap',
+        'scale',
+        'zoom',
+      ],
+      preference: 'minimapScale',
+      hint: {
+        text: t('settings.minimapScale.hint'),
+      },
+    },
+    {
+      id: 'editor.minimapMaxColumn',
+      category: 'editor',
+      title: 'Editor: Minimap Max Columns',
+      description: t('settings.minimapMaxColumn.description'),
+      controlType: 'input',
+      defaultValue: MINIMAP_DEFAULT_MAX_COLUMN,
+      min: MINIMAP_MIN_MAX_COLUMN,
+      max: MINIMAP_MAX_MAX_COLUMN,
+      step: 10,
+      keywords: [
+        '缩略图',
+        '小地图',
+        '宽度',
+        '列数',
+        'minimap',
+        'width',
+        'columns',
+        'maxcolumn',
+      ],
+      preference: 'minimapMaxColumn',
+      hint: {
+        text: t('settings.minimapMaxColumn.hint'),
       },
     },
     {

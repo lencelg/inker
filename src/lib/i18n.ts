@@ -342,6 +342,14 @@ const zh = {
   'settings.quickOpenImages.hint': '关闭时只显示 Markdown 笔记。',
   'settings.sourceHighlight.description': '源码模式代码块高亮。',
   'settings.sourceHighlight.hint': '关闭后代码块显示为单色。',
+  'settings.minimapEnabled.description': '在编辑器右侧显示文档缩略图。',
+  'settings.minimapEnabled.hint': '缩略图可点击跳转，并随滚动同步。',
+  'settings.minimapScale.description': '缩略图字符大小与行密度。',
+  'settings.minimapScale.hint':
+    '1× 更紧凑、显示更多行；3× 更清晰但占用更多宽度。',
+  'settings.minimapMaxColumn.description': '缩略图最多显示的列数。',
+  'settings.minimapMaxColumn.hint':
+    '实际宽度约为列数 × 缩放比例；窄窗口下会自动收缩。',
   'settings.codeHighlight.description': '预览代码块高亮。',
   'settings.codeHighlight.hint': '关闭后使用纯文本样式。',
   'settings.codeTheme.description': '代码块配色主题（预览与源码）。',
@@ -755,6 +763,18 @@ const en: Record<TranslationKey, string> = {
     'Code block highlighting in source mode.',
   'settings.sourceHighlight.hint':
     'Code blocks use a single color when off.',
+  'settings.minimapEnabled.description':
+    'Show a document overview on the right side of the editor.',
+  'settings.minimapEnabled.hint':
+    'Click the minimap to jump; it follows the viewport while scrolling.',
+  'settings.minimapScale.description':
+    'Character size and line density of the minimap.',
+  'settings.minimapScale.hint':
+    '1x is denser and shows more lines; 3x is clearer but wider.',
+  'settings.minimapMaxColumn.description':
+    'Maximum number of columns rendered in the minimap.',
+  'settings.minimapMaxColumn.hint':
+    'Width is roughly columns x scale and shrinks automatically in narrow panes.',
   'settings.codeHighlight.description':
     'Code block highlighting in previews.',
   'settings.codeHighlight.hint': 'Uses plain text styling when off.',

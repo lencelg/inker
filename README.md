@@ -83,7 +83,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - **多光标**：源码编辑器与实时预览均支持多光标编辑。
 - **Markdown 增强**：任务列表、表格、KaTeX 数学公式、Mermaid 图表、清洗后的原始 HTML。
 - **代码高亮**：源码代码块与预览代码块独立开关，使用 Shiki/TextMate 和 VS Code 代码主题，可导入 VS Code 主题 JSON 或旧版 highlight.js CSS。
-- **目录与导航**：标题面包屑、源码缩略图、`Markdown: Create Table Of Contents` 命令一键插入目录。
+- **目录与导航**：标题面包屑、源码缩略图（可开关，支持 1×/2×/3× 缩放与最大列数设置，按设备像素渲染并只绘制可见区域）、`Markdown: Create Table Of Contents` 命令一键插入目录。
 - **专注写作**：Zen 模式隐藏多余界面元素；底部状态栏显示光标位置、编辑模式、Vim 模式和保存状态。
 
 ### 文件与工作区

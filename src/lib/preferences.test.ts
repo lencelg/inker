@@ -11,6 +11,9 @@ import {
   IMAGE_FORMAT_STORAGE_KEY,
   IMAGE_QUALITY_STORAGE_KEY,
   IMAGE_TEMPLATE_STORAGE_KEY,
+  MINIMAP_ENABLED_STORAGE_KEY,
+  MINIMAP_MAX_COLUMN_STORAGE_KEY,
+  MINIMAP_SCALE_STORAGE_KEY,
   QUICK_OPEN_IMAGES_STORAGE_KEY,
   RESTORE_SESSION_STORAGE_KEY,
   VIM_MAPPINGS_STORAGE_KEY,
@@ -258,5 +261,71 @@ describe('preferences', () => {
     expect(stored.exportEmbedImages).toBe(false);
     expect(stored.exportOpenAfter).toBe(true);
     expect(stored.exportIncludeToc).toBe(false);
+  });
+
+  it('defaults and clamps minimap preferences', () => {
+    const defaults = normalizePreferences({});
+    expect(defaults.minimapEnabled).toBe(true);
+    expect(defaults.minimapScale).toBe(1);
+    expect(defaults.minimapMaxColumn).toBe(120);
+
+    expect(
+      normalizePreferences({ minimapEnabled: false }).minimapEnabled,
+    ).toBe(false);
+    expect(normalizePreferences({ minimapScale: 0 }).minimapScale).toBe(1);
+    expect(normalizePreferences({ minimapScale: 9 }).minimapScale).toBe(3);
+    expect(
+      normalizePreferences({ minimapScale: '3' }).minimapScale,
+    ).toBe(3);
+    expect(
+      normalizePreferences({ minimapMaxColumn: 1 }).minimapMaxColumn,
+    ).toBe(20);
+    expect(
+      normalizePreferences({ minimapMaxColumn: 9999 }).minimapMaxColumn,
+    ).toBe(200);
+  });
+
+  it('persists minimap preferences', () => {
+    savePreferences(
+      normalizePreferences({
+        minimapEnabled: false,
+        minimapScale: 3,
+        minimapMaxColumn: 120,
+      }),
+    );
+
+    expect(window.localStorage.getItem(MINIMAP_ENABLED_STORAGE_KEY)).toBe(
+      'false',
+    );
+    expect(window.localStorage.getItem(MINIMAP_SCALE_STORAGE_KEY)).toBe('3');
+    expect(
+      window.localStorage.getItem(MINIMAP_MAX_COLUMN_STORAGE_KEY),
+    ).toBe('120');
+
+    const stored = readPreferences();
+    expect(stored.minimapEnabled).toBe(false);
+    expect(stored.minimapScale).toBe(3);
+    expect(stored.minimapMaxColumn).toBe(120);
+  });
+
+  it('migrates the intermediate 2x/60 minimap defaults once', () => {
+    window.localStorage.setItem(MINIMAP_SCALE_STORAGE_KEY, '2');
+    window.localStorage.setItem(MINIMAP_MAX_COLUMN_STORAGE_KEY, '60');
+
+    const migrated = readPreferences();
+    expect(migrated.minimapScale).toBe(1);
+    expect(migrated.minimapMaxColumn).toBe(120);
+    expect(
+      window.localStorage.getItem(MINIMAP_SCALE_STORAGE_KEY),
+    ).toBeNull();
+    expect(
+      window.localStorage.getItem(MINIMAP_MAX_COLUMN_STORAGE_KEY),
+    ).toBeNull();
+
+    window.localStorage.setItem(MINIMAP_SCALE_STORAGE_KEY, '2');
+    window.localStorage.setItem(MINIMAP_MAX_COLUMN_STORAGE_KEY, '60');
+    const explicit = readPreferences();
+    expect(explicit.minimapScale).toBe(2);
+    expect(explicit.minimapMaxColumn).toBe(60);
   });
 });
