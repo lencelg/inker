@@ -1,0 +1,115 @@
+diff --git a/node_modules/@replit/codemirror-vim-core/vim.js b/node_modules/@replit/codemirror-vim-core/vim.js
+--- a/node_modules/@replit/codemirror-vim-core/vim.js
++++ b/node_modules/@replit/codemirror-vim-core/vim.js
+@@ -995,9 +995,24 @@
+         return match.command;
+       }
+ 
++      function executeMatch(command, keys) {
++        vim.expectLiteralNext = false;
++        vim.inputState.keyBuffer.length = 0;
++        var countMatcher = /^(\d*)(.*)$/.exec(keys);
++        if (countMatcher && countMatcher[1] && countMatcher[1] != '0') {
++          vim.inputState.pushRepeatDigit(countMatcher[1]);
++        }
++        commandDispatcher.processCommand(cm, vim, command);
++      }
++
+       function handleKeyNonInsertMode() {
+         if (handleMacroRecording() || handleEsc()) { return true; }
+ 
++        if (vim.inputState.pendingTimeout) {
++          window.clearTimeout(vim.inputState.pendingTimeout);
++          vim.inputState.pendingTimeout = null;
++        }
++
+         vim.inputState.keyBuffer.push(key);
+         var keys = vim.inputState.keyBuffer.join("");
+         if (/^[1-9]\d*$/.test(keys)) { return true; }
+@@ -1012,14 +1027,51 @@
+           mainKey = vim.inputState.operatorShortcut;
+         }
+         var match = commandDispatcher.matchCommand(mainKey, defaultKeymap, vim.inputState, context);
+-        if (match.type == 'none') { clearInputState(cm); return false; }
++        if (match.type == 'none') {
++          var deferred = vim.inputState.deferredCommand;
++          if (deferred) {
++            vim.inputState.deferredCommand = null;
++            vim.inputState.keyBuffer.length = 0;
++            executeMatch(deferred.command, deferred.keys);
++            return handleKeyNonInsertMode();
++          }
++          clearInputState(cm); return false;
++        }
+         else if (match.type == 'partial') {
++          vim.inputState.deferredCommand = null;
+           if (match.expectLiteralNext) vim.expectLiteralNext = true;
+           return true;
+         }
+         else if (match.type == 'clear') { clearInputState(cm); return true; }
+-        vim.expectLiteralNext = false;
+ 
++        vim.inputState.deferredCommand = null;
++        if (match.hasPartial && getOption('timeoutlen') > 0) {
++          var deferredCommand = match.command;
++          var deferredKeys = keys;
++          vim.inputState.deferredCommand = { command: deferredCommand, keys: deferredKeys };
++          vim.inputState.pendingTimeout = window.setTimeout(function() {
++            vim.inputState.pendingTimeout = null;
++            var pending = vim.inputState.deferredCommand;
++            vim.inputState.deferredCommand = null;
++            if (!pending || cm.state.vim !== vim) return;
++            cm.operation(function() {
++              cm.curOp.isVimOp = true;
++              try {
++                executeMatch(pending.command, pending.keys);
++              } catch (e) {
++                cm.state.vim = undefined;
++                maybeInitVimState(cm);
++                if (!vimApi.suppressErrorLogging) {
++                  console['log'](e);
++                }
++                throw e;
++              }
++            });
++          }, getOption('timeoutlen'));
++          return true;
++        }
++
++        vim.expectLiteralNext = false;
+         vim.inputState.keyBuffer.length = 0;
+         keysMatcher = /^(\d*)(.*)$/.exec(keys);
+         if (keysMatcher && keysMatcher[1] && keysMatcher[1] != '0') {
+@@ -1359,7 +1411,15 @@
+ 
+   /** @arg {CodeMirrorV} cm  @arg {string} [reason] */
+   function clearInputState(cm, reason) {
++    var previousState = cm.state.vim.inputState;
+     cm.state.vim.inputState = new InputState();
++    if (previousState) {
++      if (previousState.pendingTimeout) {
++        window.clearTimeout(previousState.pendingTimeout);
++        previousState.pendingTimeout = null;
++      }
++      previousState.deferredCommand = null;
++    }
+     cm.state.vim.expectLiteralNext = false;
+     CM.signal(cm, 'vim-command-done', reason);
+   }
+@@ -1613,7 +1673,7 @@
+         if (!character || character.length > 1) return {type: 'clear'};
+         inputState.selectedCharacter = character;
+       }
+-      return {type: 'full', command: bestMatch};
++      return {type: 'full', command: bestMatch, hasPartial: matches.partial.length > 0};
+     },
+     /**
+      * @arg {CodeMirrorV} cm
+@@ -6757,6 +6817,7 @@
+   // The timeout in milliseconds for the two-character ESC keymap should be
+   // adjusted according to your typing speed to prevent false positives.
+   defineOption('insertModeEscKeysTimeout', 200, 'number');
++  defineOption('timeoutlen', 1000, 'number');
+ 
+ 
+   /**

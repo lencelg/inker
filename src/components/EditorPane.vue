@@ -63,7 +63,11 @@ import {
 } from '../lib/vimFolding';
 import {
   addSurroundChanges,
+  deleteSurroundChanges,
+  findSurroundPair,
+  replaceSurroundChanges,
   surroundPair,
+  type SurroundPair,
   type TextRange,
 } from '../lib/vimSurround';
 import type { FileEntry } from '../types';
@@ -124,7 +128,11 @@ const notificationWrapped = new WeakSet<object>();
 let appliedVimMappings: VimMapping[] = [];
 let spaceLeaderActive = false;
 
-type SurroundPending = { kind: 'add'; ranges: TextRange[] };
+type SurroundPending =
+  | { kind: 'add'; ranges: TextRange[] }
+  | { kind: 'change'; stage: 'old' }
+  | { kind: 'change'; stage: 'new'; pair: SurroundPair }
+  | { kind: 'delete' };
 
 let surroundPending: SurroundPending | null = null;
 let vimSurroundRegistered = false;
@@ -972,7 +980,7 @@ function setupVimSurroundCommands(): void {
   const offsetFor = (target: EditorView, pos: { line: number; ch: number }) =>
     target.state.doc.line(pos.line + 1).from + pos.ch;
 
-  Vim.defineOperator('inkerSurroundAdd', (cm, _args, ranges) => {
+  Vim.defineOperator('inkerSurroundAdd', (cm, _args, ranges, _oldAnchor, newHead) => {
     const target = targetView(cm);
     if (!target) return;
     surroundPending = {
@@ -982,6 +990,37 @@ function setupVimSurroundCommands(): void {
         to: offsetFor(target, range.head),
       })),
     };
+    const end = ranges[ranges.length - 1];
+    const cursor =
+      (end ? offsetFor(target, newHead ?? end.head) : 0) || 0;
+    target.dispatch({ selection: { anchor: cursor } });
+    target.focus();
+  });
+
+  Vim.defineAction('inkerSurroundLine', (cm) => {
+    const target = targetView(cm);
+    if (!target) return;
+    const line = target.state.doc.lineAt(
+      target.state.selection.main.head,
+    );
+    surroundPending = {
+      kind: 'add',
+      ranges: [{ from: line.from, to: line.to }],
+    };
+    target.focus();
+  });
+
+  Vim.defineAction('inkerSurroundChange', (cm) => {
+    const target = targetView(cm);
+    if (!target) return;
+    surroundPending = { kind: 'change', stage: 'old' };
+    target.focus();
+  });
+
+  Vim.defineAction('inkerSurroundDelete', (cm) => {
+    const target = targetView(cm);
+    if (!target) return;
+    surroundPending = { kind: 'delete' };
     target.focus();
   });
 
@@ -997,6 +1036,18 @@ function setupVimSurroundCommands(): void {
     target.focus();
   });
 
+  Vim.mapCommand('ys', 'operator', 'inkerSurroundAdd', {}, {
+    context: 'normal',
+  });
+  Vim.mapCommand('yss', 'action', 'inkerSurroundLine', {}, {
+    context: 'normal',
+  });
+  Vim.mapCommand('cs', 'action', 'inkerSurroundChange', {}, {
+    context: 'normal',
+  });
+  Vim.mapCommand('ds', 'action', 'inkerSurroundDelete', {}, {
+    context: 'normal',
+  });
   Vim.mapCommand('gs', 'operator', 'inkerSurroundAdd', {}, {
     context: 'normal',
   });
@@ -1427,12 +1478,55 @@ function applySurroundChar(
   surroundPending = null;
   if (!pending) return;
 
-  const spec = surroundPair(character);
-  if (spec) {
-    target.dispatch({
-      changes: addSurroundChanges(pending.ranges, spec),
-    });
-    target.focus();
+  if (pending.kind === 'add') {
+    const spec = surroundPair(character);
+    if (spec) {
+      const first = pending.ranges[0];
+      const anchor =
+        Math.min(first.from, first.to) + spec.open.length;
+      target.dispatch({
+        changes: addSurroundChanges(pending.ranges, spec),
+        selection: { anchor },
+      });
+      target.focus();
+    }
+    return;
+  }
+
+  if (pending.kind === 'delete') {
+    const pair = findSurroundPair(
+      target.state.doc.toString(),
+      target.state.selection.main.head,
+      character,
+    );
+    if (pair) {
+      target.dispatch({ changes: deleteSurroundChanges(pair) });
+      target.focus();
+    }
+    return;
+  }
+
+  if (pending.kind === 'change' && pending.stage === 'old') {
+    const pair = findSurroundPair(
+      target.state.doc.toString(),
+      target.state.selection.main.head,
+      character,
+    );
+    if (pair) {
+      surroundPending = { kind: 'change', stage: 'new', pair };
+      target.focus();
+    }
+    return;
+  }
+
+  if (pending.kind === 'change' && pending.stage === 'new') {
+    const spec = surroundPair(character);
+    if (spec) {
+      target.dispatch({
+        changes: replaceSurroundChanges(pending.pair, spec),
+      });
+      target.focus();
+    }
   }
 }
 

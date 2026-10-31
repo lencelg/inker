@@ -418,6 +418,102 @@ describe('EditorPane', () => {
     wrapper.unmount();
   });
 
+  it('surrounds with the standard ysiw and yss keys', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: 'hello world',
+    });
+    await nextTick();
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+
+    content.dispatchEvent(keydown('y', 'KeyY', 89));
+    content.dispatchEvent(keydown('s', 'KeyS', 83));
+    content.dispatchEvent(keydown('i', 'KeyI', 73));
+    content.dispatchEvent(keydown('w', 'KeyW', 87));
+    content.dispatchEvent(keydown('(', '(', 57));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    expect(wrapper.find('.cm-content').text()).toBe('(hello) world');
+    wrapper.unmount();
+  });
+
+  it('surrounds the current line with yss', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: 'hello',
+    });
+    await nextTick();
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+
+    content.dispatchEvent(keydown('y', 'KeyY', 89));
+    content.dispatchEvent(keydown('s', 'KeyS', 83));
+    content.dispatchEvent(keydown('s', 'KeyS', 83));
+    content.dispatchEvent(keydown('*', '*', 56));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    expect(wrapper.find('.cm-content').text()).toBe('*hello*');
+    wrapper.unmount();
+  });
+
+  it('deletes and changes surround pairs', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: '(hello) world',
+    });
+    await nextTick();
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+
+    content.dispatchEvent(keydown('d', 'KeyD', 68));
+    content.dispatchEvent(keydown('s', 'KeyS', 83));
+    content.dispatchEvent(keydown('(', '(', 57));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    expect(wrapper.find('.cm-content').text()).toBe('hello world');
+
+    content.dispatchEvent(keydown('y', 'KeyY', 89));
+    content.dispatchEvent(keydown('s', 'KeyS', 83));
+    content.dispatchEvent(keydown('i', 'KeyI', 73));
+    content.dispatchEvent(keydown('w', 'KeyW', 87));
+    content.dispatchEvent(keydown('(', '(', 57));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    expect(wrapper.find('.cm-content').text()).toBe('(hello) world');
+
+    content.dispatchEvent(keydown('c', 'KeyC', 67));
+    content.dispatchEvent(keydown('s', 'KeyS', 83));
+    content.dispatchEvent(keydown('(', '(', 57));
+    content.dispatchEvent(keydown('[', '[', 219));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    expect(wrapper.find('.cm-content').text()).toBe('[hello] world');
+    wrapper.unmount();
+  });
+
+  it('keeps operator motions working with the mapping timeout', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: 'hello world',
+    });
+    await nextTick();
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+
+    content.dispatchEvent(keydown('d', 'KeyD', 68));
+    content.dispatchEvent(keydown('w', 'KeyW', 87));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+    expect(wrapper.find('.cm-content').text()).toBe('world');
+
+    wrapper.unmount();
+  });
+
   it('emits Vim macro recording state', async () => {
     prepareEditorDom();
     const wrapper = mountEditor({ vimEnabled: true });

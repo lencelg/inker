@@ -10,7 +10,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
@@ -48,6 +49,7 @@
     "@vue/test-utils": "^2.5.1",
     "jsdom": "^30.1.3",
     "jszip": "^3.10.2",
+    "patch-package": "^8.0.1",
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",
