@@ -47,6 +47,13 @@ import {
 } from '../lib/imagePaste';
 import { formatVimMode } from '../lib/vimMode';
 import { completeVimCommandLine } from '../lib/vimCommandLineCompletion';
+import {
+  closeAllVimFolds,
+  closeVimFold,
+  openAllVimFolds,
+  openVimFold,
+  toggleVimFold,
+} from '../lib/vimFolding';
 import type { FileEntry } from '../types';
 import {
   parseVimMappings,
@@ -803,6 +810,53 @@ const multiCursorMouse = EditorView.domEventHandlers({
   },
 });
 
+let vimFoldCommandsRegistered = false;
+
+function setupVimFoldCommands(): void {
+  if (vimFoldCommandsRegistered) return;
+
+  const targetView = (cm: unknown): EditorView | null => {
+    const candidate = (cm as { cm6?: EditorView } | null)?.cm6;
+    return candidate ?? view;
+  };
+
+  Vim.defineAction('inkerFoldToggle', (cm) => {
+    const target = targetView(cm);
+    if (target) toggleVimFold(target);
+  });
+  Vim.defineAction('inkerFoldClose', (cm) => {
+    const target = targetView(cm);
+    if (target) closeVimFold(target);
+  });
+  Vim.defineAction('inkerFoldOpen', (cm) => {
+    const target = targetView(cm);
+    if (target) openVimFold(target);
+  });
+  Vim.defineAction('inkerFoldCloseAll', (cm) => {
+    const target = targetView(cm);
+    if (target) closeAllVimFolds(target);
+  });
+  Vim.defineAction('inkerFoldOpenAll', (cm) => {
+    const target = targetView(cm);
+    if (target) openAllVimFolds(target);
+  });
+
+  const mappings: ReadonlyArray<[string, string]> = [
+    ['za', 'inkerFoldToggle'],
+    ['zc', 'inkerFoldClose'],
+    ['zo', 'inkerFoldOpen'],
+    ['zC', 'inkerFoldClose'],
+    ['zO', 'inkerFoldOpen'],
+    ['zM', 'inkerFoldCloseAll'],
+    ['zR', 'inkerFoldOpenAll'],
+  ];
+  for (const [keys, action] of mappings) {
+    Vim.mapCommand(keys, 'action', action, {}, { context: 'normal' });
+  }
+
+  vimFoldCommandsRegistered = true;
+}
+
 function setupVimCommands(): void {
   Vim.defineEx('write', 'w', () => {
     emit('saveRequest');
@@ -816,6 +870,7 @@ function setupVimCommands(): void {
   Vim.defineAction('inkerSave', () => {
     emit('saveRequest');
   });
+  setupVimFoldCommands();
   applyVimMappings();
 }
 

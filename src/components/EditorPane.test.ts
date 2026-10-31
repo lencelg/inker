@@ -213,6 +213,25 @@ describe('EditorPane', () => {
     wrapper.unmount();
   });
 
+  it('folds Markdown headings with za in Vim normal mode', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: '# A\nbody\n\n# B\nend',
+    });
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+    content.dispatchEvent(keydown('z', 'KeyZ', 90));
+    content.dispatchEvent(keydown('a', 'KeyA', 65));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    expect(wrapper.find('.cm-foldPlaceholder').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('completes Ex commands with Tab in the Vim command line', async () => {
     prepareEditorDom();
     const wrapper = mountEditor({ vimEnabled: true });
