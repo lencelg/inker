@@ -2977,6 +2977,8 @@ watch(
               :source-highlight="preferences.sourceHighlight"
               :request-image-save="requestImageSave"
               :vim-mappings="preferences.vimMappings"
+              :note-path="activeTab?.path ?? ''"
+              :files="entries"
               @change="handleContentChange"
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"

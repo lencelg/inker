@@ -149,6 +149,7 @@ tempfile                     测试临时目录
 - Vim 支持 Normal / Insert / Visual / V-Line / V-Block 等模式。
 - 窗口或编辑器获得焦点时会同步系统剪贴板文本到 Vim 的 unnamed register，Normal 模式 `p` / `P` 可直接粘贴；内部 yank/delete 寄存器仍可用。
 - Vim 模式状态和 `:` 命令输入行均整合在应用底部状态栏，不再额外占用编辑器行。
+- Vim 命令行支持 `Tab` / `Shift+Tab` 补全：Ex 命令名和当前笔记目录下的文件路径；单候选直接填入，多候选循环，并保留光标后的文本。
 - 支持 `:w` 保存。
 - 支持 `:pasteimage`（别名 `:pa`）从系统剪贴板粘贴图片。
 - 支持自定义 Vim 键位映射（设置“文本编辑器 → Vim Custom Mappings”），默认 `normal <Space>p pasteimage`；可绑定 `pasteimage` / `save`，支持 normal / visual / insert 模式。以 `<Space>` 开头的映射会临时占用空格键；清空映射后恢复 Vim 默认的空格右移。

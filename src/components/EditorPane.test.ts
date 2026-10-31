@@ -62,6 +62,8 @@ function mountEditor(
       requestImageSave: options.requestImageSave ?? (async () => null),
       vimMappings:
         options.vimMappings ?? 'normal <Space>p pasteimage',
+      notePath: 'note.md',
+      files: [],
     },
   });
 }
@@ -208,6 +210,45 @@ describe('EditorPane', () => {
     expect(clipboardTextMocks.readClipboardText).not.toHaveBeenCalled();
     expect(clipboardMocks.readClipboardImageFile).not.toHaveBeenCalled();
 
+    wrapper.unmount();
+  });
+
+  it('completes Ex commands with Tab in the Vim command line', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({ vimEnabled: true });
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+    const colon = new KeyboardEvent('keydown', {
+      key: ':',
+      code: 'Semicolon',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(colon, 'keyCode', { get: () => 186 });
+    Object.defineProperty(colon, 'which', { get: () => 186 });
+    content.dispatchEvent(colon);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    const input = wrapper.find('.cm-vim-panel input')
+      .element as HTMLInputElement;
+    expect(input).toBeInstanceOf(HTMLInputElement);
+
+    input.value = 'w';
+    input.setSelectionRange(1, 1);
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Tab',
+        code: 'Tab',
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(input.value).toBe('write');
     wrapper.unmount();
   });
 

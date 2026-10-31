@@ -46,6 +46,8 @@ import {
   type ImageSaveHandler,
 } from '../lib/imagePaste';
 import { formatVimMode } from '../lib/vimMode';
+import { completeVimCommandLine } from '../lib/vimCommandLineCompletion';
+import type { FileEntry } from '../types';
 import {
   parseVimMappings,
   type VimMapping,
@@ -60,6 +62,8 @@ const props = defineProps<{
   sourceHighlight: boolean;
   requestImageSave: ImageSaveHandler;
   vimMappings: string;
+  notePath: string;
+  files: FileEntry[];
 }>();
 
 const emit = defineEmits<{
@@ -924,6 +928,7 @@ onMounted(() => {
   resizeObserver.observe(scrollElement);
   view.dom.addEventListener('focusin', syncVimClipboardRegister);
   window.addEventListener('focus', syncVimClipboardRegister);
+  document.addEventListener('keydown', handleVimPromptTab, true);
   syncVimClipboardRegister();
   view.focus();
   scheduleScrollSync();
@@ -1044,6 +1049,7 @@ onBeforeUnmount(() => {
   cancelImagePrompt = null;
   view?.dom.removeEventListener('focusin', syncVimClipboardRegister);
   window.removeEventListener('focus', syncVimClipboardRegister);
+  document.removeEventListener('keydown', handleVimPromptTab, true);
   clearVimMappings();
   cancelPendingRestoreScroll();
   view?.destroy();
@@ -1138,6 +1144,30 @@ function restoreState(state: EditorViewState): void {
  * p / P can paste text copied outside the editor. Internal yank/delete
  * registers remain in effect until the next focus sync.
  */
+function handleVimPromptTab(event: KeyboardEvent): void {
+  if (event.key !== 'Tab' || !props.vimEnabled) return;
+  const cm = view ? getCM(view) : null;
+  const dialog = (
+    cm?.state as { dialog?: HTMLElement | null } | undefined
+  )?.dialog;
+  if (!dialog) return;
+
+  const input = dialog.querySelector('input');
+  if (!(input instanceof HTMLInputElement)) return;
+  if (document.activeElement !== input) return;
+
+  const prefix = dialog.querySelector('span')?.textContent?.trim();
+  if (prefix !== ':') return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  completeVimCommandLine(
+    input,
+    { notePath: props.notePath, files: props.files },
+    !event.shiftKey,
+  );
+}
+
 function syncVimClipboardRegister(): void {
   if (!view || !props.vimEnabled) return;
   const target = view;

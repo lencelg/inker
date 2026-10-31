@@ -79,7 +79,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ### 写作与编辑
 
 - **多种编辑模式**：源码编辑、实时预览（WYSIWYG）、纯预览、侧边预览；侧边预览与源码滚动位置双向同步。
-- **Vim 模式**：可选的 Vim 键位，支持自定义映射，例如在 Normal 模式用 `<Space>p` 粘贴图片；Normal 模式 `p` / `P` 可直接粘贴系统剪贴板文本。
+- **Vim 模式**：可选的 Vim 键位，支持自定义映射，例如在 Normal 模式用 `<Space>p` 粘贴图片；Normal 模式 `p` / `P` 可直接粘贴系统剪贴板文本；命令模式支持 Tab 补全 Ex 命令和文件路径。
 - **多光标**：源码编辑器与实时预览均支持多光标编辑。
 - **Markdown 增强**：任务列表、表格、KaTeX 数学公式、Mermaid 图表、清洗后的原始 HTML。
 - **代码高亮**：源码代码块与预览代码块独立开关，使用 Shiki/TextMate 和 VS Code 代码主题，可导入 VS Code 主题 JSON 或旧版 highlight.js CSS。
