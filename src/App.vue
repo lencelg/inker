@@ -31,17 +31,11 @@ import ConfirmDialog from './components/ConfirmDialog.vue';
 import EditorPane from './components/EditorPane.vue';
 import ExternalChangeDialog from './components/ExternalChangeDialog.vue';
 import EditorTabs from './components/EditorTabs.vue';
-import ExportPreviewDialog from './components/ExportPreviewDialog.vue';
-import HtmlExportDialog from './components/HtmlExportDialog.vue';
-import ImagePane from './components/ImagePane.vue';
 import ImagePasteDialog from './components/ImagePasteDialog.vue';
 import InkerMark from './components/InkerMark.vue';
 import NoteSidebar from './components/NoteSidebar.vue';
-import PreviewPane from './components/PreviewPane.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import QuickPalette from './components/QuickPalette.vue';
-import SearchPanel from './components/SearchPanel.vue';
-import SettingsOverlay from './components/SettingsOverlay.vue';
 import StatusBar from './components/StatusBar.vue';
 import {
   blobToBase64,
@@ -128,6 +122,24 @@ import type { FileEntry, NotesState, SearchMatch } from './types';
 
 const WysiwygPane = defineAsyncComponent(
   () => import('./components/WysiwygPane.vue'),
+);
+const PreviewPane = defineAsyncComponent(
+  () => import('./components/PreviewPane.vue'),
+);
+const ExportPreviewDialog = defineAsyncComponent(
+  () => import('./components/ExportPreviewDialog.vue'),
+);
+const HtmlExportDialog = defineAsyncComponent(
+  () => import('./components/HtmlExportDialog.vue'),
+);
+const SettingsOverlay = defineAsyncComponent(
+  () => import('./components/SettingsOverlay.vue'),
+);
+const SearchPanel = defineAsyncComponent(
+  () => import('./components/SearchPanel.vue'),
+);
+const ImagePane = defineAsyncComponent(
+  () => import('./components/ImagePane.vue'),
 );
 
 interface NoteTab {
@@ -3030,6 +3042,7 @@ watch(
               :layout-key="previewLayoutKey"
               :immersive="immersiveEnabled"
               :source-highlight="preferences.sourceHighlight"
+              :highlight-revision="highlightRevision"
               :request-image-save="requestImageSave"
               :vim-mappings="preferences.vimMappings"
               :minimap-enabled="preferences.minimapEnabled"

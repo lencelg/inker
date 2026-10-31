@@ -1,15 +1,15 @@
 import { markRaw, ref } from 'vue';
 import { openPath } from '@tauri-apps/plugin-opener';
-import {
-  buildDocxBase64,
-  buildDocxPreviewDocument,
-  prepareExport,
-  saveDocxBase64,
-  saveHtmlExport,
-  type PreparedExport,
-  type SaveDocxOptions,
-} from '../lib/exportContent';
+import type { PreparedExport, SaveDocxOptions } from '../lib/exportContent';
 import type { Preferences } from '../lib/preferences';
+
+type ExportContentModule = typeof import('../lib/exportContent');
+let exportContentPromise: Promise<ExportContentModule> | null = null;
+
+function loadExportContent(): Promise<ExportContentModule> {
+  exportContentPromise ??= import('../lib/exportContent');
+  return exportContentPromise;
+}
 
 export interface ExportPreviewState {
   format: 'pdf' | 'docx';
@@ -64,6 +64,8 @@ export function useDocumentExport(options: DocumentExportOptions) {
     exporting.value = true;
     try {
       const preferences = options.getPreferences();
+      const { prepareExport, buildDocxPreviewDocument } =
+        await loadExportContent();
       const commonOptions = {
         codeHighlight: preferences.codeHighlight,
         codeTheme: preferences.codeTheme,
@@ -158,6 +160,8 @@ export function useDocumentExport(options: DocumentExportOptions) {
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => resolve());
       });
+      const { buildDocxBase64, saveDocxBase64 } =
+        await loadExportContent();
       const base64 =
         current.docxBase64 ??
         (await buildDocxBase64(
@@ -185,6 +189,7 @@ export function useDocumentExport(options: DocumentExportOptions) {
 
     exporting.value = true;
     try {
+      const { saveHtmlExport } = await loadExportContent();
       const prepared = embedded ? current.embedded : current.linked;
       const path = await saveHtmlExport(prepared, {
         defaultDirectory: embedded

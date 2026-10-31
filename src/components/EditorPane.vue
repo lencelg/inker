@@ -12,6 +12,7 @@ import {
   EditorSelection,
   EditorState,
   Prec,
+  StateEffect,
   type Range,
 } from '@codemirror/state';
 import {
@@ -101,11 +102,13 @@ const props = withDefaults(
     minimapEnabled?: boolean;
     minimapScale?: number;
     minimapMaxColumn?: number;
+    highlightRevision?: number;
   }>(),
   {
     minimapEnabled: true,
     minimapScale: MINIMAP_DEFAULT_SCALE,
     minimapMaxColumn: MINIMAP_DEFAULT_MAX_COLUMN,
+    highlightRevision: 0,
   },
 );
 
@@ -487,6 +490,8 @@ function buildCodeBlockDecorations(
   return Decoration.set(decorations, true);
 }
 
+const refreshCodeHighlight = StateEffect.define<null>();
+
 function codeBlockLinePlugin(className: string) {
   return ViewPlugin.fromClass(
     class {
@@ -497,7 +502,12 @@ function codeBlockLinePlugin(className: string) {
       }
 
       update(update: ViewUpdate): void {
-        if (update.docChanged || update.viewportChanged) {
+        const refresh = update.transactions.some((transaction) =>
+          transaction.effects.some((effect) =>
+            effect.is(refreshCodeHighlight),
+          ),
+        );
+        if (update.docChanged || update.viewportChanged || refresh) {
           this.decorations = buildCodeBlockDecorations(
             update.view,
             className,
@@ -1265,6 +1275,13 @@ watch(
         sourceHighlightExtension(enabled),
       ),
     });
+  },
+);
+
+watch(
+  () => props.highlightRevision,
+  () => {
+    view?.dispatch({ effects: refreshCodeHighlight.of(null) });
   },
 );
 

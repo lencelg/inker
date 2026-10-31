@@ -138,7 +138,9 @@ tempfile                     测试临时目录
 - 1000px 高缩略图在默认 1× 下约显示 400 行；2×/3× 分别约为 200/133 行。行距按缩放级别固定为 2.5 CSS px × scale，不随 DPR 改变，便于保持整页密度稳定。
 - 渲染使用设备像素 `ImageData` 缓冲并按 tile 一次性 `putImageData`，不再逐像素调用 Canvas API；缩略图内容层保持透明，由宿主背景合成；前景使用不透明 token 颜色。
 - 制表符按 4 列制表位推进；CJK 等全角字符占两列但只绘制一个字模，避免中文正文连成一片；非 ASCII 字符映射到 ASCII 字模，避免出现占位方框。普通正文使用 `--ink` 色调，与 VS Code 的默认前景一致。
-- 缩略图使用离屏 tile 缓存：滚动时只 blit 可见切片，不逐行重绘；文档变化只失效受影响的 tile。
+- 缩略图使用离屏 tile 缓存：滚动时只 blit 可见切片，不逐行重绘；文档变化只失效受影响的 tile；被淘汰的 tile Canvas 会进入复用池，减少滚动时的 DOM/GC 抖动。
+- 布局与字体度量在布局阶段缓存，普通滚动帧不再调用 `getComputedStyle`；行文本按 tile 构建时从文档按需读取，不再在布局时为整篇文档复制字符串。
+- 缩略图逻辑拆分为纯模块：`minimap.ts`（几何/字符度量）、`minimapPalette.ts`（颜色解析与语法配色）、`minimapGlyphs.ts`（字模采样）、`minimapLines.ts`（视觉行切分）。
 - 文本着色只按可见 tile 的行范围从语法树收集，长文档不再每次布局全量遍历语法树。
 - 监听 `matchMedia` 跟踪设备像素比变化，窗口在 1x / 1.5x / 2x 等显示器间移动时会重建字模与布局。
 - 内容不足一屏时保持顶部对齐，长文档则保持同样密度并在缩略图内部滚动。
@@ -587,7 +589,10 @@ inker/
 │       ├── headings.ts            # 标题提取与当前路径计算
 │       ├── lineEndings.ts         # LF / CRLF 处理
 │       ├── markdown.ts            # markdown-it 渲染配置
-│       ├── minimap.ts             # 缩略图尺寸、坐标与滚动映射
+│       ├── minimap.ts             # 缩略图尺寸、字符度量与滚动映射
+│       ├── minimapGlyphs.ts       # 字模采样与明暗主题软化
+│       ├── minimapLines.ts        # 视觉行切分
+│       ├── minimapPalette.ts      # 颜色解析、调色板与语法节点配色
 │       ├── editorMinimap.ts       # 双 Canvas 缩略图与滚动条控制器
 │       ├── mermaid.ts             # Mermaid 延迟加载
 │       ├── palette.ts             # 快速打开模糊匹配与文件项
@@ -791,6 +796,15 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 ```
 
 侧栏宽度通过 CSS 变量 `--sidebar-width` 动态控制。
+
+### 4.7 打包体积与内存策略
+
+- 重型界面按需加载：WYSIWYG、只读预览、设置浮层、搜索面板、图片查看器、导出预览/HTML 导出对话框和 `exportContent` 均使用动态 `import()`；未打开对应界面时不会解析 KaTeX、DOMPurify、分页和 DOCX 相关代码。快速打开保持同步加载，避免输入时序问题。
+- Shiki 延迟初始化：启动时不再加载 WASM、语法和主题；首次遇到代码块时初始化，并按围栏语言按需加载语法，加载完成后通过 `highlightRevision` 触发预览重渲染。
+- 字体资源：等宽字体只引入 latin 子集；`vite.config.ts` 中的构建插件从 CSS 移除 woff/ttf 回退，只保留 woff2。字体资源由约 2 MB 降至约 0.4 MB。
+- 运行期缓存上限：Shiki token 缓存 100 条、Mermaid SVG 缓存 40 条；缩略图 tile 缓存按视口高度计算（12–48 个），淘汰的 Canvas 进入复用池。
+- 缩略图行布局使用连续 `Float64Array` / `Uint16Array` 保存每行顶部位置与视觉行数，不再为每一行创建对象。
+- 实测构建产物：主入口 JS 1.60 MB → 1.11 MB（约 -31%），入口 CSS 166 KB → 80 KB，`dist/` 15 MB → 12.5 MB。
 
 ---
 
@@ -1064,7 +1078,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：72 个测试文件，451 个测试通过
+- 前端：75 个测试文件，463 个测试通过
 - Rust：26 个测试通过
 
 覆盖范围包括：
@@ -1120,6 +1134,9 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 主区域滚轮减速
 - 源码缩略图几何、字符缩放、宽度映射、制表符/全角列宽与字模索引
 - 源码缩略图像素绘制：制表符缩进、全角字符占位、开关与缩放/列宽变化
+- 缩略图配色解析（HEX/RGB/百分比、亮度判断）与语法节点映射
+- 缩略图字模采样（VS Code 线性覆盖率、明暗软化、无 Canvas 回退）
+- 缩略图视觉行切分（空格优先、短内容补空行）
 - 设置 Schema / 搜索
 - 设置面板交互
 - 自定义下拉框

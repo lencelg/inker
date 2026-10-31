@@ -27,10 +27,8 @@ export interface HighlightTheme {
 const MAX_CODE_CHARS = 200_000;
 const MAX_CODE_LINES = 5_000;
 const MAX_LINE_CHARS = 5_000;
-const MAX_CACHE_ENTRIES = 200;
-const CORE_LANGUAGES = ['javascript', 'typescript', 'json', 'markdown', 'shellscript'];
+const MAX_CACHE_ENTRIES = 100;
 
-export const highlightReady = ref(false);
 export const highlightRevision = ref(0);
 
 let highlighter: HighlighterCore | null = null;
@@ -47,10 +45,6 @@ function languageById(id: string) {
 
 function bumpRevision(): void {
   highlightRevision.value += 1;
-}
-
-export function getShiki(): HighlighterCore | null {
-  return highlighter;
 }
 
 export function highlightFenceHtml(
@@ -80,17 +74,14 @@ export async function initShiki(
       langs: [],
       engine: createOnigurumaEngine(import('shiki/wasm')),
     });
-    highlightReady.value = true;
+    initialized = true;
     bumpRevision();
 
     if (activeTheme) {
       void ensureShikiTheme(activeTheme);
     }
-    await Promise.all(CORE_LANGUAGES.map((id) => ensureShikiLanguage(id)));
-    initialized = true;
   })()
     .catch(() => {
-      highlightReady.value = false;
       initialized = false;
       highlighter = null;
     })
@@ -162,7 +153,7 @@ export async function ensureShikiTheme(
 
 export function useCodeTheme(theme: HighlightTheme): void {
   activeTheme = theme;
-  void ensureShikiTheme(theme);
+  if (highlighter) void ensureShikiTheme(theme);
 }
 
 function shouldSkip(code: string): boolean {
@@ -188,7 +179,11 @@ export function tokenizeSync(
   theme: HighlightTheme,
 ): CodeTokenLines | null {
   const language = resolveCodeLanguage(languageId) ?? languageById(languageId);
-  if (!language || !highlighter || shouldSkip(code)) return null;
+  if (!language || shouldSkip(code)) return null;
+  if (!highlighter) {
+    void initShiki();
+    return null;
+  }
 
   if (!highlighter.getLoadedLanguages().includes(language.id)) {
     void ensureShikiLanguage(language.id);

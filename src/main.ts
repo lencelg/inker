@@ -1,5 +1,4 @@
 import { createApp } from 'vue';
-import { initShiki } from './lib/shikiHighlighter';
 import inkerIconUrl from '../assets/icons/inker.svg?url';
 import './lib/font-assets';
 import 'katex/dist/katex.min.css';
@@ -12,5 +11,4 @@ favicon.type = 'image/svg+xml';
 favicon.href = inkerIconUrl;
 document.head.append(favicon);
 
-void initShiki();
 createApp(App).mount('#app');

@@ -1,8 +1,29 @@
 import { defineConfig } from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
+import type { Plugin } from 'vite';
+
+const LEGACY_FONT_SOURCE =
+  /,\s*url\([^)]*\.(?:woff|ttf)\)\s*format\((['"])(?:woff|truetype)\1\)/gi;
+
+/**
+ * Keep only woff2 font sources. Every target WebView (WebKitGTK, WebView2,
+ * WKWebView) supports woff2, and the woff/ttf fallbacks roughly triple the
+ * bundled font payload.
+ */
+function woff2OnlyFonts(): Plugin {
+  return {
+    name: 'inker-woff2-only-fonts',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.split('?')[0].endsWith('.css')) return null;
+      const next = code.replace(LEGACY_FONT_SOURCE, '');
+      return next === code ? null : { code: next, map: null };
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [woff2OnlyFonts(), vue()],
   clearScreen: false,
   test: {
     environment: 'jsdom',
