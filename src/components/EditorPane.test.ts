@@ -356,6 +356,31 @@ describe('EditorPane', () => {
     wrapper.unmount();
   });
 
+  it('renders a highlight on empty lines in Vim linewise mode', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: 'a\n\nb',
+    });
+    await nextTick();
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+
+    content.dispatchEvent(keydown('V', 'KeyV', 86));
+    content.dispatchEvent(keydown('j', 'KeyJ', 74));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    const selections = wrapper.findAll('.cm-vim-linewise-selection');
+    expect(
+      selections.some(
+        (item) =>
+          (item.element as HTMLElement).textContent === '\u00a0\u00a0',
+      ),
+    ).toBe(true);
+    wrapper.unmount();
+  });
+
   it('surrounds the current line in visual mode', async () => {
     prepareEditorDom();
     const wrapper = mountEditor({
