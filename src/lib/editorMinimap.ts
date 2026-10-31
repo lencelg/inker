@@ -157,6 +157,7 @@ export class EditorMinimap {
   private overlayContext: CanvasRenderingContext2D | null = null;
   private dpr = 1;
   private width = 0;
+  private requestedWidth = 0;
   private height = 0;
   private rowPitch = MINIMAP_ROW_PITCH;
   private virtualHeight = 0;
@@ -203,7 +204,8 @@ export class EditorMinimap {
     this.scrollbar = options.scrollbar;
     this.scrollbarThumb = options.scrollbarThumb;
 
-    this.host.style.width = `${minimapWidthPx(this.maxColumn)}px`;
+    this.requestedWidth = minimapWidthPx(this.maxColumn);
+    this.host.style.width = `${this.requestedWidth}px`;
     this.prepareGlyphs();
     this.scrollElement.addEventListener('scroll', this.onScroll, {
       passive: true,
@@ -226,6 +228,8 @@ export class EditorMinimap {
     this.scrollbar.addEventListener('keydown', this.onScrollbarKeyDown);
     this.scrollbar.addEventListener('focus', this.onScrollbarFocus);
     this.scrollbar.addEventListener('blur', this.onScrollbarBlur);
+
+    this.updateWidth();
 
     this.resizeObserver = new ResizeObserver(() => {
       if (this.resizeFrame) return;
@@ -419,6 +423,33 @@ export class EditorMinimap {
     this.schedule();
   }
 
+  private updateWidth(): void {
+    const parentWidth = this.host.parentElement?.clientWidth ?? 0;
+    const availableWidth =
+      parentWidth > 0
+        ? parentWidth
+        : this.scrollElement.clientWidth + this.host.clientWidth;
+    const measured = this.view.defaultCharacterWidth;
+    const fontSize = Number.parseFloat(
+      getComputedStyle(this.scrollElement).fontSize,
+    );
+    const characterWidth =
+      measured > 0
+        ? measured
+        : Number.isFinite(fontSize) && fontSize > 0
+          ? fontSize * 0.6
+          : 9;
+    const width = minimapWidthPx(this.maxColumn, {
+      availableWidth,
+      characterWidth,
+      scrollbarWidth: this.scrollbar.offsetWidth,
+      pixelRatio: window.devicePixelRatio || 1,
+    });
+    if (width === this.requestedWidth) return;
+    this.requestedWidth = width;
+    this.host.style.width = `${width}px`;
+  }
+
   private schedule(forceLayout = false): void {
     if (forceLayout) this.layoutDirty = true;
     if (this.frame) return;
@@ -430,6 +461,7 @@ export class EditorMinimap {
 
   private flush(): void {
     const lineCount = this.view.state.doc.lines;
+    this.updateWidth();
     const contentHeight = Math.max(1, this.view.contentHeight);
     const hostHeight = this.host.clientHeight;
     const hostWidth = this.host.clientWidth;

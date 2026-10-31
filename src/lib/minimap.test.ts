@@ -14,9 +14,56 @@ describe('minimap geometry', () => {
     expect(MINIMAP_SCALE).toBe(2);
     expect(MINIMAP_ROW_PITCH).toBe(4);
     expect(Math.floor(1000 / MINIMAP_ROW_PITCH)).toBe(250);
-    expect(minimapWidthPx(40)).toBe(72);
+    expect(minimapWidthPx(40)).toBe(40);
     expect(minimapWidthPx(120)).toBe(120);
-    expect(minimapWidthPx(400)).toBe(180);
+    expect(minimapWidthPx(400)).toBe(400);
+  });
+
+  it('shrinks the minimap like VS Code on narrow panes', () => {
+    expect(
+      minimapWidthPx(120, {
+        availableWidth: 1600,
+        characterWidth: 9,
+        scrollbarWidth: 12,
+      }),
+    ).toBe(120);
+    expect(
+      minimapWidthPx(120, {
+        availableWidth: 1000,
+        characterWidth: 9,
+        scrollbarWidth: 12,
+      }),
+    ).toBe(106);
+    expect(
+      minimapWidthPx(120, {
+        availableWidth: 700,
+        characterWidth: 9,
+        scrollbarWidth: 12,
+      }),
+    ).toBe(76);
+    expect(
+      minimapWidthPx(40, {
+        availableWidth: 1600,
+        characterWidth: 9,
+        scrollbarWidth: 12,
+      }),
+    ).toBe(40);
+    expect(
+      minimapWidthPx(120, {
+        availableWidth: 1600,
+        characterWidth: 9,
+        scrollbarWidth: 12,
+        pixelRatio: 2,
+      }),
+    ).toBe(120);
+    expect(
+      minimapWidthPx(120, {
+        availableWidth: 1600,
+        characterWidth: 9,
+        scrollbarWidth: 12,
+        pixelRatio: 1.5,
+      }),
+    ).toBe(80);
   });
 
   it('maps scroll percentages to editor scrollTop', () => {

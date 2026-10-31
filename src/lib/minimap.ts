@@ -1,4 +1,6 @@
 export const MINIMAP_MAX_COLUMN = 120;
+export const MINIMAP_COLUMN_WIDTH = 1;
+export const MINIMAP_GUTTER_WIDTH = 8;
 export const MINIMAP_SCALE = 2;
 export const MINIMAP_GLYPH_WIDTH = MINIMAP_SCALE;
 export const MINIMAP_GLYPH_HEIGHT = MINIMAP_SCALE * 2;
@@ -15,11 +17,46 @@ function clampRatio(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+export interface MinimapWidthOptions {
+  availableWidth: number;
+  characterWidth: number;
+  scrollbarWidth?: number;
+  pixelRatio?: number;
+}
+
+/**
+ * Mirrors VS Code's minimap layout: one CSS pixel per column, an 8px gutter,
+ * and a width that shrinks with the available editor width. At the default
+ * 120 columns this caps at 120px on a wide pane.
+ */
 export function minimapWidthPx(
   maxColumn = MINIMAP_MAX_COLUMN,
+  options?: MinimapWidthOptions,
 ): number {
   const columns = Math.max(1, maxColumn);
-  return Math.round(Math.min(180, Math.max(72, columns * 0.9 + 12)));
+  if (!options) return Math.floor(columns * MINIMAP_COLUMN_WIDTH);
+
+  const {
+    availableWidth,
+    characterWidth,
+    scrollbarWidth = 0,
+    pixelRatio = 1,
+  } = options;
+  // VS Code keeps one minimap column at one CSS pixel on 1x and 2x displays
+  // and at fractional widths on scaled displays (1.25x, 1.5x, ...).
+  const ratio = Math.max(1, pixelRatio);
+  const columnWidth = (ratio >= 2 ? 2 : 1) / ratio;
+  const maxWidth = Math.floor(columns * columnWidth);
+  if (!(availableWidth > 0) || !(characterWidth > 0)) return maxWidth;
+
+  const contentWidth = Math.floor(
+    ((availableWidth - scrollbarWidth - 2) * columnWidth) /
+      (characterWidth + columnWidth),
+  );
+  return Math.min(
+    maxWidth,
+    Math.max(0, contentWidth) + MINIMAP_GUTTER_WIDTH,
+  );
 }
 
 export function minimapScrollTop(
