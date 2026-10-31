@@ -480,14 +480,14 @@ const theme = EditorView.theme({
   '&': {
     height: '100%',
     backgroundColor: 'transparent',
-    fontSize: 'var(--content-font-size, 15px)',
+    fontSize: 'calc(var(--content-font-size, 15px) * 1.25)',
   },
   '&.cm-focused': {
     outline: 'none',
   },
   '.cm-scroller': {
     fontFamily: 'var(--mono-font)',
-    lineHeight: '1.75',
+    lineHeight: 'calc(var(--content-font-size, 15px) * 1.75)',
   },
   '.cm-content': {
     padding: '14px 18px',
@@ -537,8 +537,14 @@ const theme = EditorView.theme({
     backgroundColor: 'transparent',
   },
   '.cm-fat-cursor': {
-    height: '1.2em !important',
-    lineHeight: '1.2em !important',
+    height:
+      'calc(var(--content-font-size, 15px) * 1.75) !important',
+    lineHeight:
+      'calc(var(--content-font-size, 15px) * 1.75) !important',
+    fontSize:
+      'calc(var(--content-font-size, 15px) * 1.25) !important',
+    marginTop:
+      'calc(var(--content-font-size, 15px) * -0.125)',
     backgroundColor: '#f5f0e6 !important',
     color: '#1f2933 !important',
     borderRadius: '0',
@@ -916,6 +922,9 @@ onMounted(() => {
     });
   });
   resizeObserver.observe(scrollElement);
+  view.dom.addEventListener('focusin', syncVimClipboardRegister);
+  window.addEventListener('focus', syncVimClipboardRegister);
+  syncVimClipboardRegister();
   view.focus();
   scheduleScrollSync();
   emitCursor();
@@ -938,6 +947,7 @@ watch(
     });
     scheduleVimStatus();
     applyVimMappings();
+    if (enabled) syncVimClipboardRegister();
     view?.focus();
   },
 );
@@ -1032,6 +1042,8 @@ onBeforeUnmount(() => {
   scrollElement = null;
   cancelImagePrompt?.();
   cancelImagePrompt = null;
+  view?.dom.removeEventListener('focusin', syncVimClipboardRegister);
+  window.removeEventListener('focus', syncVimClipboardRegister);
   clearVimMappings();
   cancelPendingRestoreScroll();
   view?.destroy();
@@ -1118,6 +1130,34 @@ function restoreState(state: EditorViewState): void {
     if (!view || !scrollElement) return;
     scrollElement.scrollTop = top;
     view.focus();
+  });
+}
+
+/**
+ * Mirrors the system clipboard into Vim's unnamed register so normal-mode
+ * p / P can paste text copied outside the editor. Internal yank/delete
+ * registers remain in effect until the next focus sync.
+ */
+function syncVimClipboardRegister(): void {
+  if (!view || !props.vimEnabled) return;
+  const target = view;
+  void readClipboardText().then((text) => {
+    if (!text || !target.dom.isConnected) return;
+    const cm = getCM(target);
+    const vim = cm?.state.vim as
+      | {
+          registers?: {
+            unnamedRegister?: {
+              setText?: (
+                value?: string,
+                linewise?: boolean,
+                blockwise?: boolean,
+              ) => void;
+            };
+          };
+        }
+      | undefined;
+    vim?.registers?.unnamedRegister?.setText?.(text, false);
   });
 }
 

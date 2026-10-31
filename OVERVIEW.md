@@ -147,6 +147,7 @@ tempfile                     测试临时目录
   - 支持折叠/展开多光标
 - 可选 Vim 模式。
 - Vim 支持 Normal / Insert / Visual / V-Line / V-Block 等模式。
+- 窗口或编辑器获得焦点时会同步系统剪贴板文本到 Vim 的 unnamed register，Normal 模式 `p` / `P` 可直接粘贴；内部 yank/delete 寄存器仍可用。
 - Vim 模式状态和 `:` 命令输入行均整合在应用底部状态栏，不再额外占用编辑器行。
 - 支持 `:w` 保存。
 - 支持 `:pasteimage`（别名 `:pa`）从系统剪贴板粘贴图片。
