@@ -46,5 +46,7 @@ export function suppressLinkContextMenu(event: MouseEvent): void {
 }
 
 export function openExternalLink(href: string): void {
-  void openUrl(href).catch(() => undefined);
+  void openUrl(href).catch((error) => {
+    console.error('Failed to open external link', error);
+  });
 }
