@@ -1,23 +1,35 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   classifyMarkdownLink,
-  isExternalHref,
-  isExternalLinkOpenGesture,
+  handleMarkdownLinkClick,
   suppressLinkContextMenu,
 } from './markdownLinks';
 
-vi.mock('@tauri-apps/plugin-opener', () => ({
+const mocks = vi.hoisted(() => ({
   openUrl: vi.fn(async () => undefined),
 }));
 
+vi.mock('@tauri-apps/plugin-opener', () => ({
+  openUrl: mocks.openUrl,
+}));
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
 describe('markdown links', () => {
   it('classifies external website and mail links', () => {
-    expect(isExternalHref('https://example.com')).toBe(true);
-    expect(isExternalHref('HTTP://example.com')).toBe(true);
-    expect(isExternalHref('mailto:hello@example.com')).toBe(true);
     expect(classifyMarkdownLink('https://example.com/a?b=1')).toEqual({
       kind: 'external',
       href: 'https://example.com/a?b=1',
+    });
+    expect(classifyMarkdownLink('HTTP://example.com')).toEqual({
+      kind: 'external',
+      href: 'HTTP://example.com',
+    });
+    expect(classifyMarkdownLink('mailto:hello@example.com')).toEqual({
+      kind: 'external',
+      href: 'mailto:hello@example.com',
     });
   });
 
@@ -32,17 +44,52 @@ describe('markdown links', () => {
     });
   });
 
-  it('requires Ctrl or Cmd left-click to open external links', () => {
-    expect(isExternalLinkOpenGesture({ button: 0 })).toBe(false);
-    expect(
-      isExternalLinkOpenGesture({ button: 0, ctrlKey: true }),
-    ).toBe(true);
-    expect(
-      isExternalLinkOpenGesture({ button: 0, metaKey: true }),
-    ).toBe(true);
-    expect(
-      isExternalLinkOpenGesture({ button: 1, ctrlKey: true }),
-    ).toBe(false);
+  it('opens external links only with Ctrl or Cmd left-click', () => {
+    const anchor = document.createElement('a');
+    anchor.setAttribute('href', 'https://example.com');
+
+    const plain = new MouseEvent('click', { cancelable: true });
+    expect(handleMarkdownLinkClick(plain, anchor).kind).toBe('external');
+    expect(plain.defaultPrevented).toBe(true);
+    expect(mocks.openUrl).not.toHaveBeenCalled();
+
+    const ctrl = new MouseEvent('click', {
+      cancelable: true,
+      ctrlKey: true,
+    });
+    handleMarkdownLinkClick(ctrl, anchor);
+    expect(mocks.openUrl).toHaveBeenCalledWith('https://example.com');
+
+    vi.clearAllMocks();
+    const meta = new MouseEvent('click', {
+      cancelable: true,
+      metaKey: true,
+    });
+    handleMarkdownLinkClick(meta, anchor);
+    expect(mocks.openUrl).toHaveBeenCalledWith('https://example.com');
+
+    vi.clearAllMocks();
+    const middle = new MouseEvent('auxclick', {
+      button: 1,
+      cancelable: true,
+    });
+    handleMarkdownLinkClick(middle, anchor);
+    expect(mocks.openUrl).not.toHaveBeenCalled();
+  });
+
+  it('returns internal targets without opening a browser', () => {
+    const anchor = document.createElement('a');
+    anchor.setAttribute('href', '#install');
+    const click = new MouseEvent('click', {
+      cancelable: true,
+      ctrlKey: true,
+    });
+
+    expect(handleMarkdownLinkClick(click, anchor)).toEqual({
+      kind: 'internal',
+      fragment: 'install',
+    });
+    expect(mocks.openUrl).not.toHaveBeenCalled();
   });
 
   it('suppresses the context menu only for links', () => {

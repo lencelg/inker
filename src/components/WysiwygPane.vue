@@ -37,9 +37,7 @@ import {
   scrollToAnchor,
 } from '../lib/anchors';
 import {
-  classifyMarkdownLink,
-  isExternalLinkOpenGesture,
-  openExternalLink,
+  handleMarkdownLinkClick,
   suppressLinkContextMenu,
 } from '../lib/markdownLinks';
 import { codeHighlightRanges } from '../lib/codeHighlight';
@@ -326,14 +324,7 @@ function onWysiwygClick(event: MouseEvent): void {
     'a[href]',
   );
   if (!anchor) return;
-  const link = classifyMarkdownLink(anchor.getAttribute('href'));
-  event.preventDefault();
-  if (link.kind === 'external') {
-    if (isExternalLinkOpenGesture(event)) {
-      openExternalLink(link.href);
-    }
-    return;
-  }
+  const link = handleMarkdownLinkClick(event, anchor);
   if (link.kind !== 'internal') return;
 
   const root = host.value;
