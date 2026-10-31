@@ -34,9 +34,14 @@ import Breadcrumbs from './Breadcrumbs.vue';
 import { api } from '../api';
 import {
   findAnchorTarget,
-  fragmentFromHref,
   scrollToAnchor,
 } from '../lib/anchors';
+import {
+  classifyMarkdownLink,
+  isExternalLinkOpenGesture,
+  openExternalLink,
+  suppressLinkContextMenu,
+} from '../lib/markdownLinks';
 import { codeHighlightRanges } from '../lib/codeHighlight';
 import { readClipboardImageFile } from '../lib/clipboardImage';
 import {
@@ -321,12 +326,19 @@ function onWysiwygClick(event: MouseEvent): void {
     'a[href]',
   );
   if (!anchor) return;
-  const fragment = fragmentFromHref(anchor.getAttribute('href'));
-  if (fragment === null) return;
+  const link = classifyMarkdownLink(anchor.getAttribute('href'));
+  event.preventDefault();
+  if (link.kind === 'external') {
+    if (isExternalLinkOpenGesture(event)) {
+      openExternalLink(link.href);
+    }
+    return;
+  }
+  if (link.kind !== 'internal') return;
 
   const root = host.value;
   if (!root) return;
-  event.preventDefault();
+  const { fragment } = link;
 
   if (!fragment.trim()) {
     if (typeof root.scrollTo === 'function') {
@@ -755,7 +767,12 @@ onBeforeUnmount(() => {
 <template>
   <section class="wysiwyg-pane">
     <Breadcrumbs :items="breadcrumbs" />
-    <div ref="host" class="wysiwyg-host" @click="onWysiwygClick"></div>
+    <div
+      ref="host"
+      class="wysiwyg-host"
+      @click="onWysiwygClick"
+      @contextmenu="suppressLinkContextMenu"
+    ></div>
     <div v-if="error" class="wysiwyg-error" role="alert">{{ error }}</div>
   </section>
 </template>

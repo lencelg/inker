@@ -12,9 +12,14 @@ import {
 import { api } from '../api';
 import {
   findAnchorTarget,
-  fragmentFromHref,
   scrollToAnchor,
 } from '../lib/anchors';
+import {
+  classifyMarkdownLink,
+  isExternalLinkOpenGesture,
+  openExternalLink,
+  suppressLinkContextMenu,
+} from '../lib/markdownLinks';
 import { isLocalImageSource } from '../lib/markdown';
 import { localizeError, t } from '../lib/i18n';
 import { renderMermaid } from '../lib/mermaid';
@@ -312,13 +317,20 @@ function onPreviewClick(event: MouseEvent): void {
     'a[href]',
   );
   if (!anchor) return;
-  const fragment = fragmentFromHref(anchor.getAttribute('href'));
-  if (fragment === null) return;
+  const link = classifyMarkdownLink(anchor.getAttribute('href'));
+  event.preventDefault();
+  if (link.kind === 'external') {
+    if (isExternalLinkOpenGesture(event)) {
+      openExternalLink(link.href);
+    }
+    return;
+  }
+  if (link.kind !== 'internal') return;
 
   const root = bodyRef.value;
   if (!root) return;
-  event.preventDefault();
   suppressScrollUntil = performance.now() + 650;
+  const { fragment } = link;
 
   if (!fragment.trim()) {
     if (typeof root.scrollTo === 'function') {
@@ -458,6 +470,7 @@ watch(
       class="markdown-body"
       v-html="safeHtml"
       @click="onPreviewClick"
+      @contextmenu="suppressLinkContextMenu"
       @scroll.passive="onPreviewScroll"
       @wheel.passive="markUserScroll"
       @pointerdown="onPointerDown"
