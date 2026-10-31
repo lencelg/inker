@@ -1,4 +1,5 @@
 import type { FileEntry } from '../types';
+import { VIM_EX_COMPLETION_NAMES } from './vimExCommands';
 
 export interface VimCompletionContext {
   notePath: string;
@@ -19,57 +20,6 @@ interface CompletionState {
 }
 
 const states = new WeakMap<HTMLInputElement, CompletionState>();
-
-/**
- * Ex commands available in Inker. Command-line completion stays within this
- * set so it never suggests commands the editor cannot execute.
- */
-const EX_COMMANDS: readonly string[] = [
-  'colorscheme',
-  'map',
-  'imap',
-  'nmap',
-  'vmap',
-  'omap',
-  'noremap',
-  'nnoremap',
-  'vnoremap',
-  'inoremap',
-  'onoremap',
-  'unmap',
-  'mapclear',
-  'nmapclear',
-  'vmapclear',
-  'imapclear',
-  'omapclear',
-  'write',
-  'edit',
-  'quit',
-  'xit',
-  'bnext',
-  'bprevious',
-  'undo',
-  'redo',
-  'set',
-  'setlocal',
-  'setglobal',
-  'sort',
-  'substitute',
-  'startinsert',
-  'nohlsearch',
-  'yank',
-  'put',
-  'delmarks',
-  'marks',
-  'registers',
-  'vglobal',
-  'delete',
-  'join',
-  'normal',
-  'global',
-  'pasteimage',
-  'version',
-];
 
 function normalizeDirectory(path: string): string {
   const parts: string[] = [];
@@ -219,7 +169,7 @@ export function completeVimCommandLine(
     return true;
   }
 
-  const commands = context.commands ?? EX_COMMANDS;
+  const commands = context.commands ?? VIM_EX_COMPLETION_NAMES;
   const candidates = commandCandidates(value, cursor, commands);
   const all =
     candidates.length > 0

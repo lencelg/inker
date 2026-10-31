@@ -71,6 +71,11 @@ import {
   type SurroundPair,
   type TextRange,
 } from '../lib/vimSurround';
+import {
+  APP_VIM_EX_COMMANDS,
+  type VimExContext,
+} from '../lib/vimExCommands';
+import { vimMacroState, vimViewOf } from '../lib/vimInternals';
 import type { FileEntry } from '../types';
 import {
   parseVimMappings,
@@ -202,8 +207,6 @@ function applyVimMappings(): void {
         {},
         { context: mapping.mode },
       );
-    } else {
-      Vim.map(mapping.keys, mapping.command, mapping.mode);
     }
     appliedVimMappings.push(mapping);
   }
@@ -229,17 +232,7 @@ function emitVimRecording(): void {
     return;
   }
 
-  const globalState = (
-    Vim as unknown as {
-      getVimGlobalState_?: () => {
-        macroModeState?: {
-          isRecording?: boolean;
-          latestRegister?: string;
-        };
-      };
-    }
-  ).getVimGlobalState_?.();
-  const macro = globalState?.macroModeState;
+  const macro = vimMacroState();
   const next =
     macro?.isRecording && macro.latestRegister
       ? macro.latestRegister
@@ -941,32 +934,31 @@ const multiCursorMouse = EditorView.domEventHandlers({
 
 let vimFoldCommandsRegistered = false;
 
+function vimTarget(cm: unknown): EditorView | null {
+  return vimViewOf(cm) ?? view;
+}
+
 function setupVimFoldCommands(): void {
   if (vimFoldCommandsRegistered) return;
 
-  const targetView = (cm: unknown): EditorView | null => {
-    const candidate = (cm as { cm6?: EditorView } | null)?.cm6;
-    return candidate ?? view;
-  };
-
   Vim.defineAction('inkerFoldToggle', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (target) toggleVimFold(target);
   });
   Vim.defineAction('inkerFoldClose', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (target) closeVimFold(target);
   });
   Vim.defineAction('inkerFoldOpen', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (target) openVimFold(target);
   });
   Vim.defineAction('inkerFoldCloseAll', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (target) closeAllVimFolds(target);
   });
   Vim.defineAction('inkerFoldOpenAll', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (target) openAllVimFolds(target);
   });
 
@@ -989,15 +981,11 @@ function setupVimFoldCommands(): void {
 function setupVimSurroundCommands(): void {
   if (vimSurroundRegistered) return;
 
-  const targetView = (cm: unknown): EditorView | null => {
-    const candidate = (cm as { cm6?: EditorView } | null)?.cm6;
-    return candidate ?? view;
-  };
   const offsetFor = (target: EditorView, pos: { line: number; ch: number }) =>
     target.state.doc.line(pos.line + 1).from + pos.ch;
 
   Vim.defineOperator('inkerSurroundAdd', (cm, _args, ranges, _oldAnchor, newHead) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (!target) return;
     surroundPending = {
       kind: 'add',
@@ -1014,7 +1002,7 @@ function setupVimSurroundCommands(): void {
   });
 
   Vim.defineAction('inkerSurroundLine', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (!target) return;
     const line = target.state.doc.lineAt(
       target.state.selection.main.head,
@@ -1027,21 +1015,21 @@ function setupVimSurroundCommands(): void {
   });
 
   Vim.defineAction('inkerSurroundChange', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (!target) return;
     surroundPending = { kind: 'change', stage: 'old' };
     target.focus();
   });
 
   Vim.defineAction('inkerSurroundDelete', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (!target) return;
     surroundPending = { kind: 'delete' };
     target.focus();
   });
 
   Vim.defineAction('inkerSurroundVisual', (cm) => {
-    const target = targetView(cm);
+    const target = vimTarget(cm);
     if (!target) return;
     const ranges = target.state.selection.ranges
       .filter((range) => !range.empty)
@@ -1075,26 +1063,25 @@ function setupVimSurroundCommands(): void {
 }
 
 function setupVimCommands(): void {
-  Vim.defineEx('write', 'w', () => {
-    emit('saveRequest');
-  });
-  Vim.defineEx('pasteimage', 'pa', () => {
-    void pasteImageFromClipboard();
-  });
-  Vim.defineEx('edit', 'e', (_cm, params) => {
-    const path = resolveVimNotePath(
-      params.argString ?? '',
-      props.notePath,
+  const context: VimExContext = {
+    save: () => emit('saveRequest'),
+    pasteImage: () => void pasteImageFromClipboard(),
+    openNote: (path) => {
+      if (path) emit('openNote', path);
+    },
+    closeTab: (force) => emit('closeTab', force),
+    saveAndCloseTab: () => emit('saveAndCloseTab'),
+    switchTab: (direction) => emit('switchTab', direction),
+    resolveNotePath: (input) =>
+      resolveVimNotePath(input, props.notePath),
+  };
+
+  for (const command of APP_VIM_EX_COMMANDS) {
+    Vim.defineEx(command.name, command.prefix ?? command.name, (_cm, params) =>
+      command.run(context, params),
     );
-    if (path) emit('openNote', path);
-  });
-  Vim.defineEx('quit', 'q', (_cm, params) =>
-    emit('closeTab', params.argString?.trim() === '!'),
-  );
-  Vim.defineEx('wq', 'wq', () => emit('saveAndCloseTab'));
-  Vim.defineEx('xit', 'x', () => emit('saveAndCloseTab'));
-  Vim.defineEx('bnext', 'bn', () => emit('switchTab', 1));
-  Vim.defineEx('bprevious', 'bp', () => emit('switchTab', -1));
+  }
+
   Vim.defineAction('inkerPasteImage', () => {
     void pasteImageFromClipboard();
   });
