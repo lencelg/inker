@@ -43,6 +43,11 @@ const EX_COMMANDS: readonly string[] = [
   'imapclear',
   'omapclear',
   'write',
+  'edit',
+  'quit',
+  'xit',
+  'bnext',
+  'bprevious',
   'undo',
   'redo',
   'set',
@@ -166,6 +171,29 @@ function fileCandidates(
  * key press was handled (even if there were no candidates), so the caller
  * can keep the prompt focused instead of letting Tab move focus away.
  */
+export function resolveVimNotePath(
+  input: string,
+  notePath: string,
+): string | null {
+  const value = input.trim().replace(/\\/g, '/');
+  if (!value) return null;
+
+  const current = parentDirectory(notePath.replace(/\\/g, '/'));
+  const combined = value.startsWith('/')
+    ? value.slice(1)
+    : `${current}${value}`;
+  const parts: string[] = [];
+  for (const part of combined.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  return parts.length > 0 ? parts.join('/') : null;
+}
+
 export function completeVimCommandLine(
   input: HTMLInputElement,
   context: VimCompletionContext,

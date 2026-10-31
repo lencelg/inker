@@ -32,6 +32,22 @@ describe('parseVimMappings', () => {
     ]);
   });
 
+  it('parses operator-pending and key-to-key mappings', () => {
+    expect(
+      parseVimMappings(
+        [
+          'operatorPending iw =ciw',
+          'insert jk =<Esc>',
+          'normal Q =gq',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      { mode: 'operatorPending', keys: 'iw', command: '=ciw' },
+      { mode: 'insert', keys: 'jk', command: '=<Esc>' },
+      { mode: 'normal', keys: 'Q', command: '=gq' },
+    ]);
+  });
+
   it('ignores malformed lines', () => {
     expect(
       parseVimMappings(
@@ -42,6 +58,8 @@ describe('parseVimMappings', () => {
           'normal <Space>p',
           'normal :x save',
           'normal <Space> p save',
+          'insert jk =',
+          'insert jk =:w',
         ].join('\n'),
       ),
     ).toEqual([]);

@@ -1176,6 +1176,33 @@ function handleVimRecording(register: string | null): void {
   vimRecording.value = register;
 }
 
+function handleVimOpenNote(path: string): void {
+  void openNote(path);
+}
+
+function handleVimCloseTab(force: boolean): void {
+  const path = activePath.value;
+  if (path) void requestCloseTab(path, force);
+}
+
+async function handleVimSaveAndCloseTab(): Promise<void> {
+  const path = activePath.value;
+  if (!path) return;
+  if (!(await saveCurrentNote())) return;
+  await requestCloseTab(path);
+}
+
+function handleVimSwitchTab(direction: 1 | -1): void {
+  const list = tabs.value;
+  if (list.length < 2) return;
+  const index = list.findIndex(
+    (tab) => tab.path === activePath.value,
+  );
+  if (index < 0) return;
+  const next = list[(index + direction + list.length) % list.length];
+  if (next) void activateTab(next.path);
+}
+
 function handleVimMessage(message: string | null): void {
   if (vimMessageTimer) {
     window.clearTimeout(vimMessageTimer);
@@ -2313,17 +2340,20 @@ async function requestDelete(entry: FileEntry): Promise<void> {
   }
 }
 
-async function requestCloseTab(path: string): Promise<void> {
+async function requestCloseTab(
+  path: string,
+  force = false,
+): Promise<void> {
   if (busy.value || anySaving.value) return;
 
   const tab = tabs.value.find((item) => item.path === path);
   if (!tab) return;
 
-  if (tab.content !== tab.savedContent && preferences.value.autoSave) {
+  if (!force && tab.content !== tab.savedContent && preferences.value.autoSave) {
     if (!(await saveTab(tab))) return;
   }
 
-  if (tab.content !== tab.savedContent) {
+  if (!force && tab.content !== tab.savedContent) {
     const confirmed = await askConfirmation({
       title: t('close.unsavedTitle'),
       message: t('close.unsavedMessage', {
@@ -3010,6 +3040,10 @@ watch(
               @vim-mode="handleVimMode"
               @vim-recording="handleVimRecording"
               @vim-message="handleVimMessage"
+              @open-note="handleVimOpenNote"
+              @close-tab="handleVimCloseTab"
+              @save-and-close-tab="handleVimSaveAndCloseTab"
+              @switch-tab="handleVimSwitchTab"
               @save-request="saveCurrentNote"
             />
           </section>

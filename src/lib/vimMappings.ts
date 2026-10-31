@@ -1,5 +1,9 @@
-export type VimMappingMode = 'normal' | 'visual' | 'insert';
-export type VimMappingCommand = 'pasteimage' | 'save';
+export type VimMappingMode =
+  | 'normal'
+  | 'visual'
+  | 'insert'
+  | 'operatorPending';
+export type VimMappingCommand = string;
 
 export interface VimMapping {
   mode: VimMappingMode;
@@ -11,8 +15,14 @@ export const DEFAULT_VIM_MAPPINGS = 'normal <Space>p pasteimage';
 export const MAX_VIM_MAPPINGS = 20;
 export const MAX_VIM_KEYS_LENGTH = 64;
 
-const MODES = new Set<string>(['normal', 'visual', 'insert']);
-const COMMANDS = new Set<string>(['pasteimage', 'save']);
+const MODES: Record<string, VimMappingMode> = {
+  normal: 'normal',
+  visual: 'visual',
+  insert: 'insert',
+  operator: 'operatorPending',
+  operatorpending: 'operatorPending',
+};
+const ACTIONS = new Set<string>(['pasteimage', 'save']);
 
 function isValidKeys(keys: string): boolean {
   if (keys.length === 0 || keys.length > MAX_VIM_KEYS_LENGTH) return false;
@@ -31,17 +41,23 @@ export function parseVimMappings(value: string): VimMapping[] {
     const parts = line.split(/\s+/);
     if (parts.length !== 3) continue;
 
-    const mode = parts[0].toLowerCase();
+    const mode = MODES[parts[0].toLowerCase()];
     const keys = parts[1];
-    const command = parts[2].toLowerCase();
-    if (!MODES.has(mode) || !COMMANDS.has(command)) continue;
-    if (!isValidKeys(keys)) continue;
+    const rawCommand = parts[2];
+    if (!mode || !isValidKeys(keys)) continue;
 
-    const mapping: VimMapping = {
-      mode: mode as VimMappingMode,
-      keys,
-      command: command as VimMappingCommand,
-    };
+    const action = rawCommand.toLowerCase();
+    let command: string;
+    if (ACTIONS.has(action)) {
+      command = action;
+    } else if (rawCommand.startsWith('=')) {
+      if (!isValidKeys(rawCommand.slice(1))) continue;
+      command = rawCommand;
+    } else {
+      continue;
+    }
+
+    const mapping: VimMapping = { mode, keys, command };
     mappings.set(`${mapping.mode}\u0000${mapping.keys}`, mapping);
   }
 

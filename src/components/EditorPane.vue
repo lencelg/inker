@@ -46,7 +46,10 @@ import {
   type ImageSaveHandler,
 } from '../lib/imagePaste';
 import { formatVimMode } from '../lib/vimMode';
-import { completeVimCommandLine } from '../lib/vimCommandLineCompletion';
+import {
+  completeVimCommandLine,
+  resolveVimNotePath,
+} from '../lib/vimCommandLineCompletion';
 import {
   loadVimCommandHistory,
   recordVimCommand,
@@ -85,6 +88,10 @@ const emit = defineEmits<{
   vimMode: [mode: string | null];
   vimRecording: [register: string | null];
   vimMessage: [message: string | null];
+  openNote: [path: string];
+  closeTab: [force: boolean];
+  saveAndCloseTab: [];
+  switchTab: [direction: 1 | -1];
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
@@ -154,13 +161,31 @@ function applyVimMappings(): void {
   }
 
   for (const mapping of mappings) {
-    Vim.mapCommand(
-      mapping.keys,
-      'action',
-      mapping.command === 'pasteimage' ? 'inkerPasteImage' : 'inkerSave',
-      {},
-      { context: mapping.mode },
-    );
+    if (mapping.command.startsWith('=')) {
+      Vim.map(
+        mapping.keys,
+        mapping.command.slice(1),
+        mapping.mode,
+      );
+    } else if (mapping.command === 'pasteimage') {
+      Vim.mapCommand(
+        mapping.keys,
+        'action',
+        'inkerPasteImage',
+        {},
+        { context: mapping.mode },
+      );
+    } else if (mapping.command === 'save') {
+      Vim.mapCommand(
+        mapping.keys,
+        'action',
+        'inkerSave',
+        {},
+        { context: mapping.mode },
+      );
+    } else {
+      Vim.map(mapping.keys, mapping.command, mapping.mode);
+    }
     appliedVimMappings.push(mapping);
   }
 }
@@ -934,6 +959,20 @@ function setupVimCommands(): void {
   Vim.defineEx('pasteimage', 'pa', () => {
     void pasteImageFromClipboard();
   });
+  Vim.defineEx('edit', 'e', (_cm, params) => {
+    const path = resolveVimNotePath(
+      params.argString ?? '',
+      props.notePath,
+    );
+    if (path) emit('openNote', path);
+  });
+  Vim.defineEx('quit', 'q', (_cm, params) =>
+    emit('closeTab', params.argString?.trim() === '!'),
+  );
+  Vim.defineEx('wq', 'wq', () => emit('saveAndCloseTab'));
+  Vim.defineEx('xit', 'x', () => emit('saveAndCloseTab'));
+  Vim.defineEx('bnext', 'bn', () => emit('switchTab', 1));
+  Vim.defineEx('bprevious', 'bp', () => emit('switchTab', -1));
   Vim.defineAction('inkerPasteImage', () => {
     void pasteImageFromClipboard();
   });

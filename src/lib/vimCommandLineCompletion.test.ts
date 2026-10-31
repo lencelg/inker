@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { FileEntry } from '../types';
-import { completeVimCommandLine } from './vimCommandLineCompletion';
+import {
+  completeVimCommandLine,
+  resolveVimNotePath,
+} from './vimCommandLineCompletion';
 
 function makeInput(value: string, cursor = value.length): HTMLInputElement {
   const input = document.createElement('input');
@@ -20,6 +23,30 @@ const files: FileEntry[] = [
 ];
 
 const context = { notePath: 'docs/note.md', files };
+
+describe('Vim note path resolution', () => {
+  it('resolves paths relative to the current note', () => {
+    expect(resolveVimNotePath('other.md', 'docs/note.md')).toBe(
+      'docs/other.md',
+    );
+    expect(resolveVimNotePath('../other.md', 'docs/note.md')).toBe(
+      'other.md',
+    );
+    expect(resolveVimNotePath('./sub/x.md', 'docs/note.md')).toBe(
+      'docs/sub/x.md',
+    );
+    expect(resolveVimNotePath('/root.md', 'docs/note.md')).toBe(
+      'root.md',
+    );
+    expect(resolveVimNotePath('', 'docs/note.md')).toBeNull();
+  });
+
+  it('normalizes Windows separators', () => {
+    expect(resolveVimNotePath('sub\\x.md', 'docs\\note.md')).toBe(
+      'docs/sub/x.md',
+    );
+  });
+});
 
 describe('Vim command-line completion', () => {
   it('completes Ex command names from the start of the line', () => {

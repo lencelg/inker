@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { mount, type VueWrapper } from '@vue/test-utils';
 import {
   afterEach,
   beforeEach,
@@ -10,6 +10,7 @@ import {
 import { nextTick } from 'vue';
 import EditorPane from './EditorPane.vue';
 import type { ImageSaveHandler } from '../lib/imagePaste';
+import type { FileEntry } from '../types';
 import { VIM_COMMAND_HISTORY_KEY } from '../lib/vimCommandHistory';
 
 const clipboardMocks = vi.hoisted(() => ({
@@ -48,6 +49,8 @@ function mountEditor(
     sourceHighlight?: boolean;
     vimEnabled?: boolean;
     vimMappings?: string;
+    notePath?: string;
+    files?: FileEntry[];
     requestImageSave?: ImageSaveHandler;
   } = {},
 ) {
@@ -63,10 +66,50 @@ function mountEditor(
       requestImageSave: options.requestImageSave ?? (async () => null),
       vimMappings:
         options.vimMappings ?? 'normal <Space>p pasteimage',
-      notePath: 'note.md',
-      files: [],
+      notePath: options.notePath ?? 'note.md',
+      files: options.files ?? [],
     },
   });
+}
+
+async function openVimPrompt(
+  wrapper: VueWrapper,
+): Promise<HTMLInputElement> {
+  const content = wrapper.find('.cm-content').element as HTMLElement;
+  content.focus();
+  const colon = new KeyboardEvent('keydown', {
+    key: ':',
+    code: 'Semicolon',
+    shiftKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.defineProperty(colon, 'keyCode', { get: () => 186 });
+  Object.defineProperty(colon, 'which', { get: () => 186 });
+  content.dispatchEvent(colon);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await nextTick();
+  return wrapper.find('.cm-vim-panel input').element as HTMLInputElement;
+}
+
+async function submitVimCommand(
+  wrapper: VueWrapper,
+  command: string,
+): Promise<void> {
+  const input = await openVimPrompt(wrapper);
+  input.value = command;
+  input.setSelectionRange(command.length, command.length);
+  input.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await nextTick();
 }
 
 function prepareEditorDom(): void {
@@ -231,6 +274,63 @@ describe('EditorPane', () => {
     await nextTick();
 
     expect(wrapper.find('.cm-foldPlaceholder').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('handles Vim note navigation and tab commands', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      notePath: 'docs/note.md',
+    });
+    await nextTick();
+
+    await submitVimCommand(wrapper, 'e other.md');
+    expect(wrapper.emitted('openNote')?.at(-1)).toEqual([
+      'docs/other.md',
+    ]);
+
+    await submitVimCommand(wrapper, 'bn');
+    expect(wrapper.emitted('switchTab')?.at(-1)).toEqual([1]);
+
+    await submitVimCommand(wrapper, 'bp');
+    expect(wrapper.emitted('switchTab')?.at(-1)).toEqual([-1]);
+
+    await submitVimCommand(wrapper, 'q');
+    expect(wrapper.emitted('closeTab')?.at(-1)).toEqual([false]);
+
+    await submitVimCommand(wrapper, 'q!');
+    expect(wrapper.emitted('closeTab')?.at(-1)).toEqual([true]);
+
+    await submitVimCommand(wrapper, 'wq');
+    expect(wrapper.emitted('saveAndCloseTab')).toHaveLength(1);
+
+    await submitVimCommand(wrapper, 'x');
+    expect(wrapper.emitted('saveAndCloseTab')).toHaveLength(2);
+
+    wrapper.unmount();
+  });
+
+  it('applies insert-mode key-to-key mappings', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      vimMappings: 'insert jk =<Esc>',
+    });
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+    content.dispatchEvent(keydown('i', 'KeyI', 73));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    content.dispatchEvent(keydown('j', 'KeyJ', 74));
+    content.dispatchEvent(keydown('k', 'KeyK', 75));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    expect(wrapper.emitted('vimMode')?.at(-1)).toEqual(['NORMAL']);
     wrapper.unmount();
   });
 

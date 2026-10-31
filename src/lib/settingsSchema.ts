@@ -353,6 +353,8 @@ function settingTemplates(): SettingTemplate[] {
         'mapping',
         'pasteimage',
         'save',
+        'keyToKey',
+        'operatorPending',
       ],
       preference: 'vimMappings',
       hint: {
