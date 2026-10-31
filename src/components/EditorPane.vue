@@ -48,6 +48,10 @@ import {
 import { formatVimMode } from '../lib/vimMode';
 import { completeVimCommandLine } from '../lib/vimCommandLineCompletion';
 import {
+  loadVimCommandHistory,
+  recordVimCommand,
+} from '../lib/vimCommandHistory';
+import {
   closeAllVimFolds,
   closeVimFold,
   openAllVimFolds,
@@ -79,6 +83,8 @@ const emit = defineEmits<{
   cursor: [position: { line: number; column: number }];
   saveRequest: [];
   vimMode: [mode: string | null];
+  vimRecording: [register: string | null];
+  vimMessage: [message: string | null];
 }>();
 
 const host = ref<HTMLDivElement | null>(null);
@@ -101,6 +107,8 @@ let view: EditorView | null = null;
 let headings: HeadingItem[] = [];
 let scrollElement: HTMLElement | null = null;
 let cancelImagePrompt: (() => void) | null = null;
+let lastVimRecording: string | null = null;
+const notificationWrapped = new WeakSet<object>();
 let appliedVimMappings: VimMapping[] = [];
 let spaceLeaderActive = false;
 
@@ -168,6 +176,60 @@ interface VimModeEvent {
   subMode?: string;
 }
 
+function emitVimRecording(): void {
+  if (!props.vimEnabled) {
+    if (lastVimRecording !== null) {
+      lastVimRecording = null;
+      emit('vimRecording', null);
+    }
+    return;
+  }
+
+  const globalState = (
+    Vim as unknown as {
+      getVimGlobalState_?: () => {
+        macroModeState?: {
+          isRecording?: boolean;
+          latestRegister?: string;
+        };
+      };
+    }
+  ).getVimGlobalState_?.();
+  const macro = globalState?.macroModeState;
+  const next =
+    macro?.isRecording && macro.latestRegister
+      ? macro.latestRegister
+      : null;
+  if (next === lastVimRecording) return;
+  lastVimRecording = next;
+  emit('vimRecording', next);
+}
+
+interface VimNotificationAdapter {
+  openNotification: (
+    template: HTMLElement,
+    options?: { duration?: number },
+  ) => () => void;
+}
+
+function wrapVimNotifications(cm: object): void {
+  if (notificationWrapped.has(cm)) return;
+  notificationWrapped.add(cm);
+
+  const adapter = cm as VimNotificationAdapter;
+  const original = adapter.openNotification.bind(adapter);
+  adapter.openNotification = (template, options) => {
+    const text = template.textContent?.trim() ?? '';
+    if (!text) return original(template, options);
+
+    emit('vimMessage', text);
+    if (options?.duration === 0) {
+      return original(template, options);
+    }
+    return () => undefined;
+  };
+}
+
 function scheduleVimStatus(): void {
   if (vimStatusFrame) cancelAnimationFrame(vimStatusFrame);
   vimStatusFrame = requestAnimationFrame(() => {
@@ -179,15 +241,20 @@ function scheduleVimStatus(): void {
 function attachVimStatus(): void {
   if (!view) return;
   if (!props.vimEnabled) {
+    lastVimRecording = null;
     emit('vimMode', null);
+    emit('vimRecording', null);
     return;
   }
 
   const cm = getCM(view);
   if (!cm) {
     emit('vimMode', 'NORMAL');
+    emit('vimRecording', null);
     return;
   }
+
+  wrapVimNotifications(cm);
 
   const commandHost = document.querySelector<HTMLElement>(
     '.status-vim-command',
@@ -217,14 +284,17 @@ function attachVimStatus(): void {
 
   cm.on('vim-mode-change', (event: VimModeEvent) => {
     emit('vimMode', formatVimMode(event));
+    emitVimRecording();
   });
   cm.on('vim-command-done', () => {
     emit(
       'vimMode',
       formatVimMode({ mode: cm.state.vim?.mode ?? 'normal' }),
     );
+    emitVimRecording();
   });
   emit('vimMode', formatVimMode({ mode: cm.state.vim?.mode ?? 'normal' }));
+  emitVimRecording();
 }
 
 const SOURCE_FALLBACK: Record<string, string> = {
@@ -983,7 +1053,7 @@ onMounted(() => {
   resizeObserver.observe(scrollElement);
   view.dom.addEventListener('focusin', syncVimClipboardRegister);
   window.addEventListener('focus', syncVimClipboardRegister);
-  document.addEventListener('keydown', handleVimPromptTab, true);
+  document.addEventListener('keydown', handleVimPromptKeyDown, true);
   syncVimClipboardRegister();
   view.focus();
   scheduleScrollSync();
@@ -1104,7 +1174,7 @@ onBeforeUnmount(() => {
   cancelImagePrompt = null;
   view?.dom.removeEventListener('focusin', syncVimClipboardRegister);
   window.removeEventListener('focus', syncVimClipboardRegister);
-  document.removeEventListener('keydown', handleVimPromptTab, true);
+  document.removeEventListener('keydown', handleVimPromptKeyDown, true);
   clearVimMappings();
   cancelPendingRestoreScroll();
   view?.destroy();
@@ -1199,8 +1269,57 @@ function restoreState(state: EditorViewState): void {
  * p / P can paste text copied outside the editor. Internal yank/delete
  * registers remain in effect until the next focus sync.
  */
-function handleVimPromptTab(event: KeyboardEvent): void {
-  if (event.key !== 'Tab' || !props.vimEnabled) return;
+const vimHistoryState = new WeakMap<
+  HTMLInputElement,
+  { index: number; draft: string }
+>();
+
+function navigateVimHistory(
+  input: HTMLInputElement,
+  direction: -1 | 1,
+): void {
+  const history = loadVimCommandHistory();
+  if (history.length === 0) return;
+
+  let state = vimHistoryState.get(input);
+  if (!state) {
+    state = { index: history.length, draft: input.value };
+    vimHistoryState.set(input, state);
+  }
+
+  if (direction < 0) {
+    if (state.index <= 0) return;
+    state.index -= 1;
+  } else {
+    if (state.index >= history.length) return;
+    state.index += 1;
+  }
+
+  const value =
+    state.index >= history.length ? state.draft : history[state.index];
+  input.value = value;
+  input.setSelectionRange(value.length, value.length);
+}
+
+function deleteWordBeforeCursor(input: HTMLInputElement): void {
+  const value = input.value;
+  const start = input.selectionStart ?? value.length;
+  const end = input.selectionEnd ?? start;
+
+  if (start !== end) {
+    input.value = value.slice(0, start) + value.slice(end);
+    input.setSelectionRange(start, start);
+    return;
+  }
+
+  const before = value.slice(0, start);
+  const cut = before.replace(/\s+$/, '').replace(/\S+$/, '').length;
+  input.value = value.slice(0, cut) + value.slice(start);
+  input.setSelectionRange(cut, cut);
+}
+
+function handleVimPromptKeyDown(event: KeyboardEvent): void {
+  if (!props.vimEnabled) return;
   const cm = view ? getCM(view) : null;
   const dialog = (
     cm?.state as { dialog?: HTMLElement | null } | undefined
@@ -1212,15 +1331,67 @@ function handleVimPromptTab(event: KeyboardEvent): void {
   if (document.activeElement !== input) return;
 
   const prefix = dialog.querySelector('span')?.textContent?.trim();
+  if (prefix !== ':' && prefix !== '/' && prefix !== '?') return;
+
+  if (
+    prefix !== ':' &&
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    event.key.toLowerCase() === 'w'
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    deleteWordBeforeCursor(input);
+    return;
+  }
+
   if (prefix !== ':') return;
 
-  event.preventDefault();
-  event.stopPropagation();
-  completeVimCommandLine(
-    input,
-    { notePath: props.notePath, files: props.files },
-    !event.shiftKey,
-  );
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    event.stopPropagation();
+    vimHistoryState.delete(input);
+    completeVimCommandLine(
+      input,
+      { notePath: props.notePath, files: props.files },
+      !event.shiftKey,
+    );
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    recordVimCommand(input.value);
+    vimHistoryState.delete(input);
+    return;
+  }
+
+  if (event.key === 'Escape' || event.key === 'Esc') {
+    vimHistoryState.delete(input);
+    return;
+  }
+
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    event.preventDefault();
+    event.stopPropagation();
+    navigateVimHistory(input, event.key === 'ArrowUp' ? -1 : 1);
+    return;
+  }
+
+  if (
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    event.key.toLowerCase() === 'w'
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    vimHistoryState.delete(input);
+    deleteWordBeforeCursor(input);
+    return;
+  }
+
+  vimHistoryState.delete(input);
 }
 
 function syncVimClipboardRegister(): void {

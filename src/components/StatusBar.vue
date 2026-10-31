@@ -13,6 +13,8 @@ const props = defineProps<{
   mode: ViewMode;
   vimEnabled: boolean;
   vimMode?: string | null;
+  vimRecording?: string | null;
+  vimMessage?: string | null;
   lineEnding: string;
   immersive: boolean;
   saveState?: 'saved' | 'saving' | 'dirty' | null;
@@ -200,6 +202,20 @@ function onMenuKeyDown(event: KeyboardEvent): void {
         :aria-label="t('status.vimAria', { mode: vimModeLabel })"
       >
         {{ vimModeLabel }}
+      </span>
+      <span
+        v-if="vimEnabled && vimRecording"
+        class="status-vim-recording"
+        :aria-label="t('status.vimRecording', { register: vimRecording })"
+      >
+        REC @{{ vimRecording }}
+      </span>
+      <span
+        v-if="vimEnabled && vimMessage"
+        class="status-vim-message"
+        :title="vimMessage"
+      >
+        {{ vimMessage }}
       </span>
       <button
         type="button"
@@ -505,6 +521,31 @@ function onMenuKeyDown(event: KeyboardEvent): void {
   font-family: var(--mono-font);
   font-size: 10.5px;
   letter-spacing: 0.03em;
+}
+
+.status-vim-recording {
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: var(--warning);
+  font-family: var(--mono-font);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.status-vim-command :deep(span.cm-vim-message) {
+  display: none;
+}
+
+.status-vim-message {
+  min-width: 0;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--statusbar-muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
 }
 
 .status-focus {

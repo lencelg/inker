@@ -100,4 +100,29 @@ describe('StatusBar mode menu', () => {
     expect(wrapper.find('.status-vim').text()).toBe('INSERT');
     wrapper.unmount();
   });
+
+  it('shows macro recording and transient Vim messages', () => {
+    const wrapper = mount(StatusBar, {
+      attachTo: document.body,
+      props: {
+        line: 1,
+        column: 1,
+        mode: 'source',
+        vimEnabled: true,
+        vimMode: 'NORMAL',
+        vimRecording: 'q',
+        vimMessage: '3 lines yanked',
+        lineEnding: 'LF',
+        immersive: false,
+      },
+    });
+
+    expect(wrapper.find('.status-vim-recording').text()).toContain(
+      'REC @q',
+    );
+    expect(wrapper.find('.status-vim-message').text()).toBe(
+      '3 lines yanked',
+    );
+    wrapper.unmount();
+  });
 });

@@ -150,6 +150,8 @@ tempfile                     测试临时目录
 - 窗口或编辑器获得焦点时会同步系统剪贴板文本到 Vim 的 unnamed register，Normal 模式 `p` / `P` 可直接粘贴；内部 yank/delete 寄存器仍可用。
 - Vim 模式状态和 `:` 命令输入行均整合在应用底部状态栏，不再额外占用编辑器行。
 - Vim 命令行支持 `Tab` / `Shift+Tab` 补全：Ex 命令名和当前笔记目录下的文件路径；单候选直接填入，多候选循环，并保留光标后的文本。
+- `:` 命令行历史会持久化（最多 50 条），支持 `Up` / `Down` 浏览和 `Ctrl-W` 删除前一个词；搜索命令行也支持 `Ctrl-W`。
+- 状态栏显示宏录制 `REC @x`；yank、搜索等 Vim 提示信息显示在底栏，不再占用编辑器通知区域。
 - 支持 `za` / `zc` / `zo` / `zM` / `zR` 折叠与展开 Markdown 标题、代码块、引用和表格等 CodeMirror 折叠范围。
 - 支持 `:w` 保存。
 - 支持 `:pasteimage`（别名 `:pa`）从系统剪贴板粘贴图片。
@@ -733,6 +735,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-font-family` | 编辑器字体 |
 | `inker-vim` | Vim 模式 |
 | `inker-vim-mappings` | 自定义 Vim 键位映射（每行 `mode keys command`） |
+| `inker-vim-command-history` | Vim `:` 命令行历史（最多 50 条） |
 | `inker-immersive` | Zen 模式 |
 | `inker-code-highlight` | 预览代码高亮 |
 | `inker-code-theme` | 代码高亮主题 |

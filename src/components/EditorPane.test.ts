@@ -10,6 +10,7 @@ import {
 import { nextTick } from 'vue';
 import EditorPane from './EditorPane.vue';
 import type { ImageSaveHandler } from '../lib/imagePaste';
+import { VIM_COMMAND_HISTORY_KEY } from '../lib/vimCommandHistory';
 
 const clipboardMocks = vi.hoisted(() => ({
   readClipboardImageFile: vi.fn(),
@@ -82,6 +83,7 @@ function prepareEditorDom(): void {
 beforeEach(() => {
   clipboardTextMocks.hasClipboardText.mockReturnValue(false);
   clipboardTextMocks.readClipboardText.mockResolvedValue(null);
+  localStorage.removeItem(VIM_COMMAND_HISTORY_KEY);
 });
 
 afterEach(() => {
@@ -229,6 +231,155 @@ describe('EditorPane', () => {
     await nextTick();
 
     expect(wrapper.find('.cm-foldPlaceholder').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('emits Vim macro recording state', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({ vimEnabled: true });
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+    content.dispatchEvent(keydown('q', 'KeyQ', 81));
+    content.dispatchEvent(keydown('a', 'KeyA', 65));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    expect(wrapper.emitted('vimRecording')?.at(-1)).toEqual(['a']);
+
+    content.dispatchEvent(keydown('q', 'KeyQ', 81));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    expect(wrapper.emitted('vimRecording')?.at(-1)).toEqual([null]);
+    wrapper.unmount();
+  });
+
+  it('emits Vim notification text as a status message', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: 'one\ntwo',
+    });
+    await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+    content.dispatchEvent(keydown('y', 'KeyY', 89));
+    content.dispatchEvent(keydown('y', 'KeyY', 89));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    const messages = wrapper.emitted('vimMessage')?.flat() ?? [];
+    expect(
+      messages.some((message) => /yanked/i.test(String(message))),
+    ).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('recalls Vim command history with ArrowUp and ArrowDown', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({ vimEnabled: true });
+    await nextTick();
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+
+    const openPrompt = async (): Promise<HTMLInputElement> => {
+      content.focus();
+      const colon = new KeyboardEvent('keydown', {
+        key: ':',
+        code: 'Semicolon',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(colon, 'keyCode', { get: () => 186 });
+      Object.defineProperty(colon, 'which', { get: () => 186 });
+      content.dispatchEvent(colon);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTick();
+      return wrapper.find('.cm-vim-panel input')
+        .element as HTMLInputElement;
+    };
+
+    let input = await openPrompt();
+    input.value = 'set textwidth=80';
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    input = await openPrompt();
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowUp',
+        code: 'ArrowUp',
+        keyCode: 38,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(input.value).toBe('set textwidth=80');
+
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        code: 'ArrowDown',
+        keyCode: 40,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(input.value).toBe('');
+
+    wrapper.unmount();
+  });
+
+  it('deletes a word with Ctrl-W in the Vim command line', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({ vimEnabled: true });
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+    const colon = new KeyboardEvent('keydown', {
+      key: ':',
+      code: 'Semicolon',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    Object.defineProperty(colon, 'keyCode', { get: () => 186 });
+    Object.defineProperty(colon, 'which', { get: () => 186 });
+    content.dispatchEvent(colon);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    const input = wrapper.find('.cm-vim-panel input')
+      .element as HTMLInputElement;
+    input.value = 'set textwidth=80';
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'w',
+        code: 'KeyW',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    expect(input.value).toBe('set ');
     wrapper.unmount();
   });
 

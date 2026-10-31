@@ -201,6 +201,9 @@ const preferences = computed<Preferences>(() =>
   }),
 );
 const vimMode = ref<string | null>('NORMAL');
+const vimRecording = ref<string | null>(null);
+const vimMessage = ref<string | null>(null);
+let vimMessageTimer = 0;
 const activeView = ref<'explorer' | 'search'>('explorer');
 const sidebarVisible = ref(true);
 const sidebarWidth = ref(readSidebarWidth());
@@ -1163,6 +1166,28 @@ function handleCursor(position: {
 
 function handleVimMode(mode: string | null): void {
   vimMode.value = mode;
+  if (mode === null) {
+    vimRecording.value = null;
+    vimMessage.value = null;
+  }
+}
+
+function handleVimRecording(register: string | null): void {
+  vimRecording.value = register;
+}
+
+function handleVimMessage(message: string | null): void {
+  if (vimMessageTimer) {
+    window.clearTimeout(vimMessageTimer);
+    vimMessageTimer = 0;
+  }
+  vimMessage.value = message;
+  if (message) {
+    vimMessageTimer = window.setTimeout(() => {
+      vimMessage.value = null;
+      vimMessageTimer = 0;
+    }, 4000);
+  }
 }
 
 async function setViewMode(mode: ViewMode): Promise<void> {
@@ -2983,6 +3008,8 @@ watch(
               @scroll-sync="handleEditorScroll"
               @cursor="handleCursor"
               @vim-mode="handleVimMode"
+              @vim-recording="handleVimRecording"
+              @vim-message="handleVimMessage"
               @save-request="saveCurrentNote"
             />
           </section>
@@ -3076,6 +3103,8 @@ watch(
         vimEnabled && !activeImagePath && viewMode !== 'wysiwyg'
       "
       :vim-mode="vimMode"
+      :vim-recording="vimRecording"
+      :vim-message="vimMessage"
       :line-ending="activeImagePath ? t('app.status.image') : lineEnding"
       :immersive="immersiveEnabled"
       :save-state="saveState"
