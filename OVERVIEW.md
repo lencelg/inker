@@ -504,7 +504,7 @@ tempfile                     测试临时目录
 inker/
 ├── README.md                      # 产品介绍、安装与功能
 ├── OVERVIEW.md                    # 本文档：架构与实现说明
-├── LICENSE                        # MIT 许可证
+├── LICENSE                        # GPL-3.0 许可证
 ├── Cargo.toml                     # Cargo workspace
 ├── Cargo.lock
 ├── index.html
