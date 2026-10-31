@@ -23,6 +23,8 @@ function setup(
     pickNotesDir: vi.fn(async () => '/notes' as string | null),
     chooseNotesDir: vi.fn(async () => state('/other')),
     applyState: vi.fn(),
+    showLauncher: vi.fn(),
+    recordWorkspace: vi.fn(),
     restoreSession: vi.fn(
       overrides.restoreSession ?? (async () => true),
     ),
@@ -46,50 +48,27 @@ function setup(
 }
 
 describe('useWorkspaceLifecycle', () => {
-  it('boots into a restored session', async () => {
+  it('boots into the launcher without opening a workspace', async () => {
     const { lifecycle, callbacks } = setup();
 
-    await lifecycle.bootstrap();
+    await lifecycle.bootstrapLauncher();
 
-    expect(callbacks.applyState).toHaveBeenCalledWith(state());
-    expect(callbacks.restoreSession).toHaveBeenCalledTimes(1);
+    expect(callbacks.getState).toHaveBeenCalledTimes(1);
+    expect(callbacks.showLauncher).toHaveBeenCalledWith(state());
+    expect(callbacks.applyState).not.toHaveBeenCalled();
+    expect(callbacks.restoreSession).not.toHaveBeenCalled();
     expect(callbacks.openNote).not.toHaveBeenCalled();
     expect(callbacks.setHydrating.mock.calls).toEqual([[true], [false]]);
-    expect(callbacks.scheduleSessionPersist).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to the first note when restore fails', async () => {
-    const { lifecycle, callbacks } = setup({
-      restoreSession: async () => false,
-    });
-
-    await lifecycle.bootstrap();
-
-    expect(callbacks.openNote).toHaveBeenCalledWith('a.md');
-  });
-
-  it('falls back when restore throws', async () => {
-    const { lifecycle, callbacks } = setup({
-      restoreSession: async () => {
-        throw new Error('restore failed');
-      },
-    });
-
-    await lifecycle.bootstrap();
-
-    expect(callbacks.openNote).toHaveBeenCalledWith('a.md');
-    expect(callbacks.setError).not.toHaveBeenCalled();
-  });
-
-  it('reports bootstrap errors and clears hydrating', async () => {
+  it('reports launcher bootstrap errors and clears hydrating', async () => {
     const { lifecycle, callbacks } = setup();
     callbacks.getState.mockRejectedValue(new Error('state failed'));
 
-    await lifecycle.bootstrap();
+    await lifecycle.bootstrapLauncher();
 
     expect(callbacks.setError).toHaveBeenCalledTimes(1);
     expect(callbacks.setHydrating).toHaveBeenLastCalledWith(false);
-    expect(callbacks.scheduleSessionPersist).toHaveBeenCalledTimes(1);
   });
 
   it('ignores folder switching while busy', async () => {
@@ -133,10 +112,27 @@ describe('useWorkspaceLifecycle', () => {
     expect(callbacks.chooseNotesDir).toHaveBeenCalledWith('/notes');
     expect(callbacks.resetTabs).toHaveBeenCalledTimes(1);
     expect(callbacks.applyState).toHaveBeenCalledWith(state('/other'));
+    expect(callbacks.recordWorkspace).toHaveBeenCalledWith(
+      state('/other'),
+    );
     expect(callbacks.restoreSession).toHaveBeenCalledTimes(1);
     expect(callbacks.openNote).not.toHaveBeenCalled();
     expect(callbacks.setHydrating.mock.calls).toEqual([[true], [false]]);
     expect(callbacks.scheduleSessionPersist).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens a recent workspace without the folder picker', async () => {
+    const { lifecycle, callbacks } = setup();
+
+    await lifecycle.openWorkspace('/other/');
+
+    expect(callbacks.pickNotesDir).not.toHaveBeenCalled();
+    expect(callbacks.chooseNotesDir).toHaveBeenCalledWith('/other/');
+    expect(callbacks.applyState).toHaveBeenCalledWith(state('/other'));
+    expect(callbacks.recordWorkspace).toHaveBeenCalledWith(
+      state('/other'),
+    );
+    expect(callbacks.restoreSession).toHaveBeenCalledTimes(1);
   });
 
   it('opens the first note when the target session cannot be restored', async () => {
@@ -144,7 +140,7 @@ describe('useWorkspaceLifecycle', () => {
       restoreSession: async () => false,
     });
 
-    await lifecycle.chooseFolder();
+    await lifecycle.openWorkspace('/other');
 
     expect(callbacks.openNote).toHaveBeenCalledWith('a.md');
   });
@@ -153,7 +149,7 @@ describe('useWorkspaceLifecycle', () => {
     const { lifecycle, callbacks } = setup();
     callbacks.chooseNotesDir.mockRejectedValue(new Error('switch failed'));
 
-    await lifecycle.chooseFolder();
+    await lifecycle.openWorkspace('/other');
 
     expect(callbacks.setError).toHaveBeenCalledTimes(1);
     expect(callbacks.setSwitching).toHaveBeenLastCalledWith(false);

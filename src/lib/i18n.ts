@@ -58,8 +58,10 @@ const zh = {
   'app.sidebar.resizeAria': '调整侧边栏宽度，当前 {width} 像素',
   'app.sidebar.resizeTitle': '拖动调整侧边栏宽度，双击恢复默认',
   'app.splitter.title': '拖动调整编辑区和预览区宽度，双击恢复默认',
-  'app.welcome.description': '选择一个文件夹，笔记会以 .md 文件保存在其中。',
-  'app.welcome.chooseFolder': '选择笔记文件夹',
+  'app.launcher.openFolder': '打开其他文件夹…',
+  'app.launcher.recent': '最近',
+  'app.launcher.empty': '还没有最近的工作区。',
+  'app.launcher.more': '更多…',
   'app.error.dismiss': '关闭错误提示',
   'app.watcherError':
     '文件监听不可用，外部修改不会自动检测：{error}',
@@ -443,9 +445,10 @@ const en: Record<TranslationKey, string> = {
     'Drag to resize the sidebar; double-click to reset',
   'app.splitter.title':
     'Drag to resize the editor and preview; double-click to reset',
-  'app.welcome.description':
-    'Choose a folder. Your notes will be saved there as .md files.',
-  'app.welcome.chooseFolder': 'Choose Notes Folder',
+  'app.launcher.openFolder': 'Open Another Folder…',
+  'app.launcher.recent': 'Recent',
+  'app.launcher.empty': 'No recent workspaces yet.',
+  'app.launcher.more': 'More…',
   'app.error.dismiss': 'Dismiss error',
   'app.watcherError':
     'File watching is unavailable; external changes will not be detected automatically: {error}',

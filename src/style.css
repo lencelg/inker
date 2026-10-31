@@ -1454,50 +1454,103 @@ button:disabled {
   line-height: 1.7;
 }
 
-.welcome-card {
-  width: min(420px, 100%);
-  padding: 36px 32px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  box-shadow: var(--shadow);
-  text-align: center;
+.launcher-card {
+  width: min(480px, 100%);
+  padding: 0 4px;
+  text-align: left;
 }
 
-.welcome-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--leaf), var(--leaf-strong));
-  color: #fff;
-}
-
-.welcome-icon svg {
-  width: 26px;
-  height: 26px;
-}
-
-.welcome-card h1 {
-  margin: 16px 0 8px;
-  font-size: 22px;
-  letter-spacing: -0.01em;
-}
-
-.welcome-card p {
-  margin: 0 0 22px;
-  color: var(--muted);
+.launcher-title {
+  margin: 0 0 8px;
+  color: var(--ink);
   font-size: 13px;
-  line-height: 1.7;
+  font-weight: 600;
 }
 
-.welcome-card .btn {
-  width: 100%;
+.launcher-list {
+  display: flex;
+  max-height: 340px;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
 }
 
-.welcome-card .welcome-error {
-  margin: 16px 0 0;
+.launcher-list li {
+  display: flex;
+  min-width: 0;
+}
+
+.launcher-workspace {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.launcher-workspace:hover:not(:disabled) .launcher-workspace-name {
+  text-decoration: underline;
+}
+
+.launcher-workspace:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.launcher-workspace-name {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-workspace-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launcher-empty {
+  margin: 0 0 4px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.launcher-more {
+  margin: 6px 0 0;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.launcher-more:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.launcher-card .welcome-error {
+  margin: 12px 0 0;
   color: var(--error);
   font-size: 12px;
 }

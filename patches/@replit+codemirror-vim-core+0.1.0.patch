@@ -50,7 +50,7 @@ diff --git a/node_modules/@replit/codemirror-vim-core/vim.js b/node_modules/@rep
 -        vim.expectLiteralNext = false;
  
 +        vim.inputState.deferredCommand = null;
-+        if (match.hasPartial && getOption('timeoutlen') > 0) {
++        if (match.hasUserPartial && getOption('timeoutlen') > 0) {
 +          var deferredCommand = match.command;
 +          var deferredKeys = keys;
 +          vim.inputState.deferredCommand = { command: deferredCommand, keys: deferredKeys };
@@ -101,11 +101,19 @@ diff --git a/node_modules/@replit/codemirror-vim-core/vim.js b/node_modules/@rep
          inputState.selectedCharacter = character;
        }
 -      return {type: 'full', command: bestMatch};
-+      return {type: 'full', command: bestMatch, hasPartial: matches.partial.length > 0};
++      return {type: 'full', command: bestMatch, hasUserPartial: matches.partial.some(function(command) { return command.userDefined; })};
      },
      /**
       * @arg {CodeMirrorV} cm
-@@ -6757,6 +6817,7 @@
+@@ -6715,6 +6775,7 @@
+ 
+   /** @arg {vimKey} command*/
+   function _mapCommand(command) {
++    command.userDefined = true;
+     defaultKeymap.unshift(command);
+     if (command.keys) addUsedKeys(command.keys);
+   }
+@@ -6757,6 +6818,7 @@
    // The timeout in milliseconds for the two-character ESC keymap should be
    // adjusted according to your typing speed to prevent false positives.
    defineOption('insertModeEscKeysTimeout', 200, 'number');

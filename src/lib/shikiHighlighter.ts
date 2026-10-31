@@ -7,6 +7,7 @@ import type {
 } from '@shikijs/types';
 import {
   CODE_LANGUAGES,
+  extractFenceLanguages,
   resolveCodeLanguage,
 } from './codeLanguages';
 import { BUILTIN_CODE_THEME_REGISTRATIONS } from './codeThemeRegistrations';
@@ -28,6 +29,13 @@ const MAX_CODE_CHARS = 200_000;
 const MAX_CODE_LINES = 5_000;
 const MAX_LINE_CHARS = 5_000;
 const MAX_CACHE_ENTRIES = 100;
+const CORE_LANGUAGES = [
+  'javascript',
+  'typescript',
+  'json',
+  'markdown',
+  'shellscript',
+];
 
 export const highlightRevision = ref(0);
 
@@ -74,12 +82,13 @@ export async function initShiki(
       langs: [],
       engine: createOnigurumaEngine(import('shiki/wasm')),
     });
-    initialized = true;
     bumpRevision();
 
     if (activeTheme) {
       void ensureShikiTheme(activeTheme);
     }
+    await Promise.all(CORE_LANGUAGES.map((id) => ensureShikiLanguage(id)));
+    initialized = true;
   })()
     .catch(() => {
       initialized = false;
@@ -153,7 +162,21 @@ export async function ensureShikiTheme(
 
 export function useCodeTheme(theme: HighlightTheme): void {
   activeTheme = theme;
-  if (highlighter) void ensureShikiTheme(theme);
+  void ensureShikiTheme(theme);
+}
+
+/**
+ * Warms the languages used by the active note so entering insert mode or
+ * scrolling through fenced code does not trigger grammar loads mid-edit.
+ */
+export function preloadMarkdownLanguages(source: string): void {
+  const languages = extractFenceLanguages(source);
+  if (languages.length === 0) return;
+  void initShiki().then(() =>
+    Promise.all(
+      languages.map((language) => ensureShikiLanguage(language)),
+    ),
+  );
 }
 
 function shouldSkip(code: string): boolean {

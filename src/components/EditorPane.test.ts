@@ -311,6 +311,24 @@ describe('EditorPane', () => {
     wrapper.unmount();
   });
 
+  it('enters insert mode immediately from normal mode', async () => {
+    prepareEditorDom();
+    const wrapper = mountEditor({
+      vimEnabled: true,
+      initialContent: 'hello',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+
+    const content = wrapper.find('.cm-content').element as HTMLElement;
+    content.focus();
+    content.dispatchEvent(keydown('i', 'KeyI', 73));
+    await nextTick();
+
+    expect(wrapper.emitted('vimMode')?.at(-1)).toEqual(['INSERT']);
+    wrapper.unmount();
+  });
+
   it('applies insert-mode key-to-key mappings', async () => {
     prepareEditorDom();
     const wrapper = mountEditor({

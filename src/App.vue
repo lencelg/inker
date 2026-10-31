@@ -66,7 +66,7 @@ import { isImagePath } from './lib/fileKinds';
 import { restoreSettingsFocus } from './lib/focus';
 import { localizeError, t, type TranslationKey } from './lib/i18n';
 import { renderMarkdown, extractMarkdownHeadings } from './lib/markdown';
-import { highlightRevision } from './lib/shikiHighlighter';
+import { highlightRevision, preloadMarkdownLanguages } from './lib/shikiHighlighter';
 import {
   buildFilePaletteItems,
   commandKeepsSettingsOpen,
@@ -86,6 +86,13 @@ import {
   isSameOrDescendant,
   replacePrefix,
 } from './lib/paths';
+import {
+  readRecentWorkspaces,
+  recordRecentWorkspace,
+  seedRecentWorkspaces,
+  writeRecentWorkspaces,
+  type RecentWorkspace,
+} from './lib/recentWorkspaces';
 import {
   applyPreferences,
   normalizePreferences,
@@ -175,6 +182,7 @@ const MAX_SIDEBAR_WIDTH = 480;
 
 const entries = ref<FileEntry[]>([]);
 const notesDir = ref<string | null>(null);
+const recentWorkspaces = ref<RecentWorkspace[]>(readRecentWorkspaces());
 const tabs = ref<NoteTab[]>([]);
 const activePath = ref<string | null>(null);
 const previewPath = ref<string | null>(null);
@@ -285,8 +293,7 @@ const previewHtml = computed(() => {
   });
 });
 const anySaving = computed(() => savingPaths.value.length > 0);
-const busy = computed(() => switching.value || mutating.value);
-const vimEnabled = computed(() => preferences.value.vimEnabled);
+const busy = computed(() => switching.value || mutating.value);const vimEnabled = computed(() => preferences.value.vimEnabled);
 const lineEnding = computed(() =>
   activeTab.value?.content.includes('\r\n') ? 'CRLF' : 'LF',
 );
@@ -295,6 +302,21 @@ const previewLayoutKey = computed(
     `${preferences.value.theme}:${preferences.value.fontFamily}:${preferences.value.fontSize}`,
 );
 const immersiveEnabled = computed(() => preferences.value.immersive);
+
+watch(
+  () => activeTab.value?.path ?? null,
+  () => {
+    if (
+      !preferences.value.codeHighlight &&
+      !preferences.value.sourceHighlight
+    ) {
+      return;
+    }
+    const content = activeTab.value?.content;
+    if (content) preloadMarkdownLanguages(content);
+  },
+  { immediate: true },
+);
 const tabItems = computed(() =>
   tabs.value.map((tab) => ({
     path: tab.path,
@@ -655,7 +677,7 @@ onMounted(() => {
       }
     })
     .catch(() => undefined);
-  void workspaceLifecycle.bootstrap();
+  void workspaceLifecycle.bootstrapLauncher();
 });
 
 onBeforeUnmount(() => {
@@ -684,6 +706,17 @@ const workspaceLifecycle = useWorkspaceLifecycle({
   pickNotesDir: () => api.pickNotesDir(),
   chooseNotesDir: (path) => api.chooseNotesDir(path),
   applyState,
+  showLauncher: (state) => {
+    recentWorkspaces.value = seedRecentWorkspaces(state.notesDir);
+  },
+  recordWorkspace: (state) => {
+    if (!state.notesDir) return;
+    recentWorkspaces.value = recordRecentWorkspace(
+      recentWorkspaces.value,
+      state.notesDir,
+    );
+    writeRecentWorkspaces(recentWorkspaces.value);
+  },
   restoreSession: restoreWorkspaceSession,
   firstNotePath,
   openNote,
@@ -702,6 +735,10 @@ const workspaceLifecycle = useWorkspaceLifecycle({
   },
   scheduleSessionPersist,
 });
+
+function openRecentWorkspace(path: string): void {
+  void workspaceLifecycle.openWorkspace(path);
+}
 
 function updatePreferences(patch: Partial<Preferences>): void {
   const next = normalizePreferences({
@@ -2918,14 +2955,44 @@ watch(
       @dblclick="resetSidebarWidth"
     ></div>
 
-    <main v-if="notesDir === null" class="workspace welcome">
-      <div class="welcome-card">
-        <span class="welcome-icon"><InkerMark /></span>
-        <h1>Inker</h1>
-        <p>{{ t('app.welcome.description') }}</p>
-        <button class="btn primary" type="button" @click="workspaceLifecycle.chooseFolder">
-          {{ t('app.welcome.chooseFolder') }}
+    <main v-if="notesDir === null" class="workspace welcome launcher">
+      <div class="launcher-card">
+        <h1 class="launcher-title">{{ t('app.launcher.recent') }}</h1>
+        <p v-if="recentWorkspaces.length === 0" class="launcher-empty">
+          {{ t('app.launcher.empty') }}
+        </p>
+        <ul v-else class="launcher-list">
+          <li
+            v-for="workspace in recentWorkspaces"
+            :key="workspace.path"
+          >
+            <button
+              class="launcher-workspace"
+              type="button"
+              :disabled="busy"
+              :title="workspace.path"
+              @click="openRecentWorkspace(workspace.path)"
+            >
+              <span class="launcher-workspace-name">
+                {{ workspace.name }}
+              </span>
+              <span class="launcher-workspace-path">
+                {{ workspace.path }}
+              </span>
+            </button>
+          </li>
+        </ul>
+        <button
+          class="launcher-more"
+          type="button"
+          :disabled="busy"
+          :aria-label="t('app.launcher.openFolder')"
+          :title="t('app.launcher.openFolder')"
+          @click="workspaceLifecycle.chooseFolder"
+        >
+          {{ t('app.launcher.more') }}
         </button>
+
         <p v-if="error" class="welcome-error">{{ error }}</p>
       </div>
     </main>

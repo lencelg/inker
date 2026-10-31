@@ -491,6 +491,17 @@ function buildCodeBlockDecorations(
 }
 
 const refreshCodeHighlight = StateEffect.define<null>();
+const CODE_HIGHLIGHT_REFRESH_DELAY = 80;
+let codeHighlightTimer = 0;
+
+function scheduleCodeHighlightRefresh(view: EditorView): void {
+  if (codeHighlightTimer) window.clearTimeout(codeHighlightTimer);
+  codeHighlightTimer = window.setTimeout(() => {
+    codeHighlightTimer = 0;
+    if (!view.dom.isConnected) return;
+    view.dispatch({ effects: refreshCodeHighlight.of(null) });
+  }, CODE_HIGHLIGHT_REFRESH_DELAY);
+}
 
 function codeBlockLinePlugin(className: string) {
   return ViewPlugin.fromClass(
@@ -507,11 +518,13 @@ function codeBlockLinePlugin(className: string) {
             effect.is(refreshCodeHighlight),
           ),
         );
-        if (update.docChanged || update.viewportChanged || refresh) {
+        if (refresh || update.viewportChanged) {
           this.decorations = buildCodeBlockDecorations(
             update.view,
             className,
           );
+        } else if (update.docChanged) {
+          scheduleCodeHighlightRefresh(update.view);
         }
       }
     },
@@ -795,6 +808,19 @@ function refreshHeadingTrail(): void {
     view.state.selection.main.head,
   ).number;
   breadcrumbs.value = activeHeadingTrail(headings, line);
+}
+
+const HEADING_REFRESH_DELAY = 120;
+let headingRefreshTimer = 0;
+
+function scheduleHeadingCollection(): void {
+  if (headingRefreshTimer) window.clearTimeout(headingRefreshTimer);
+  headingRefreshTimer = window.setTimeout(() => {
+    headingRefreshTimer = 0;
+    if (!view) return;
+    headings = collectHeadings(view.state);
+    refreshHeadingTrail();
+  }, HEADING_REFRESH_DELAY);
 }
 
 function activeBlock(
@@ -1183,7 +1209,7 @@ onMounted(() => {
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             emit('change', update.state.doc.toString());
-            headings = collectHeadings(update.state);
+            scheduleHeadingCollection();
             scheduleScrollSync();
           }
           if (update.docChanged || update.selectionSet) {
@@ -1350,6 +1376,14 @@ watch(language, () => {
 });
 
 onBeforeUnmount(() => {
+  if (headingRefreshTimer) {
+    window.clearTimeout(headingRefreshTimer);
+    headingRefreshTimer = 0;
+  }
+  if (codeHighlightTimer) {
+    window.clearTimeout(codeHighlightTimer);
+    codeHighlightTimer = 0;
+  }
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame);
     scrollFrame = 0;

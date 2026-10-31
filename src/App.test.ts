@@ -201,10 +201,15 @@ function mountApp() {
   return wrapper;
 }
 
-async function settle(): Promise<void> {
+async function settle(autoOpenWorkspace = true): Promise<void> {
   for (let index = 0; index < 6; index += 1) {
     await flushPromises();
     await nextTick();
+    if (autoOpenWorkspace) {
+      document
+        .querySelector<HTMLButtonElement>('.launcher-workspace')
+        ?.click();
+    }
   }
 }
 
@@ -243,6 +248,12 @@ beforeEach(() => {
   state = { notesDir: '/notes', entries: makeEntries() };
 
   mocks.apiMock.getState.mockResolvedValue(state);
+  mocks.apiMock.chooseNotesDir.mockImplementation(
+    async (path: string) => ({
+      ...(await mocks.apiMock.getState()),
+      notesDir: path,
+    }),
+  );
   mocks.apiMock.refresh.mockResolvedValue(state);
   mocks.apiMock.saveCopy.mockResolvedValue(null);
   mocks.apiMock.readNote.mockImplementation(
@@ -268,6 +279,24 @@ afterEach(() => {
 });
 
 describe('App integration', () => {
+  it('shows recent workspaces and opens one from the launcher', async () => {
+    const wrapper = mountApp();
+    await settle(false);
+
+    expect(wrapper.find('.launcher').exists()).toBe(true);
+    const items = wrapper.findAll('.launcher-workspace');
+    expect(items).toHaveLength(1);
+    expect(items[0].text()).toContain('notes');
+    expect(items[0].text()).toContain('/notes');
+
+    await items[0].trigger('click');
+    await settle(false);
+
+    expect(wrapper.find('.launcher').exists()).toBe(false);
+    expect(mocks.apiMock.chooseNotesDir).toHaveBeenCalledWith('/notes');
+    expect(wrapper.find('.editor-stub').text()).toContain('# A');
+  });
+
   it('zooms the workbench with the VS Code shortcuts', async () => {
     const wrapper = mountApp();
     await settle();

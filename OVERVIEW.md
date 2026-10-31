@@ -76,6 +76,9 @@ tempfile                     测试临时目录
 
 ### 2.1 工作区与文件管理
 
+- 启动时显示工作区选择页：列出最近打开的工作区（最多 10 个），可一键打开或选择其他文件夹。
+- 最近工作区会从已有会话快照和后端保存的当前文件夹自动补全，首次升级后也能看到之前的工作区。
+- 打开最近工作区时会恢复该工作区的会话（标签、光标、滚动位置、编辑模式等）；文件夹失效时保留启动页并显示错误。
 - 选择一个本地文件夹作为笔记库。
 - Markdown 文件与图片文件显示在同一个文件树中。
 - 文件夹支持展开/折叠。
@@ -161,11 +164,12 @@ tempfile                     测试临时目录
 - 状态栏显示宏录制 `REC @x`；yank、搜索等 Vim 提示信息显示在底栏，不再占用编辑器通知区域。
 - 支持 `za` / `zc` / `zo` / `zM` / `zR` 折叠与展开 Markdown 标题、代码块、引用和表格等 CodeMirror 折叠范围。
 - 支持 vim-surround：normal 模式 `ys{motion}{char}` / `yss` / `cs{old}{new}` / `ds{char}`（`gs` 为别名）、visual 模式 `S{char}`（整行用 `V` 后 `S`）；字符支持括号、引号、反引号、`*` / `_` / `~` 等。
-- 为支持多键映射，对 `@replit/codemirror-vim-core` 增加了多键超时 patch（`patches/` 目录，`postinstall` 运行 patch-package）；新增 `timeoutlen` 选项（默认 1000ms），可用 `:set timeoutlen=...` 调整。
+- 为支持多键映射，对 `@replit/codemirror-vim-core` 增加了多键超时 patch（`patches/` 目录，`postinstall` 运行 patch-package）；新增 `timeoutlen` 选项（默认 1000ms），可用 `:set timeoutlen=...` 调整。超时只对自定义/插件映射生效，`i`/`a`/`o` 等内置命令立即执行，不会因 `i<register>` 等前缀等待。
 - 支持 `:w` 保存；`:e` / `:edit` 按路径打开笔记（相对当前笔记目录，支持 Tab 补全），`:bn` / `:bp` 切换标签，`:q` / `:q!` 关闭当前标签，`:wq` / `:x` 保存并关闭。
 - 支持 `:pasteimage`（别名 `:pa`）从系统剪贴板粘贴图片。
 - 支持自定义 Vim 键位映射（设置“文本编辑器 → Vim Custom Mappings”），默认 `normal <Space>p pasteimage`；可绑定 `pasteimage` / `save`，支持 normal / visual / insert / operatorPending 模式；使用 `=` 前缀定义 key-to-key 映射，例如 `insert jk =<Esc>`。以 `<Space>` 开头的映射会临时占用空格键；清空映射后恢复 Vim 默认的空格右移。
 - 可通过设置关闭源码模式中围栏代码块的语法高亮，默认开启；Markdown 语法高亮不受影响。
+- Vim 快速输入时，标题面包屑与源码代码块配色采用防抖重建，避免每个按键都执行全量语法扫描和 tokenize；打开笔记时会预热该笔记使用的代码语言。
 
 ### 2.6 实时预览编辑器
 
@@ -766,6 +770,7 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 | `inker-session-v1` | 按笔记文件夹保存的会话快照 |
 | `inker-drafts-v1` | 未保存内容的崩溃草稿 |
 | `inker-recent-files-v1` | 按笔记文件夹保存的最近打开文件 |
+| `inker-recent-workspaces-v1` | 启动页的最近工作区列表（最多 10 个） |
 | `inker-workspace-settings-v1` | 按笔记文件夹保存的偏好覆盖（最多 20 个） |
 | `inker-image-confirm` | 粘贴图片时是否确认名称 |
 | `inker-image-template` | 图片命名模板 |
@@ -800,7 +805,8 @@ Tauri 命令层，把 `AppHandle`、当前笔记目录与 `notes.rs` 连接起�
 ### 4.7 打包体积与内存策略
 
 - 重型界面按需加载：WYSIWYG、只读预览、设置浮层、搜索面板、图片查看器、导出预览/HTML 导出对话框和 `exportContent` 均使用动态 `import()`；未打开对应界面时不会解析 KaTeX、DOMPurify、分页和 DOCX 相关代码。快速打开保持同步加载，避免输入时序问题。
-- Shiki 延迟初始化：启动时不再加载 WASM、语法和主题；首次遇到代码块时初始化，并按围栏语言按需加载语法，加载完成后通过 `highlightRevision` 触发预览重渲染。
+- Shiki 启动预热：应用启动时在后台初始化 WASM、内置主题和常用语言；打开笔记时会预加载该笔记围栏中使用的语言，避免在 Vim 插入模式或滚动代码块时才触发语法加载。其余语言仍按需加载。
+- 编辑防抖：源码代码块配色重建延迟 80ms、标题面包屑收集延迟 120ms，避免快速输入（尤其是 Vim 模式）时每个按键都执行全量语法遍历和 tokenize。
 - 字体资源：等宽字体只引入 latin 子集；`vite.config.ts` 中的构建插件从 CSS 移除 woff/ttf 回退，只保留 woff2。字体资源由约 2 MB 降至约 0.4 MB。
 - 运行期缓存上限：Shiki token 缓存 100 条、Mermaid SVG 缓存 40 条；缩略图 tile 缓存按视口高度计算（12–48 个），淘汰的 Canvas 进入复用池。
 - 缩略图行布局使用连续 `Float64Array` / `Uint16Array` 保存每行顶部位置与视觉行数，不再为每一行创建对象。
@@ -1078,7 +1084,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 当前测试情况：
 
-- 前端：75 个测试文件，463 个测试通过
+- 前端：76 个测试文件，469 个测试通过
 - Rust：26 个测试通过
 
 覆盖范围包括：
@@ -1100,6 +1106,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 图片命名模板、名称清洗、格式映射与 Markdown 路径编码
 - 图片命名弹窗的确认、取消、空名称校验与预览
 - Vim 自定义键位映射解析（模式/命令校验、注释、去重、数量上限）
+- Vim 内置命令不等超时（Normal `i` 立即进入 Insert）与自定义多键映射超时
 - Vim 命令注册与映射应用不抛错
 - 源码编辑器挂载与初始 Markdown 内容渲染
 - 源码编辑器块插入（上下文空行、选区替换、光标位置）
@@ -1115,7 +1122,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 自动保存组合式计时器：延迟保存、取消、模态阻塞重试与保存期间继续编辑
 - 会话组合式持久化：防抖、最大间隔、恢复期间跳过与定时器取消
 - 会话恢复计划：标签/预览回退、草稿覆盖与清理、孤儿草稿、布局与光标状态
-- 工作区生命周期：启动恢复、切换前保存、取消切换与恢复失败回退
+- 工作区生命周期：启动进入最近工作区选择页、切换前保存、取消切换与恢复失败回退
+- 最近工作区：去重、容量上限、会话快照补全与 localStorage 往返
 - 窗口关闭流程：等待保存、取消/确认、错误恢复与重复关闭保护
 - 关闭前保存：自动保存跳过确认、失败重试、放弃草稿与弹窗阻塞
 - PDF / HTML / DOCX 导出准备、保存、取消与导出后打开
