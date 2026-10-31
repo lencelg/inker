@@ -61,6 +61,11 @@ import {
   openVimFold,
   toggleVimFold,
 } from '../lib/vimFolding';
+import {
+  addSurroundChanges,
+  surroundPair,
+  type TextRange,
+} from '../lib/vimSurround';
 import type { FileEntry } from '../types';
 import {
   parseVimMappings,
@@ -118,6 +123,11 @@ let lastVimRecording: string | null = null;
 const notificationWrapped = new WeakSet<object>();
 let appliedVimMappings: VimMapping[] = [];
 let spaceLeaderActive = false;
+
+type SurroundPending = { kind: 'add'; ranges: TextRange[] };
+
+let surroundPending: SurroundPending | null = null;
+let vimSurroundRegistered = false;
 
 function clearVimMappings(): void {
   for (const mapping of appliedVimMappings) {
@@ -952,6 +962,51 @@ function setupVimFoldCommands(): void {
   vimFoldCommandsRegistered = true;
 }
 
+function setupVimSurroundCommands(): void {
+  if (vimSurroundRegistered) return;
+
+  const targetView = (cm: unknown): EditorView | null => {
+    const candidate = (cm as { cm6?: EditorView } | null)?.cm6;
+    return candidate ?? view;
+  };
+  const offsetFor = (target: EditorView, pos: { line: number; ch: number }) =>
+    target.state.doc.line(pos.line + 1).from + pos.ch;
+
+  Vim.defineOperator('inkerSurroundAdd', (cm, _args, ranges) => {
+    const target = targetView(cm);
+    if (!target) return;
+    surroundPending = {
+      kind: 'add',
+      ranges: ranges.map((range) => ({
+        from: offsetFor(target, range.anchor),
+        to: offsetFor(target, range.head),
+      })),
+    };
+    target.focus();
+  });
+
+  Vim.defineAction('inkerSurroundVisual', (cm) => {
+    const target = targetView(cm);
+    if (!target) return;
+    const ranges = target.state.selection.ranges
+      .filter((range) => !range.empty)
+      .map((range) => ({ from: range.from, to: range.to }));
+    if (ranges.length === 0) return;
+    surroundPending = { kind: 'add', ranges };
+    Vim.exitVisualMode(cm);
+    target.focus();
+  });
+
+  Vim.mapCommand('gs', 'operator', 'inkerSurroundAdd', {}, {
+    context: 'normal',
+  });
+  Vim.mapCommand('S', 'action', 'inkerSurroundVisual', {}, {
+    context: 'visual',
+  });
+
+  vimSurroundRegistered = true;
+}
+
 function setupVimCommands(): void {
   Vim.defineEx('write', 'w', () => {
     emit('saveRequest');
@@ -980,6 +1035,7 @@ function setupVimCommands(): void {
     emit('saveRequest');
   });
   setupVimFoldCommands();
+  setupVimSurroundCommands();
   applyVimMappings();
 }
 
@@ -1093,6 +1149,7 @@ onMounted(() => {
   view.dom.addEventListener('focusin', syncVimClipboardRegister);
   window.addEventListener('focus', syncVimClipboardRegister);
   document.addEventListener('keydown', handleVimPromptKeyDown, true);
+  document.addEventListener('keydown', handleVimSurroundKey, true);
   syncVimClipboardRegister();
   view.focus();
   scheduleScrollSync();
@@ -1110,7 +1167,10 @@ onMounted(() => {
 watch(
   () => props.vimEnabled,
   (enabled) => {
-    if (!enabled) cancelImagePrompt?.();
+    if (!enabled) {
+      cancelImagePrompt?.();
+      surroundPending = null;
+    }
     view?.dispatch({
       effects: vimCompartment.reconfigure(enabled ? vimExtension : []),
     });
@@ -1214,6 +1274,8 @@ onBeforeUnmount(() => {
   view?.dom.removeEventListener('focusin', syncVimClipboardRegister);
   window.removeEventListener('focus', syncVimClipboardRegister);
   document.removeEventListener('keydown', handleVimPromptKeyDown, true);
+  document.removeEventListener('keydown', handleVimSurroundKey, true);
+  surroundPending = null;
   clearVimMappings();
   cancelPendingRestoreScroll();
   view?.destroy();
@@ -1355,6 +1417,52 @@ function deleteWordBeforeCursor(input: HTMLInputElement): void {
   const cut = before.replace(/\s+$/, '').replace(/\S+$/, '').length;
   input.value = value.slice(0, cut) + value.slice(start);
   input.setSelectionRange(cut, cut);
+}
+
+function applySurroundChar(
+  target: EditorView,
+  character: string,
+): void {
+  const pending = surroundPending;
+  surroundPending = null;
+  if (!pending) return;
+
+  const spec = surroundPair(character);
+  if (spec) {
+    target.dispatch({
+      changes: addSurroundChanges(pending.ranges, spec),
+    });
+    target.focus();
+  }
+}
+
+function handleVimSurroundKey(event: KeyboardEvent): void {
+  if (!surroundPending || !view || !props.vimEnabled) return;
+  if (!view.dom.contains(document.activeElement)) {
+    surroundPending = null;
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    surroundPending = null;
+    return;
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey) {
+    surroundPending = null;
+    return;
+  }
+
+  const character = event.key;
+  if (character.length !== 1) {
+    event.preventDefault();
+    event.stopPropagation();
+    surroundPending = null;
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  applySurroundChar(view, character);
 }
 
 function handleVimPromptKeyDown(event: KeyboardEvent): void {

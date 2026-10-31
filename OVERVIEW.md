@@ -153,6 +153,7 @@ tempfile                     测试临时目录
 - `:` 命令行历史会持久化（最多 50 条），支持 `Up` / `Down` 浏览和 `Ctrl-W` 删除前一个词；搜索命令行也支持 `Ctrl-W`。
 - 状态栏显示宏录制 `REC @x`；yank、搜索等 Vim 提示信息显示在底栏，不再占用编辑器通知区域。
 - 支持 `za` / `zc` / `zo` / `zM` / `zR` 折叠与展开 Markdown 标题、代码块、引用和表格等 CodeMirror 折叠范围。
+- 支持 vim-surround 子集：normal 模式 `gs{motion}{char}`、visual 模式 `S{char}`（整行用 `V` 后 `S`）；字符支持括号、引号、反引号、`*` / `_` / `~` 等。标准 `ys` / `cs` / `ds` 需要给 Vim 核心增加多键超时，暂未实现。
 - 支持 `:w` 保存；`:e` / `:edit` 按路径打开笔记（相对当前笔记目录，支持 Tab 补全），`:bn` / `:bp` 切换标签，`:q` / `:q!` 关闭当前标签，`:wq` / `:x` 保存并关闭。
 - 支持 `:pasteimage`（别名 `:pa`）从系统剪贴板粘贴图片。
 - 支持自定义 Vim 键位映射（设置“文本编辑器 → Vim Custom Mappings”），默认 `normal <Space>p pasteimage`；可绑定 `pasteimage` / `save`，支持 normal / visual / insert / operatorPending 模式；使用 `=` 前缀定义 key-to-key 映射，例如 `insert jk =<Esc>`。以 `<Space>` 开头的映射会临时占用空格键；清空映射后恢复 Vim 默认的空格右移。
