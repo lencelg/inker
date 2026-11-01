@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.1-blue" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.2-blue" />
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux-informational" />
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-green" />
 </p>

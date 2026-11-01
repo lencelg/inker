@@ -1,6 +1,6 @@
 [package]
 name = "inker"
-version = "0.1.1"
+version = "0.1.2"
 description = "Inker - local Markdown editor"
 authors = ["lencelg"]
 license = "GPL-3.0-only"

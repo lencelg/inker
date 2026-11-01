@@ -6,7 +6,7 @@ Inker 不依赖数据库或云端服务，笔记以普通 `.md` / `.markdown` �
 
 > 本文档面向开发和维护者，记录架构、实现细节、已知限制与开发约定。产品介绍、安装方式和功能概览见 [README.md](README.md)。
 
-- 当前版本：`0.1.1`
+- 当前版本：`0.1.2`
 - 应用标识：`com.lencelg.markdownnotes`（为兼容已有配置保持不变）
 - 界面语言：简体中文 / English（默认跟随系统）
 - 主要开发环境：Linux / Wayland / niri
@@ -1141,10 +1141,10 @@ cargo tauri build
 当前产物：
 
 ```text
-target/release/bundle/deb/Inker_0.1.1_amd64.deb
+target/release/bundle/deb/Inker_0.1.2_amd64.deb
 ```
 
-已发布 `v0.1.1`：<https://github.com/lencelg/inker/releases/tag/v0.1.1>。Release 附件中的 `.deb` 约 8.7 MiB，仅支持 Linux x86_64；仓库当前为私有，下载需要相应 GitHub 权限。
+已发布 `v0.1.2`：<https://github.com/lencelg/inker/releases/tag/v0.1.2>。Release 附件中的 `.deb` 约 8.7 MiB，仅支持 Linux x86_64；仓库当前为私有，下载需要相应 GitHub 权限。
 
 构建时可能出现 Vite 的 chunk 体积警告，但不影响构建结果。
 
