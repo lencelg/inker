@@ -793,7 +793,7 @@ onBeforeUnmount(() => {
   padding: 32px max(40px, calc((100% - 760px) / 2)) 25vh;
   outline: none;
   color: var(--ink);
-  font-size: calc(var(--content-font-size) + 1px);
+  font-size: var(--content-font-size);
   line-height: 1.75;
   overflow-wrap: break-word;
 }

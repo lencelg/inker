@@ -882,7 +882,7 @@ Markdown 图片路径
   id: 'editor.fontSize',
   category: 'common',
   title: 'Editor: Font Size',
-  description: '控制编辑器字体大小（像素）。',
+  description: '控制编辑与预览字体大小（像素）。',
   controlType: 'input',
   value: 15,
   defaultValue: 15,

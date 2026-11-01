@@ -651,7 +651,7 @@ const theme = EditorView.theme({
   '&': {
     height: '100%',
     backgroundColor: 'transparent',
-    fontSize: 'calc(var(--content-font-size, 15px) * 1.25)',
+    fontSize: 'var(--content-font-size, 15px)',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -712,10 +712,10 @@ const theme = EditorView.theme({
       'calc(var(--content-font-size, 15px) * 1.75) !important',
     lineHeight:
       'calc(var(--content-font-size, 15px) * 1.75) !important',
-    fontSize:
-      'calc(var(--content-font-size, 15px) * 1.25) !important',
+    // The block spans the full line height, but the measured glyph box starts
+    // lower; lift it so the cursor glyph shares the line's baseline.
     marginTop:
-      'calc(var(--content-font-size, 15px) * -0.125)',
+      'calc(var(--content-font-size, 15px) * -0.275)',
     backgroundColor: '#f5f0e6 !important',
     color: '#1f2933 !important',
     borderRadius: '0',

@@ -302,7 +302,7 @@ const zh = {
   'themePreset.custom': '自定义',
   'settings.colorTheme.hint': '切换后立即应用。',
   'settings.colorTheme.reset': '恢复默认主题',
-  'settings.fontSize.description': '编辑器字号。',
+  'settings.fontSize.description': '编辑与预览字号。',
   'settings.fontSize.hint': '按住 Ctrl 滚动鼠标滚轮可快速调整。',
   'settings.fontSize.reset': '重置为默认值',
   'settings.immersive.description': '当前行居中，其他内容淡化。',
@@ -693,7 +693,7 @@ const en: Record<TranslationKey, string> = {
   'themePreset.custom': 'Custom',
   'settings.colorTheme.hint': 'Applies immediately.',
   'settings.colorTheme.reset': 'Restore Default Theme',
-  'settings.fontSize.description': 'Editor font size.',
+  'settings.fontSize.description': 'Font size for editing and preview.',
   'settings.fontSize.hint': 'Hold Ctrl and scroll to adjust.',
   'settings.fontSize.reset': 'Reset to Default',
   'settings.immersive.description':

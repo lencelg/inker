@@ -1149,7 +1149,7 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   padding: 16px 22px 32px;
-  font-size: calc(var(--content-font-size) + 0.5px);
+  font-size: var(--content-font-size);
   line-height: 1.75;
   overflow-wrap: break-word;
 }
